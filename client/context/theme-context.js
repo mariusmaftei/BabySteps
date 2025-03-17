@@ -1,6 +1,5 @@
-import { createContext, useState, useContext, useEffect } from "react";
+import { createContext, useState, useContext } from "react";
 import { useColorScheme } from "react-native";
-
 // Define theme colors - Updated with gender-specific themes
 const girlTheme = {
   background: "#FFF8FA",
@@ -64,17 +63,55 @@ export const ThemeProvider = ({ children }) => {
 
   // Initialize theme state based on device preference
   const [isGirlTheme, setIsGirlTheme] = useState(false);
+  const [manualThemeOverride, setManualThemeOverride] = useState(false);
 
-  // Toggle theme function
+  // Toggle theme function - disabled for now as we only want automatic theme changes
   const toggleTheme = () => {
-    setIsGirlTheme((prevMode) => !prevMode);
+    console.log(
+      "Manual theme toggling is disabled. Theme changes based on child gender only."
+    );
+    // No longer changing the theme manually
+    // setIsGirlTheme((prevMode) => !prevMode)
+    // setManualThemeOverride(true)
+  };
+
+  // Add a function to set theme based on child gender - always applies regardless of previous state
+  const setThemeByGender = (gender) => {
+    if (gender) {
+      const isFemale = gender.toLowerCase() === "female";
+      setIsGirlTheme(isFemale);
+      console.log(
+        `Theme updated based on child gender: ${
+          isFemale ? "Girl theme" : "Boy theme"
+        }`
+      );
+    }
+  };
+
+  // Function to reset to automatic theme based on gender
+  const resetToAutoTheme = (gender) => {
+    setManualThemeOverride(false);
+    if (gender) {
+      const isFemale = gender.toLowerCase() === "female";
+      setIsGirlTheme(isFemale);
+    }
+    console.log("Theme reset to automatic gender-based selection");
   };
 
   // Get current theme
   const theme = isGirlTheme ? girlTheme : boyTheme;
 
   return (
-    <ThemeContext.Provider value={{ theme, isGirlTheme, toggleTheme }}>
+    <ThemeContext.Provider
+      value={{
+        theme,
+        isGirlTheme,
+        toggleTheme,
+        setThemeByGender,
+        resetToAutoTheme,
+        isManuallyOverridden: manualThemeOverride,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );

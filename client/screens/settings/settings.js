@@ -21,7 +21,9 @@ import defaultChildImage from "../../assets/images/default-child.png";
 import { useAuth } from "../../context/auth-context";
 import { useTheme } from "../../context/theme-context";
 import { useChildActivity } from "../../context/child-activity-context";
-
+// Handle profile image selection with improved error handling
+// Handle profile image selection with improved error handling
+// Handle profile image selection with improved error handling
 const handleSelectImage = async () => {
   try {
     console.log("Starting image selection process");
@@ -122,6 +124,8 @@ export default function SettingsScreen({ navigation }) {
   const [editChildAge, setEditChildAge] = useState("");
   const [editChildGender, setEditChildGender] = useState("other");
   const [editChildImage, setEditChildImage] = useState(null);
+  const [isUsingDefaultChildImage, setIsUsingDefaultChildImage] =
+    useState(false);
 
   // Fetch user profile on component mount
   useEffect(() => {
@@ -221,6 +225,7 @@ export default function SettingsScreen({ navigation }) {
       if (imageUri) {
         console.log("Setting edit child image to:", imageUri);
         setEditChildImage(imageUri);
+        setIsUsingDefaultChildImage(false);
       }
     } catch (error) {
       console.error("Error in onSelectEditChildImage:", error);
@@ -326,15 +331,71 @@ export default function SettingsScreen({ navigation }) {
   // Add new child
   const handleAddChild = async () => {
     if (newChildName.trim() === "" || newChildAge.trim() === "") {
-      Alert.alert("Required Fields", "Please enter both name and age");
+      Alert.alert("Required Fields", "Please enter both name and birth date");
       return;
+    }
+
+    // Validate date format (DD/MM/YYYY)
+    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    if (!dateRegex.test(newChildAge)) {
+      Alert.alert(
+        "Invalid Date",
+        "Please enter the birth date in DD/MM/YYYY format"
+      );
+      return;
+    }
+
+    // Parse the date parts
+    const [day, month, year] = newChildAge
+      .split("/")
+      .map((part) => Number.parseInt(part, 10));
+
+    // Validate date values
+    if (
+      day < 1 ||
+      day > 31 ||
+      month < 1 ||
+      month > 12 ||
+      year < 1900 ||
+      year > new Date().getFullYear()
+    ) {
+      Alert.alert("Invalid Date", "Please enter a valid birth date");
+      return;
+    }
+
+    // Calculate age
+    const birthDate = new Date(year, month - 1, day); // month is 0-indexed in JS Date
+    const today = new Date();
+    let ageYears = today.getFullYear() - birthDate.getFullYear();
+    let ageMonths = today.getMonth() - birthDate.getMonth();
+
+    if (
+      ageMonths < 0 ||
+      (ageMonths === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      ageYears--;
+      ageMonths += 12;
+    }
+
+    // Format age string
+    let ageString = "";
+    if (ageYears > 0) {
+      ageString += `${ageYears} year${ageYears !== 1 ? "s" : ""}`;
+    }
+    if (ageMonths > 0) {
+      if (ageString.length > 0) ageString += ", ";
+      ageString += `${ageMonths} month${ageMonths !== 1 ? "s" : ""}`;
+    }
+    if (ageString === "") {
+      ageString = "Less than 1 month";
     }
 
     const newChild = {
       name: newChildName,
-      age: newChildAge,
+      age: ageString,
+      birthDate: newChildAge, // Store the birth date for future reference
       gender: newChildGender,
-      imageSrc: newChildImage, // If no image is selected, we'll use defaultChildImage in the UI
+      imageSrc: newChildImage || "default", // Use a marker string to indicate default image
     };
 
     try {
@@ -352,35 +413,109 @@ export default function SettingsScreen({ navigation }) {
     } catch (error) {
       console.error("Error adding child:", error);
       Alert.alert("Error", error.message || "Failed to add child");
+    } finally {
+      console.log(
+        "Child added with image:",
+        newChildImage || "Using default image"
+      );
     }
   };
 
-  // Add this function after handleAddChild
   // Function to handle editing a child
   const handleEditChild = (child) => {
+    console.log("Editing child:", child);
     setEditChildId(child.id);
     setEditChildName(child.name);
-    setEditChildAge(child.age);
+    setEditChildAge(child.birthDate || "");
     setEditChildGender(child.gender || "other");
-    setEditChildImage(child.imageSrc || child.image);
+
+    // Check if the child has a custom image or is using the default
+    if (!child.imageSrc || child.imageSrc === "default") {
+      setEditChildImage(null);
+      setIsUsingDefaultChildImage(true);
+      console.log("Using default image for edit");
+    } else {
+      setEditChildImage(child.imageSrc);
+      setIsUsingDefaultChildImage(false);
+      console.log("Using custom image for edit:", child.imageSrc);
+    }
+
     setShowEditChildModal(true);
   };
 
-  // Add this function after handleEditChild
   // Function to save edited child data
   const saveEditedChild = async () => {
     if (editChildName.trim() === "" || editChildAge.trim() === "") {
-      Alert.alert("Required Fields", "Please enter both name and age");
+      Alert.alert("Required Fields", "Please enter both name and birth date");
       return;
+    }
+
+    // Validate date format (DD/MM/YYYY)
+    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    if (!dateRegex.test(editChildAge)) {
+      Alert.alert(
+        "Invalid Date",
+        "Please enter the birth date in DD/MM/YYYY format"
+      );
+      return;
+    }
+
+    // Parse the date parts
+    const [day, month, year] = editChildAge
+      .split("/")
+      .map((part) => Number.parseInt(part, 10));
+
+    // Validate date values
+    if (
+      day < 1 ||
+      day > 31 ||
+      month < 1 ||
+      month > 12 ||
+      year < 1900 ||
+      year > new Date().getFullYear()
+    ) {
+      Alert.alert("Invalid Date", "Please enter a valid birth date");
+      return;
+    }
+
+    // Calculate age
+    const birthDate = new Date(year, month - 1, day); // month is 0-indexed in JS Date
+    const today = new Date();
+    let ageYears = today.getFullYear() - birthDate.getFullYear();
+    let ageMonths = today.getMonth() - birthDate.getMonth();
+
+    if (
+      ageMonths < 0 ||
+      (ageMonths === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      ageYears--;
+      ageMonths += 12;
+    }
+
+    // Format age string
+    let ageString = "";
+    if (ageYears > 0) {
+      ageString += `${ageYears} year${ageYears !== 1 ? "s" : ""}`;
+    }
+    if (ageMonths > 0) {
+      if (ageString.length > 0) ageString += ", ";
+      ageString += `${ageMonths} month${ageMonths !== 1 ? "s" : ""}`;
+    }
+    if (ageString === "") {
+      ageString = "Less than 1 month";
     }
 
     const updatedChildData = {
       name: editChildName,
-      age: editChildAge,
+      age: ageString,
+      birthDate: editChildAge, // Store the birth date for future reference
       gender: editChildGender,
     };
 
-    if (editChildImage) {
+    // Handle image - if using default, set to "default", otherwise use the selected image
+    if (isUsingDefaultChildImage) {
+      updatedChildData.imageSrc = "default";
+    } else if (editChildImage) {
       updatedChildData.imageSrc = editChildImage;
     }
 
@@ -528,9 +663,14 @@ export default function SettingsScreen({ navigation }) {
         >
           <Image
             source={
-              child.imageSrc ? { uri: child.imageSrc } : defaultChildImage
+              child.imageSrc && child.imageSrc !== "default"
+                ? { uri: child.imageSrc }
+                : defaultChildImage
             }
             style={styles.childImage}
+            onError={() =>
+              console.log("Error loading child image, falling back to default")
+            }
           />
           <View style={styles.childInfo}>
             <Text style={[styles.childName, { color: theme.text }]}>
@@ -674,27 +814,82 @@ export default function SettingsScreen({ navigation }) {
                 />
               </View>
 
-              {/* Child Age */}
+              {/* Child Birth Date */}
               <View style={styles.inputContainer}>
                 <Text
                   style={[styles.inputLabel, { color: theme.textSecondary }]}
                 >
-                  Child's Age *
+                  Child's Birth Date *
                 </Text>
-                <TextInput
+                <View
                   style={[
-                    styles.input,
+                    styles.datePickerContainer,
                     {
                       borderColor: theme.border,
-                      color: theme.text,
                       backgroundColor: theme.backgroundSecondary,
                     },
                   ]}
-                  value={newChildAge}
-                  onChangeText={setNewChildAge}
-                  placeholder="e.g., 2 years, 6 months"
-                  placeholderTextColor={theme.textTertiary}
-                />
+                >
+                  <TextInput
+                    style={[styles.dateInput, { color: theme.text }]}
+                    value={newChildAge}
+                    onChangeText={(text) => {
+                      // Remove any non-numeric characters
+                      const cleaned = text.replace(/[^0-9]/g, "");
+
+                      // Format as DD/MM/YYYY automatically as user types
+                      let formatted = "";
+                      if (cleaned.length > 0) {
+                        // Add first digit of day
+                        formatted = cleaned.substring(
+                          0,
+                          Math.min(1, cleaned.length)
+                        );
+
+                        // Add second digit of day
+                        if (cleaned.length > 1) {
+                          formatted = cleaned.substring(0, 2);
+                        }
+
+                        // Add first slash and first digit of month
+                        if (cleaned.length > 2) {
+                          formatted = `${cleaned.substring(
+                            0,
+                            2
+                          )}/${cleaned.substring(2, 3)}`;
+                        }
+
+                        // Add second digit of month
+                        if (cleaned.length > 3) {
+                          formatted = `${cleaned.substring(
+                            0,
+                            2
+                          )}/${cleaned.substring(2, 4)}`;
+                        }
+
+                        // Add second slash and start of year
+                        if (cleaned.length > 4) {
+                          formatted = `${cleaned.substring(
+                            0,
+                            2
+                          )}/${cleaned.substring(2, 4)}/${cleaned.substring(
+                            4,
+                            Math.min(8, cleaned.length)
+                          )}`;
+                        }
+                      }
+
+                      setNewChildAge(formatted);
+                    }}
+                    placeholder="DD/MM/YYYY"
+                    placeholderTextColor={theme.textTertiary}
+                    keyboardType="numeric"
+                    maxLength={10}
+                  />
+                </View>
+                <Text style={[styles.dateHint, { color: theme.textTertiary }]}>
+                  Format: DD/MM/YYYY (e.g., 15/06/2022)
+                </Text>
               </View>
 
               {/* Child Gender */}
@@ -952,27 +1147,82 @@ export default function SettingsScreen({ navigation }) {
                 />
               </View>
 
-              {/* Child Age */}
+              {/* Child Birth Date */}
               <View style={styles.inputContainer}>
                 <Text
                   style={[styles.inputLabel, { color: theme.textSecondary }]}
                 >
-                  Child's Age *
+                  Child's Birth Date *
                 </Text>
-                <TextInput
+                <View
                   style={[
-                    styles.input,
+                    styles.datePickerContainer,
                     {
                       borderColor: theme.border,
-                      color: theme.text,
                       backgroundColor: theme.backgroundSecondary,
                     },
                   ]}
-                  value={editChildAge}
-                  onChangeText={setEditChildAge}
-                  placeholder="e.g., 2 years, 6 months"
-                  placeholderTextColor={theme.textTertiary}
-                />
+                >
+                  <TextInput
+                    style={[styles.dateInput, { color: theme.text }]}
+                    value={editChildAge}
+                    onChangeText={(text) => {
+                      // Remove any non-numeric characters
+                      const cleaned = text.replace(/[^0-9]/g, "");
+
+                      // Format as DD/MM/YYYY automatically as user types
+                      let formatted = "";
+                      if (cleaned.length > 0) {
+                        // Add first digit of day
+                        formatted = cleaned.substring(
+                          0,
+                          Math.min(1, cleaned.length)
+                        );
+
+                        // Add second digit of day
+                        if (cleaned.length > 1) {
+                          formatted = cleaned.substring(0, 2);
+                        }
+
+                        // Add first slash and first digit of month
+                        if (cleaned.length > 2) {
+                          formatted = `${cleaned.substring(
+                            0,
+                            2
+                          )}/${cleaned.substring(2, 3)}`;
+                        }
+
+                        // Add second digit of month
+                        if (cleaned.length > 3) {
+                          formatted = `${cleaned.substring(
+                            0,
+                            2
+                          )}/${cleaned.substring(2, 4)}`;
+                        }
+
+                        // Add second slash and start of year
+                        if (cleaned.length > 4) {
+                          formatted = `${cleaned.substring(
+                            0,
+                            2
+                          )}/${cleaned.substring(2, 4)}/${cleaned.substring(
+                            4,
+                            Math.min(8, cleaned.length)
+                          )}`;
+                        }
+                      }
+
+                      setEditChildAge(formatted);
+                    }}
+                    placeholder="DD/MM/YYYY"
+                    placeholderTextColor={theme.textTertiary}
+                    keyboardType="numeric"
+                    maxLength={10}
+                  />
+                </View>
+                <Text style={[styles.dateHint, { color: theme.textTertiary }]}>
+                  Format: DD/MM/YYYY (e.g., 15/06/2022)
+                </Text>
               </View>
 
               {/* Child Gender */}
@@ -1420,12 +1670,39 @@ export default function SettingsScreen({ navigation }) {
               notificationsEnabled,
               setNotificationsEnabled
             )}
-            {renderToggleSetting(
-              "color-palette",
-              isGirlTheme ? "Girl Color Theme" : "Boy Color Theme",
-              !isGirlTheme,
-              toggleTheme
-            )}
+            <View
+              style={[
+                styles.settingItem,
+                { borderBottomColor: theme.borderLight },
+              ]}
+            >
+              <View style={styles.settingItemLeft}>
+                <Ionicons
+                  name="color-palette"
+                  size={24}
+                  color={theme.primary}
+                  style={styles.settingIcon}
+                />
+                <Text style={[styles.settingText, { color: theme.text }]}>
+                  Theme
+                </Text>
+              </View>
+              <View style={styles.themeIndicator}>
+                <Ionicons
+                  name={isGirlTheme ? "female" : "male"}
+                  size={22}
+                  color={theme.primary}
+                />
+                <Text
+                  style={[
+                    styles.themeIndicatorText,
+                    { color: theme.textSecondary, marginLeft: 6 },
+                  ]}
+                >
+                  {isGirlTheme ? "Girl" : "Boy"}
+                </Text>
+              </View>
+            </View>
             {renderChevronSetting("language", "Language", () =>
               console.log("Language pressed")
             )}
@@ -1819,5 +2096,38 @@ const styles = StyleSheet.create({
   },
   childGender: {
     fontSize: 12,
+  },
+  datePickerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  dateInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 10,
+  },
+  calendarButton: {
+    padding: 8,
+  },
+  dateHint: {
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: "italic",
+  },
+  themeIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.05)",
+  },
+  themeIndicatorText: {
+    fontSize: 14,
+    fontWeight: "500",
   },
 });

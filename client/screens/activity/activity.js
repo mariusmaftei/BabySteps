@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import defaultChildImage from "../../assets/images/default-child.png";
 // contexts
 
 import { useTheme } from "../../context/theme-context";
@@ -177,21 +178,6 @@ export default function ActivityScreen({ navigation }) {
       trendValue: currentChild?.activities?.diaper?.trend || "0%",
       screen: "DiaperDetails",
     },
-
-    {
-      title: "Health",
-      subtitle: "Medical checkups",
-      icon: "medkit",
-      color: "#5856D6",
-      gradient: ["#5856D6", "#7674E8"],
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/heatly-child.jpg-kyeSB4d3cISzh9dPjtHnSvLRzZG6D1.jpeg",
-      trend: currentChild?.activities?.health?.trend?.startsWith("+")
-        ? "up"
-        : "down",
-      trendValue: currentChild?.activities?.health?.trend || "0%",
-      screen: "HealthDetails",
-    },
     {
       title: "Relaxing",
       subtitle: "Soothing music & sounds",
@@ -206,20 +192,20 @@ export default function ActivityScreen({ navigation }) {
       trendValue: currentChild?.activities?.relaxing?.trend || "0%",
       screen: "RelaxingMusic",
     },
-    // {
-    //   title: "Social",
-    //   subtitle: "Social Development",
-    //   icon: "people",
-    //   color: "#AF52DE",
-    //   gradient: ["#AF52DE", "#C77CEA"],
-    //   image:
-    //     "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/child-social.jpg-nzn6ufJRA5nRx2aMAv2olCJJwkZVji.jpeg",
-    //   trend: currentChild?.activities?.social?.trend?.startsWith("+")
-    //     ? "up"
-    //     : "down",
-    //   trendValue: currentChild?.activities?.social?.trend || "0%",
-    //   screen: "SocialDetails",
-    // },
+    {
+      title: "Health",
+      subtitle: "Medical checkups",
+      icon: "medkit",
+      color: "#5856D6",
+      gradient: ["#5856D6", "#7674E8"],
+      image:
+        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/heatly-child.jpg-kyeSB4d3cISzh9dPjtHnSvLRzZG6D1.jpeg",
+      trend: currentChild?.activities?.health?.trend?.startsWith("+")
+        ? "up"
+        : "down",
+      trendValue: currentChild?.activities?.health?.trend || "0%",
+      screen: "HealthDetails",
+    },
   ];
 
   // Calculate overall mood based on trends
@@ -368,49 +354,70 @@ export default function ActivityScreen({ navigation }) {
             </View>
 
             <ScrollView style={styles.childList}>
-              {children.map((child) => (
-                <TouchableOpacity
-                  key={child.id}
-                  style={[
-                    styles.childSwitcherItem,
-                    child.id === currentChildId && {
-                      backgroundColor: `${theme.primary}15`,
-                    },
-                    { borderBottomColor: theme.borderLight },
-                  ]}
-                  onPress={() => handleSelectChild(child.id)}
-                >
-                  <Image
-                    source={{ uri: child.image }}
-                    style={styles.childSwitcherImage}
-                  />
-                  <View style={styles.childSwitcherInfo}>
-                    <Text
-                      style={[styles.childSwitcherName, { color: theme.text }]}
-                    >
-                      {child.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.childSwitcherAge,
-                        { color: theme.textSecondary },
-                      ]}
-                    >
-                      {child.age}
-                    </Text>
-                  </View>
-                  {child.id === currentChildId && (
-                    <View
-                      style={[
-                        styles.currentChildIndicator,
-                        { backgroundColor: theme.primary },
-                      ]}
-                    >
-                      <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+              {children.map((child) => {
+                // Debug log to see what image properties are available
+                console.log(`Child ${child.id} image properties:`, {
+                  image: child.image,
+                  imageSrc: child.imageSrc,
+                });
+
+                return (
+                  <TouchableOpacity
+                    key={child.id}
+                    style={[
+                      styles.childSwitcherItem,
+                      child.id === currentChildId && {
+                        backgroundColor: `${theme.primary}15`,
+                      },
+                      { borderBottomColor: theme.borderLight },
+                    ]}
+                    onPress={() => handleSelectChild(child.id)}
+                  >
+                    <Image
+                      source={
+                        child.imageSrc && child.imageSrc !== "default"
+                          ? { uri: child.imageSrc }
+                          : defaultChildImage
+                      }
+                      style={styles.childSwitcherImage}
+                      onError={(e) => {
+                        console.log(
+                          "Error loading child image:",
+                          e.nativeEvent.error
+                        );
+                      }}
+                    />
+                    <View style={styles.childSwitcherInfo}>
+                      <Text
+                        style={[
+                          styles.childSwitcherName,
+                          { color: theme.text },
+                        ]}
+                      >
+                        {child.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.childSwitcherAge,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        {child.age}
+                      </Text>
                     </View>
-                  )}
-                </TouchableOpacity>
-              ))}
+                    {child.id === currentChildId && (
+                      <View
+                        style={[
+                          styles.currentChildIndicator,
+                          { backgroundColor: theme.primary },
+                        ]}
+                      >
+                        <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
 
             <TouchableOpacity

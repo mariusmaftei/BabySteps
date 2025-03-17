@@ -27,12 +27,14 @@ import CustomTabBar from "./components/custom-tab-bar/custom-tab-bar";
 // Theme Provider
 import { ThemeProvider, useTheme } from "./context/theme-context";
 // Auth Provider
-import { ChildActivityProvider } from "./context/child-activity-context";
+import {
+  ChildActivityProvider,
+  useChildActivity,
+} from "./context/child-activity-context";
 // Auth Provider
 import { AuthProvider, useAuth } from "./context/auth-context";
 import LoginScreen from "./screens/login/login-screen";
 import RegisterScreen from "./screens/register/register-screen";
-
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 const AuthStack = createStackNavigator();
@@ -147,6 +149,20 @@ function AuthStackNavigator() {
   );
 }
 
+// Add this function to connect the child activity context with the theme context
+const ThemeChildConnector = () => {
+  const { currentChild } = useChildActivity();
+  const { setThemeByGender } = useTheme();
+
+  useEffect(() => {
+    if (currentChild && currentChild.gender) {
+      setThemeByGender(currentChild.gender);
+    }
+  }, [currentChild]);
+
+  return null; // This component doesn't render anything
+};
+
 // Simple splash screen with just the logo image
 function SplashScreen() {
   return (
@@ -164,8 +180,9 @@ function SplashScreen() {
 
 // Update the MainApp component to make sure it responds to auth state changes
 function MainApp() {
-  const { theme } = useTheme();
+  const { theme, setThemeByGender } = useTheme();
   const { isLoading: authLoading, isAuthenticated } = useAuth();
+  const { currentChild } = useChildActivity();
   const [isSplashVisible, setIsSplashVisible] = useState(true);
 
   useEffect(() => {
@@ -176,6 +193,16 @@ function MainApp() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Keep only this effect for theme updates based on child gender
+  useEffect(() => {
+    if (currentChild && currentChild.gender) {
+      setThemeByGender(currentChild.gender);
+      console.log(
+        `Theme updated based on current child gender: ${currentChild.gender}`
+      );
+    }
+  }, [currentChild, setThemeByGender]);
 
   // Custom navigation theme
   const customTheme = {
@@ -228,6 +255,7 @@ export default function App() {
       <AuthProvider>
         <ChildActivityProvider>
           <SafeAreaProvider>
+            <ThemeChildConnector />
             <MainApp />
           </SafeAreaProvider>
         </ChildActivityProvider>
