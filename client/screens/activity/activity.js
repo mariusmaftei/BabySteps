@@ -179,20 +179,6 @@ export default function ActivityScreen({ navigation }) {
       screen: "DiaperDetails",
     },
     {
-      title: "Relaxing",
-      subtitle: "Soothing music & sounds",
-      icon: "musical-notes",
-      color: "#F472B6",
-      gradient: ["#F472B6", "#F9A8D4"],
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/relaxing.jpg-njSGsa3qQi5ELgv3r4dECK349CakfZ.jpeg",
-      trend: currentChild?.activities?.relaxing?.trend?.startsWith("+")
-        ? "up"
-        : "down",
-      trendValue: currentChild?.activities?.relaxing?.trend || "0%",
-      screen: "RelaxingMusic",
-    },
-    {
       title: "Health",
       subtitle: "Medical checkups",
       icon: "medkit",
@@ -205,6 +191,20 @@ export default function ActivityScreen({ navigation }) {
         : "down",
       trendValue: currentChild?.activities?.health?.trend || "0%",
       screen: "HealthDetails",
+    },
+    {
+      title: "Relaxing",
+      subtitle: "Soothing music & sounds",
+      icon: "musical-notes",
+      color: "#F472B6",
+      gradient: ["#F472B6", "#F9A8D4"],
+      image:
+        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/relaxing.jpg-njSGsa3qQi5ELgv3r4dECK349CakfZ.jpeg",
+      trend: currentChild?.activities?.relaxing?.trend?.startsWith("+")
+        ? "up"
+        : "down",
+      trendValue: currentChild?.activities?.relaxing?.trend || "0%",
+      screen: "RelaxingMusic",
     },
   ];
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,124 +9,100 @@ import {
   Dimensions,
   Animated,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { useTheme } from "../../../context/theme-context";
 import Icon from "react-native-vector-icons/Feather";
 import Slider from "@react-native-community/slider";
-
-// Dummy data for relaxing music
-const dummySongs = [
-  {
-    id: "1",
-    title: "Twinkle Twinkle Little Star",
-    artist: "Lullaby Dreams",
-    duration: "3:24",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "Lullaby",
-  },
-  {
-    id: "2",
-    title: "Ocean Waves",
-    artist: "Nature Sounds",
-    duration: "5:12",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "White Noise",
-  },
-  {
-    id: "3",
-    title: "Brahms Lullaby",
-    artist: "Classical Baby",
-    duration: "4:05",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "Classical",
-  },
-  {
-    id: "4",
-    title: "Gentle Rain",
-    artist: "Nature Sounds",
-    duration: "6:30",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "White Noise",
-  },
-  {
-    id: "5",
-    title: "Rock-a-bye Baby",
-    artist: "Lullaby Dreams",
-    duration: "2:58",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "Lullaby",
-  },
-  {
-    id: "6",
-    title: "Heartbeat Sounds",
-    artist: "Womb Sounds",
-    duration: "8:15",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "White Noise",
-  },
-  {
-    id: "7",
-    title: "Mozart for Babies",
-    artist: "Classical Baby",
-    duration: "4:45",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "Classical",
-  },
-  {
-    id: "8",
-    title: "Soft Piano Lullaby",
-    artist: "Piano Dreams",
-    duration: "5:20",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "Instrumental",
-  },
-  {
-    id: "9",
-    title: "Hush Little Baby",
-    artist: "Lullaby Dreams",
-    duration: "3:10",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "Lullaby",
-  },
-  {
-    id: "10",
-    title: "Calming Guitar",
-    artist: "Acoustic Baby",
-    duration: "4:35",
-    coverArt:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-    category: "Instrumental",
-  },
-];
-
-// Get all unique categories
-const categories = ["All", ...new Set(dummySongs.map((song) => song.category))];
+import { Audio } from "expo-av";
+import * as musicService from "../../../services/music-service";
 
 const RelaxingMusicScreen = () => {
   const { theme } = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [songs, setSongs] = useState([]);
+  const [categories, setCategories] = useState(["All"]);
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [currentSong, setCurrentSong] = useState(dummySongs[0]);
+  const [currentSong, setCurrentSong] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [volume, setVolume] = useState(0.7);
+  const [duration, setDuration] = useState(0);
+  const [position, setPosition] = useState(0);
+
+  // Refs
+  const soundRef = useRef(null);
+  const progressIntervalRef = useRef(null);
 
   // Animation for the album rotation
   const spinValue = new Animated.Value(0);
 
+  // Fetch music data on component mount
+  useEffect(() => {
+    const fetchMusicData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch all music tracks
+        const musicData = await musicService.getAllMusic();
+        setSongs(musicData);
+
+        // Get unique categories
+        const uniqueCategories = [
+          "All",
+          ...new Set(musicData.map((song) => song.category)),
+        ];
+        setCategories(uniqueCategories);
+
+        // Set initial current song
+        if (musicData.length > 0) {
+          setCurrentSong(musicData[0]);
+        }
+
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching music data:", err);
+        setError("Failed to load music. Please try again later.");
+        setLoading(false);
+      }
+    };
+
+    fetchMusicData();
+
+    // Initialize audio
+    const setupAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: true,
+        });
+        console.log("Audio mode set successfully");
+      } catch (err) {
+        console.error("Error setting audio mode:", err);
+      }
+    };
+
+    setupAudio();
+
+    // Cleanup function
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, []);
+
   // Filter songs based on selected category
   const filteredSongs =
     selectedCategory === "All"
-      ? dummySongs
-      : dummySongs.filter((song) => song.category === selectedCategory);
+      ? songs
+      : songs.filter((song) => song.category === selectedCategory);
 
   // Start spinning animation when playing
   useEffect(() => {
@@ -142,22 +118,11 @@ const RelaxingMusicScreen = () => {
       spinValue.stopAnimation();
     }
 
-    // Simulate progress
-    let interval;
-    if (isPlaying) {
-      interval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 1) {
-            clearInterval(interval);
-            setIsPlaying(false);
-            return 0;
-          }
-          return prev + 0.01;
-        });
-      }, 300);
-    }
-
-    return () => clearInterval(interval);
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
   }, [isPlaying]);
 
   // Create the spinning animation
@@ -166,28 +131,220 @@ const RelaxingMusicScreen = () => {
     outputRange: ["0deg", "360deg"],
   });
 
-  const formatTime = (progress) => {
-    const duration = currentSong ? currentSong.duration : "0:00";
-    const [minutes, seconds] = duration.split(":");
-    const totalSeconds =
-      Number.parseInt(minutes) * 60 + Number.parseInt(seconds);
-    const currentSeconds = Math.floor(progress * totalSeconds);
-    const currentMinutes = Math.floor(currentSeconds / 60);
-    const remainingSeconds = currentSeconds % 60;
-    return `${currentMinutes}:${
-      remainingSeconds < 10 ? "0" : ""
-    }${remainingSeconds}`;
+  // Load and play a song
+  const loadAndPlaySong = async (song) => {
+    try {
+      // Unload previous sound if exists
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+      }
+
+      // Clear previous progress interval
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+
+      console.log(`Loading song: ${song.title}, URL: ${song.trackUrl}`);
+
+      // Load the new sound
+      const { sound, status } = await Audio.Sound.createAsync(
+        { uri: song.trackUrl },
+        { shouldPlay: true, volume: volume },
+        onPlaybackStatusUpdate
+      );
+
+      soundRef.current = sound;
+      setCurrentSong(song);
+      setIsPlaying(true);
+
+      // Start progress tracking
+      startProgressTracking();
+
+      console.log(`Now playing: ${song.title}`);
+    } catch (err) {
+      console.error("Error loading and playing song:", err);
+      setError(`Failed to play "${song.title}". Please try again.`);
+    }
   };
 
-  const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
+  // Handle playback status updates
+  const onPlaybackStatusUpdate = (status) => {
+    if (status.isLoaded) {
+      setDuration(status.durationMillis || 0);
+      setPosition(status.positionMillis || 0);
+
+      if (status.didJustFinish) {
+        setIsPlaying(false);
+        setProgress(0);
+        playNextSong();
+      }
+    }
   };
 
-  const handleSongSelect = (song) => {
-    setCurrentSong(song);
-    setProgress(0);
-    setIsPlaying(true);
+  // Start tracking progress
+  const startProgressTracking = () => {
+    progressIntervalRef.current = setInterval(async () => {
+      if (soundRef.current) {
+        const status = await soundRef.current.getStatusAsync();
+        if (status.isLoaded) {
+          const newProgress = status.positionMillis / status.durationMillis;
+          setProgress(newProgress || 0);
+          setPosition(status.positionMillis || 0);
+        }
+      }
+    }, 1000);
   };
+
+  // Format time for display (mm:ss)
+  const formatTime = (milliseconds) => {
+    if (!milliseconds) return "0:00";
+
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+  };
+
+  // Handle play/pause
+  const handlePlayPause = async () => {
+    if (!currentSong) return;
+
+    try {
+      if (isPlaying) {
+        await soundRef.current.pauseAsync();
+        setIsPlaying(false);
+      } else {
+        if (soundRef.current) {
+          await soundRef.current.playAsync();
+          setIsPlaying(true);
+          startProgressTracking();
+        } else {
+          // If no sound is loaded yet, load and play the current song
+          await loadAndPlaySong(currentSong);
+        }
+      }
+    } catch (err) {
+      console.error("Error toggling play/pause:", err);
+    }
+  };
+
+  // Handle song selection
+  const handleSongSelect = async (song) => {
+    if (currentSong && currentSong.id === song.id) {
+      // If the same song is selected, toggle play/pause
+      handlePlayPause();
+    } else {
+      // Load and play the new song
+      await loadAndPlaySong(song);
+    }
+  };
+
+  // Handle seeking
+  const handleSeek = async (value) => {
+    if (!soundRef.current) return;
+
+    try {
+      const newPosition = value * duration;
+      await soundRef.current.setPositionAsync(newPosition);
+      setProgress(value);
+      setPosition(newPosition);
+    } catch (err) {
+      console.error("Error seeking:", err);
+    }
+  };
+
+  // Handle volume change
+  const handleVolumeChange = async (value) => {
+    setVolume(value);
+    if (soundRef.current) {
+      try {
+        await soundRef.current.setVolumeAsync(value);
+      } catch (err) {
+        console.error("Error setting volume:", err);
+      }
+    }
+  };
+
+  // Play next song
+  const playNextSong = () => {
+    if (!currentSong || filteredSongs.length === 0) return;
+
+    const currentIndex = filteredSongs.findIndex(
+      (song) => song.id === currentSong.id
+    );
+    const nextIndex = (currentIndex + 1) % filteredSongs.length;
+    loadAndPlaySong(filteredSongs[nextIndex]);
+  };
+
+  // Play previous song
+  const playPreviousSong = () => {
+    if (!currentSong || filteredSongs.length === 0) return;
+
+    const currentIndex = filteredSongs.findIndex(
+      (song) => song.id === currentSong.id
+    );
+    const prevIndex =
+      (currentIndex - 1 + filteredSongs.length) % filteredSongs.length;
+    loadAndPlaySong(filteredSongs[prevIndex]);
+  };
+
+  // Render loading state
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.centerContent,
+          { backgroundColor: theme.background },
+        ]}
+      >
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={[styles.loadingText, { color: theme.text }]}>
+          Loading music...
+        </Text>
+      </View>
+    );
+  }
+
+  // Render error state
+  if (error) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.centerContent,
+          { backgroundColor: theme.background },
+        ]}
+      >
+        <Icon name="alert-circle" size={50} color={theme.error} />
+        <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>
+        <TouchableOpacity
+          style={[styles.retryButton, { backgroundColor: theme.primary }]}
+          onPress={() => window.location.reload()}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Render empty state
+  if (songs.length === 0) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.centerContent,
+          { backgroundColor: theme.background },
+        ]}
+      >
+        <Icon name="music-off" size={50} color={theme.textLight} />
+        <Text style={[styles.emptyText, { color: theme.text }]}>
+          No music available
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -198,85 +355,103 @@ const RelaxingMusicScreen = () => {
           { backgroundColor: theme.cardBackground },
         ]}
       >
-        <View style={styles.songInfoContainer}>
-          <Animated.View
-            style={[
-              styles.albumCoverContainer,
-              { transform: [{ rotate: spin }] },
-            ]}
-          >
-            <Image
-              source={{ uri: currentSong.coverArt }}
-              style={styles.albumCover}
-            />
-          </Animated.View>
+        {currentSong && (
+          <>
+            <View style={styles.songInfoContainer}>
+              <Animated.View
+                style={[
+                  styles.albumCoverContainer,
+                  { transform: [{ rotate: spin }] },
+                ]}
+              >
+                <Image
+                  source={{ uri: currentSong.coverArt }}
+                  style={styles.albumCover}
+                  onError={(e) =>
+                    console.log("Error loading cover art:", e.nativeEvent.error)
+                  }
+                />
+              </Animated.View>
 
-          <View style={styles.songDetails}>
-            <Text style={[styles.songTitle, { color: theme.text }]}>
-              {currentSong.title}
-            </Text>
-            <Text style={[styles.artistName, { color: theme.textLight }]}>
-              {currentSong.artist}
-            </Text>
-            <Text style={[styles.category, { color: theme.primary }]}>
-              {currentSong.category}
-            </Text>
-          </View>
-        </View>
+              <View style={styles.songDetails}>
+                <Text style={[styles.songTitle, { color: theme.text }]}>
+                  {currentSong.title}
+                </Text>
+                <Text style={[styles.artistName, { color: theme.textLight }]}>
+                  {currentSong.artist}
+                </Text>
+                <Text style={[styles.category, { color: theme.primary }]}>
+                  {currentSong.category}
+                </Text>
+              </View>
+            </View>
 
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <Text style={[styles.timeText, { color: theme.textLight }]}>
-            {formatTime(progress)}
-          </Text>
-          <Slider
-            style={styles.progressBar}
-            minimumValue={0}
-            maximumValue={1}
-            value={progress}
-            onValueChange={setProgress}
-            minimumTrackTintColor={theme.primary}
-            maximumTrackTintColor={theme.borderLight}
-            thumbTintColor={theme.primary}
-          />
-          <Text style={[styles.timeText, { color: theme.textLight }]}>
-            {currentSong.duration}
-          </Text>
-        </View>
+            {/* Progress Bar */}
+            <View style={styles.progressContainer}>
+              <Text style={[styles.timeText, { color: theme.textLight }]}>
+                {formatTime(position)}
+              </Text>
+              <Slider
+                style={styles.progressBar}
+                minimumValue={0}
+                maximumValue={1}
+                value={progress}
+                onValueChange={setProgress}
+                onSlidingComplete={handleSeek}
+                minimumTrackTintColor={theme.primary}
+                maximumTrackTintColor={theme.borderLight}
+                thumbTintColor={theme.primary}
+              />
+              <Text style={[styles.timeText, { color: theme.textLight }]}>
+                {formatTime(duration)}
+              </Text>
+            </View>
 
-        {/* Controls */}
-        <View style={styles.controlsContainer}>
-          <TouchableOpacity style={styles.controlButton}>
-            <Icon name="skip-back" size={24} color={theme.text} />
-          </TouchableOpacity>
+            {/* Controls */}
+            <View style={styles.controlsContainer}>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={playPreviousSong}
+              >
+                <Icon name="skip-back" size={24} color={theme.text} />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.playButton, { backgroundColor: theme.primary }]}
-            onPress={handlePlayPause}
-          >
-            <Icon name={isPlaying ? "pause" : "play"} size={30} color="#FFF" />
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.playButton, { backgroundColor: theme.primary }]}
+                onPress={handlePlayPause}
+              >
+                <Icon
+                  name={isPlaying ? "pause" : "play"}
+                  size={30}
+                  color="#FFF"
+                />
+              </TouchableOpacity>
 
-          <TouchableOpacity style={styles.controlButton}>
-            <Icon name="skip-forward" size={24} color={theme.text} />
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={playNextSong}
+              >
+                <Icon name="skip-forward" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
 
-        {/* Volume Control */}
-        <View style={styles.volumeContainer}>
-          <Icon name="volume-1" size={20} color={theme.textLight} />
-          <Slider
-            style={styles.volumeSlider}
-            minimumValue={0}
-            maximumValue={1}
-            value={volume}
-            onValueChange={setVolume}
-            minimumTrackTintColor={theme.primary}
-            maximumTrackTintColor={theme.borderLight}
-            thumbTintColor={theme.primary}
-          />
-          <Icon name="volume-2" size={20} color={theme.textLight} />
-        </View>
+            {/* Volume Control */}
+            <View style={styles.volumeContainer}>
+              <Icon name="volume-1" size={20} color={theme.textLight} />
+              <Slider
+                style={styles.volumeSlider}
+                minimumValue={0}
+                maximumValue={1}
+                value={volume}
+                onValueChange={handleVolumeChange}
+                minimumTrackTintColor={theme.primary}
+                maximumTrackTintColor={theme.borderLight}
+                thumbTintColor={theme.primary}
+              />
+              <Icon name="volume-2" size={20} color={theme.textLight} />
+            </View>
+          </>
+        )}
       </View>
 
       {/* Category Selector */}
@@ -324,14 +499,20 @@ const RelaxingMusicScreen = () => {
               styles.songItem,
               {
                 backgroundColor:
-                  currentSong.id === item.id
+                  currentSong && currentSong.id === item.id
                     ? `${theme.primary}20`
                     : theme.cardBackground,
               },
             ]}
             onPress={() => handleSongSelect(item)}
           >
-            <Image source={{ uri: item.coverArt }} style={styles.songCover} />
+            <Image
+              source={{ uri: item.coverArt }}
+              style={styles.songCover}
+              onError={(e) =>
+                console.log("Error loading song cover:", e.nativeEvent.error)
+              }
+            />
             <View style={styles.songItemDetails}>
               <Text style={[styles.songItemTitle, { color: theme.text }]}>
                 {item.title}
@@ -359,6 +540,34 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: "center",
+    marginHorizontal: 24,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  retryButton: {
+    marginTop: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#FFF",
+    fontWeight: "600",
+  },
   nowPlayingContainer: {
     borderRadius: 16,
     padding: 16,
@@ -380,6 +589,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     overflow: "hidden",
     marginRight: 16,
+    backgroundColor: "#f0f0f0",
   },
   albumCover: {
     width: "100%",
@@ -443,30 +653,30 @@ const styles = StyleSheet.create({
   },
   categoryWrapper: {
     marginBottom: 10,
-    height: 42, // Increased by 50% from 28px
+    height: 42,
   },
   categoryContainer: {
     height: 42,
   },
   categoryContent: {
     paddingRight: 16,
-    alignItems: "center", // Center items vertically
+    alignItems: "center",
   },
   categoryButton: {
-    paddingHorizontal: 18, // Increased from 12px
-    paddingVertical: 3, // Increased from 2px
-    borderRadius: 20, // Increased from 14px
-    marginRight: 10, // Increased from 8px
+    paddingHorizontal: 18,
+    paddingVertical: 3,
+    borderRadius: 20,
+    marginRight: 10,
     backgroundColor: "#F0F0F0",
-    height: 36, // Increased by 50% from 24px
-    justifyContent: "center", // Center text vertically
-    alignItems: "center", // Center text horizontally
-    minWidth: 60, // Added minimum width for better touch targets
+    height: 36,
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 60,
   },
   categoryText: {
-    fontSize: 13, // Increased from 11px
+    fontSize: 13,
     fontWeight: "500",
-    textAlign: "center", // Ensure text is centered
+    textAlign: "center",
   },
   songList: {
     paddingBottom: 80,
@@ -483,6 +693,7 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 8,
     marginRight: 12,
+    backgroundColor: "#f0f0f0",
   },
   songItemDetails: {
     flex: 1,
