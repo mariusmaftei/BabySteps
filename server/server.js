@@ -7,7 +7,8 @@ import childRoute from "./routes/child.js";
 import sleepRoute from "./routes/sleep.js";
 import dotenv from "dotenv";
 import mediaRouter from "./routes/media.js";
-import { db, storage } from "./config/firebase.js";
+import { db } from "./config/firebase.js";
+import vaccinationRoute from "./routes/vaccination.js";
 
 // Load environment variables
 dotenv.config();
@@ -41,6 +42,7 @@ app.use("/auth", authRoute);
 app.use("/children", childRoute);
 app.use("/sleep", sleepRoute);
 app.use("/media", mediaRouter);
+app.use("/vaccinations", vaccinationRoute);
 
 // Check Firebase Firestore connection
 db.listCollections()

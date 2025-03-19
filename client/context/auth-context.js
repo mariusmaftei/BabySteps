@@ -53,6 +53,9 @@ export const AuthProvider = ({ children }) => {
         setToken(token);
         setUser(user);
         setIsAuthenticated(true);
+
+        // Store user data in AsyncStorage
+        await AsyncStorage.setItem("user", JSON.stringify(user));
       }
 
       return result;
@@ -77,6 +80,10 @@ export const AuthProvider = ({ children }) => {
       setToken(newToken);
       setUser(userData);
       setIsAuthenticated(true);
+
+      // Store user data in AsyncStorage
+      await AsyncStorage.setItem("user", JSON.stringify(userData));
+
       return true;
     } catch (err) {
       console.error("Login error in auth context:", err);
@@ -93,6 +100,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const userData = await authService.getCurrentUser(token);
       setUser(userData);
+
+      // Update stored user data
+      await AsyncStorage.setItem("user", JSON.stringify(userData));
+
       return userData;
     } catch (err) {
       setError(err.message || "Failed to get user data");
@@ -119,6 +130,15 @@ export const AuthProvider = ({ children }) => {
         ...prev,
         ...updatedUser,
       }));
+
+      // Update stored user data
+      await AsyncStorage.setItem(
+        "user",
+        JSON.stringify({
+          ...user,
+          ...updatedUser,
+        })
+      );
 
       return updatedUser;
     } catch (err) {

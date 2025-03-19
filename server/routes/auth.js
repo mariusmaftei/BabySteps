@@ -9,12 +9,15 @@ import {
 
 const authRoute = express.Router();
 
-// Public routes
+// Public routes (accessible without authentication)
 authRoute.post("/register", register);
 authRoute.post("/login", login);
 
-// Protected routes
-authRoute.get("/me", protect, getCurrentUser);
-authRoute.put("/update", protect, updateUserProfile);
+// Apply authentication middleware to all routes below
+authRoute.use(protect);
+
+// Protected routes (require authentication)
+authRoute.get("/me", getCurrentUser);
+authRoute.put("/update", updateUserProfile);
 
 export default authRoute;

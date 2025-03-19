@@ -21,9 +21,8 @@ import defaultChildImage from "../../assets/images/default-child.png";
 import { useAuth } from "../../context/auth-context";
 import { useTheme } from "../../context/theme-context";
 import { useChildActivity } from "../../context/child-activity-context";
-// Handle profile image selection with improved error handling
-// Handle profile image selection with improved error handling
-// Handle profile image selection with improved error handling
+import { useNotification } from "../../context/notification-context";
+
 const handleSelectImage = async () => {
   try {
     console.log("Starting image selection process");
@@ -126,6 +125,10 @@ export default function SettingsScreen({ navigation }) {
   const [editChildImage, setEditChildImage] = useState(null);
   const [isUsingDefaultChildImage, setIsUsingDefaultChildImage] =
     useState(false);
+
+  // Add this inside your SettingsScreen component, right after the other useState declarations
+  const { settings, toggleNotifications, toggleHealthReminders } =
+    useNotification();
 
   // Fetch user profile on component mount
   useEffect(() => {
@@ -1669,6 +1672,12 @@ export default function SettingsScreen({ navigation }) {
               "Notifications",
               notificationsEnabled,
               setNotificationsEnabled
+            )}
+            {renderToggleSetting(
+              "notifications",
+              "Vaccination Reminders",
+              settings.healthReminders,
+              toggleHealthReminders
             )}
             <View
               style={[

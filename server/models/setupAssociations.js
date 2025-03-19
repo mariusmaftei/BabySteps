@@ -2,17 +2,41 @@
 import User from "./Auth.js";
 import Child from "./Child.js";
 import Sleep from "./Sleep.js";
+import Vaccination from "./Vaccination.js";
 
 const setupAssociations = () => {
-  // Define the relationship between User and Child
-  Child.belongsTo(User, { foreignKey: "userId", as: "user" });
-  User.hasMany(Child, { foreignKey: "userId", as: "children" });
+  // User has many Children
+  User.hasMany(Child, {
+    foreignKey: "userId",
+    as: "children",
+  });
 
-  // Define the relationship between Child and Sleep
-  Sleep.belongsTo(Child, { foreignKey: "childId" });
-  Child.hasMany(Sleep, { foreignKey: "childId", as: "sleepRecords" });
+  Child.belongsTo(User, {
+    foreignKey: "userId",
+    as: "user",
+  });
 
-  // Add other model associations here as needed
+  // Child has many Sleep records
+  Child.hasMany(Sleep, {
+    foreignKey: "childId",
+    as: "sleepRecords",
+  });
+
+  Sleep.belongsTo(Child, {
+    foreignKey: "childId",
+    as: "child",
+  });
+
+  // Child has many Vaccination records
+  Child.hasMany(Vaccination, {
+    foreignKey: "childId",
+    as: "vaccinations",
+  });
+
+  Vaccination.belongsTo(Child, {
+    foreignKey: "childId",
+    as: "child",
+  });
 };
 
 export default setupAssociations;

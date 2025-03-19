@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,15 +8,26 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
-  SectionList,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../../context/theme-context";
 import { useChildActivity } from "../../../context/child-activity-context";
+import { useNotification } from "../../../context/notification-context";
+import * as VaccinationService from "../../../services/vaccination-service";
+
 export default function HealthDetailsScreen({ navigation }) {
   const { theme } = useTheme();
   const { currentChild } = useChildActivity();
+  const {
+    scheduleVaccinationReminders,
+    cancelVaccinationReminders,
+    updateCurrentScreen,
+  } = useNotification();
   const [vaccinations, setVaccinations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -27,52 +38,163 @@ export default function HealthDetailsScreen({ navigation }) {
   const [currentRelevantDate, setCurrentRelevantDate] = useState(null);
   const [nextRelevantDate, setNextRelevantDate] = useState(null);
   const [birthDate, setBirthDate] = useState(null);
+  const [dueNowVaccines, setDueNowVaccines] = useState([]);
+  const [progress, setProgress] = useState({
+    total: 0,
+    completed: 0,
+    percentage: 0,
+  });
+  const [savingVaccination, setSavingVaccination] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(false);
 
-  // Set up the header title
+  // Set up the header title and update current screen
   React.useLayoutEffect(() => {
     navigation.setOptions({
       title: `${currentChild.name.split(" ")[0]}'s Vaccinations`,
     });
-  }, [navigation, currentChild]);
 
-  // Load completed vaccines from storage (in a real app)
+    // Update current screen to HealthDetails
+    updateCurrentScreen("HealthDetails");
+
+    // When component unmounts, reset to Activity
+    return () => {
+      updateCurrentScreen("Activity");
+    };
+  }, [navigation, currentChild, updateCurrentScreen]);
+
+  // Load vaccinations from API
   useEffect(() => {
-    // This would load from AsyncStorage or API in a real app
-    const savedCompletedVaccines = {};
-    setCompletedVaccines(savedCompletedVaccines);
+    const loadVaccinations = async () => {
+      setLoading(true);
+      try {
+        // Try to fetch vaccinations from the API
+        const vaccinationData =
+          await VaccinationService.getVaccinationsForChild(currentChild.id);
+
+        // If we have vaccinations in the database, use them
+        if (vaccinationData && vaccinationData.length > 0) {
+          setVaccinations(vaccinationData);
+
+          // Create a map of completed vaccines
+          const completedMap = {};
+          vaccinationData.forEach((vaccine) => {
+            if (vaccine.isCompleted) {
+              completedMap[vaccine.vaccineId] = {
+                completedDate: new Date(vaccine.completedDate),
+                notes: vaccine.completionNotes,
+              };
+            }
+          });
+          setCompletedVaccines(completedMap);
+
+          // Parse birth date from the first vaccination's scheduledDate
+          // This assumes the first vaccination is at birth
+          const birthVaccine = vaccinationData.find(
+            (v) => v.ageMonths === 0 && v.ageDays === 0
+          );
+          if (birthVaccine) {
+            const birthDateFromVaccine = new Date(birthVaccine.scheduledDate);
+            setBirthDate(birthDateFromVaccine);
+          } else {
+            // Fallback to calculating from age
+            calculateBirthDateFromAge();
+          }
+
+          // Group vaccinations by date
+          const groupedByDate = groupVaccinationsByDate(vaccinationData);
+
+          // Find the current and next relevant dates
+          const { currentDate, nextDate } = findRelevantDates(groupedByDate);
+          setCurrentRelevantDate(currentDate);
+          setNextRelevantDate(nextDate);
+
+          // Initialize collapsed state for each date - only expand the current relevant date
+          const initialCollapsedState = {};
+          Object.keys(groupedByDate).forEach((dateKey) => {
+            initialCollapsedState[dateKey] = dateKey !== currentDate;
+          });
+          setCollapsedDates(initialCollapsedState);
+
+          // Find due now vaccines for notifications
+          findDueNowVaccines(vaccinationData, groupedByDate);
+        } else {
+          // If no vaccinations in database, generate them
+          await generateAndSaveVaccinationSchedule();
+        }
+
+        // Load vaccination progress
+        await loadVaccinationProgress();
+      } catch (error) {
+        console.error("Error loading vaccinations:", error);
+        Alert.alert(
+          "Error",
+          "Failed to load vaccination data. Please try again later.",
+          [{ text: "OK" }]
+        );
+
+        // Fallback to generating schedule locally
+        await generateAndSaveVaccinationSchedule();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadVaccinations();
   }, [currentChild.id]);
 
-  // Generate vaccination schedule based on birth date
-  useEffect(() => {
-    setLoading(true);
+  // Calculate birth date from age
+  const calculateBirthDateFromAge = () => {
+    const calculatedBirthDate = new Date();
+    const ageText = currentChild.age.toLowerCase();
 
+    if (ageText.includes("day")) {
+      // Handle days old
+      const days = Number.parseInt(ageText.split(" ")[0]) || 0;
+      calculatedBirthDate.setDate(calculatedBirthDate.getDate() - days);
+    } else if (ageText.includes("month")) {
+      // Handle months old
+      const months = Number.parseInt(ageText.split(" ")[0]) || 0;
+      calculatedBirthDate.setMonth(calculatedBirthDate.getMonth() - months);
+    } else if (ageText.includes("year")) {
+      // Handle years old
+      const years = Number.parseInt(ageText.split(" ")[0]) || 0;
+      calculatedBirthDate.setFullYear(
+        calculatedBirthDate.getFullYear() - years
+      );
+    }
+
+    setBirthDate(calculatedBirthDate);
+    return calculatedBirthDate;
+  };
+
+  // Generate and save vaccination schedule
+  const generateAndSaveVaccinationSchedule = async () => {
     try {
-      // Parse birth date from child's age
-      // In a real app, you would store and use the actual birth date
-      // For this example, we'll calculate an approximate birth date based on age
-      const calculatedBirthDate = new Date();
-      const ageText = currentChild.age.toLowerCase();
-
-      if (ageText.includes("day")) {
-        // Handle days old
-        const days = Number.parseInt(ageText.split(" ")[0]) || 0;
-        calculatedBirthDate.setDate(calculatedBirthDate.getDate() - days);
-      } else if (ageText.includes("month")) {
-        // Handle months old
-        const months = Number.parseInt(ageText.split(" ")[0]) || 0;
-        calculatedBirthDate.setMonth(calculatedBirthDate.getMonth() - months);
-      } else if (ageText.includes("year")) {
-        // Handle years old
-        const years = Number.parseInt(ageText.split(" ")[0]) || 0;
-        calculatedBirthDate.setFullYear(
-          calculatedBirthDate.getFullYear() - years
-        );
-      }
-
-      setBirthDate(calculatedBirthDate);
+      // Calculate birth date from age
+      const calculatedBirthDate = calculateBirthDateFromAge();
 
       // Generate vaccination schedule
       const schedule = generateVaccinationSchedule(calculatedBirthDate);
+
+      // Format for API
+      const vaccinationsForApi = schedule.map((vaccine) => ({
+        vaccineId: vaccine.id,
+        vaccineName: vaccine.vaccine,
+        dose: vaccine.dose,
+        scheduledDate: vaccine.date,
+        ageMonths: vaccine.ageMonths,
+        ageDays: vaccine.ageDays,
+        notes: vaccine.notes,
+        isCompleted: false,
+      }));
+
+      // Save to API
+      await VaccinationService.createMultipleVaccinations(
+        currentChild.id,
+        vaccinationsForApi
+      );
+
+      // Set vaccinations state
       setVaccinations(schedule);
 
       // Group vaccinations by date
@@ -88,14 +210,112 @@ export default function HealthDetailsScreen({ navigation }) {
       Object.keys(groupedByDate).forEach((dateKey) => {
         initialCollapsedState[dateKey] = dateKey !== currentDate;
       });
-
       setCollapsedDates(initialCollapsedState);
+
+      // Find due now vaccines for notifications
+      findDueNowVaccines(schedule, groupedByDate);
     } catch (error) {
-      console.error("Error generating vaccination schedule:", error);
-    } finally {
-      setLoading(false);
+      console.error("Error generating and saving vaccination schedule:", error);
+      Alert.alert(
+        "Error",
+        "Failed to save vaccination schedule. Please try again later.",
+        [{ text: "OK" }]
+      );
     }
-  }, [currentChild]);
+  };
+
+  // Load vaccination progress
+  const loadVaccinationProgress = async () => {
+    setLoadingProgress(true);
+    try {
+      const progressData = await VaccinationService.getVaccinationProgress(
+        currentChild.id
+      );
+      setProgress(progressData);
+    } catch (error) {
+      console.error("Error loading vaccination progress:", error);
+      // Calculate progress locally as fallback
+      if (vaccinations.length > 0) {
+        const completedCount = Object.keys(completedVaccines).length;
+        const totalCount = vaccinations.length;
+        const percentage = Math.round((completedCount / totalCount) * 100);
+        setProgress({
+          total: totalCount,
+          completed: completedCount,
+          percentage,
+        });
+      }
+    } finally {
+      setLoadingProgress(false);
+    }
+  };
+
+  // Find vaccines that are due now for notifications
+  const findDueNowVaccines = async (schedule, groupedByDate) => {
+    try {
+      // Try to get due vaccinations from API
+      const dueVaccines = await VaccinationService.getDueVaccinations(
+        currentChild.id
+      );
+      setDueNowVaccines(dueVaccines);
+
+      // Schedule notification if there are due vaccines
+      if (dueVaccines.length > 0) {
+        scheduleVaccinationReminders(dueVaccines, currentChild.name);
+      } else {
+        // Cancel notification if no due vaccines
+        cancelVaccinationReminders();
+      }
+    } catch (error) {
+      console.error("Error fetching due vaccinations:", error);
+
+      // Fallback to calculating due vaccines locally
+      const today = new Date();
+      const localDueVaccines = schedule.filter((vaccine) => {
+        // Check if the vaccine is due this month and not completed
+        return (
+          vaccine.date.getMonth() === today.getMonth() &&
+          vaccine.date.getFullYear() === today.getFullYear() &&
+          !completedVaccines[vaccine.id]
+        );
+      });
+
+      setDueNowVaccines(localDueVaccines);
+
+      // Schedule notification if there are due vaccines
+      if (localDueVaccines.length > 0) {
+        scheduleVaccinationReminders(localDueVaccines, currentChild.name);
+      } else {
+        // Cancel notification if no due vaccines
+        cancelVaccinationReminders();
+      }
+    }
+  };
+
+  // Update notifications when completed vaccines change
+  useEffect(() => {
+    if (vaccinations.length === 0) return;
+
+    // Check if all due now vaccines are completed
+    const allDueNowCompleted = dueNowVaccines.every(
+      (vaccine) => completedVaccines[vaccine.vaccineId || vaccine.id]
+    );
+
+    if (allDueNowCompleted && dueNowVaccines.length > 0) {
+      // Cancel notifications if all due vaccines are completed
+      cancelVaccinationReminders();
+    } else if (dueNowVaccines.length > 0) {
+      // Update notification with remaining due vaccines
+      const remainingDueVaccines = dueNowVaccines.filter(
+        (vaccine) => !completedVaccines[vaccine.vaccineId || vaccine.id]
+      );
+      if (remainingDueVaccines.length > 0) {
+        scheduleVaccinationReminders(remainingDueVaccines, currentChild.name);
+      } else {
+        cancelVaccinationReminders();
+      }
+    }
+  }, [completedVaccines, dueNowVaccines]);
 
   // Function to find the current and next relevant vaccination dates
   const findRelevantDates = (groupedVaccinations) => {
@@ -109,10 +329,10 @@ export default function HealthDetailsScreen({ navigation }) {
         const firstVaccine = groupedVaccinations[dateKey][0];
         return {
           dateKey,
-          date: firstVaccine.date,
+          date: new Date(firstVaccine.scheduledDate || firstVaccine.date),
           // Check if all vaccines for this date are completed
           allCompleted: groupedVaccinations[dateKey].every(
-            (v) => completedVaccines[v.id]
+            (v) => completedVaccines[v.vaccineId || v.id]
           ),
         };
       })
@@ -468,14 +688,17 @@ export default function HealthDetailsScreen({ navigation }) {
 
   // Format age for display
   const formatAge = (vaccine) => {
-    if (vaccine.ageMonths === 0) {
+    const ageMonths = vaccine.ageMonths;
+    const ageDays = vaccine.ageDays;
+
+    if (ageMonths === 0) {
       return "At birth";
-    } else if (vaccine.ageMonths < 1) {
-      return `${vaccine.ageDays} days old`;
-    } else if (vaccine.ageMonths === 1) {
+    } else if (ageMonths < 1) {
+      return `${ageDays} days old`;
+    } else if (ageMonths === 1) {
       return "1 month old";
     } else {
-      return `${vaccine.ageMonths} months old`;
+      return `${ageMonths} months old`;
     }
   };
 
@@ -494,50 +717,74 @@ export default function HealthDetailsScreen({ navigation }) {
 
   // Mark a vaccine as completed
   const markAsCompleted = (vaccineId) => {
-    setSelectedVaccine(vaccinations.find((v) => v.id === vaccineId));
+    const vaccine = vaccinations.find(
+      (v) => (v.vaccineId || v.id) === vaccineId
+    );
+    setSelectedVaccine(vaccine);
     setShowAddModal(true);
   };
 
   // Save completion details
-  const saveCompletion = () => {
+  const saveCompletion = async () => {
     if (!selectedVaccine) return;
 
-    const updatedCompletedVaccines = {
-      ...completedVaccines,
-      [selectedVaccine.id]: {
-        completedDate: new Date(),
-        notes: notes,
-      },
-    };
+    setSavingVaccination(true);
 
-    setCompletedVaccines(updatedCompletedVaccines);
-    setShowAddModal(false);
-    setNotes("");
+    try {
+      // Save to API
+      await VaccinationService.markVaccinationAsCompleted(
+        currentChild.id,
+        selectedVaccine.vaccineId || selectedVaccine.id,
+        notes
+      );
 
-    // In a real app, you would save this to AsyncStorage or API
-    console.log("Saved completion:", updatedCompletedVaccines);
+      // Update local state
+      const updatedCompletedVaccines = {
+        ...completedVaccines,
+        [selectedVaccine.vaccineId || selectedVaccine.id]: {
+          completedDate: new Date(),
+          notes: notes,
+        },
+      };
 
-    // After marking a vaccine as completed, recalculate the relevant dates
-    const groupedByDate = groupVaccinationsByDate(vaccinations);
-    const { currentDate, nextDate } = findRelevantDates(groupedByDate);
+      setCompletedVaccines(updatedCompletedVaccines);
+      setShowAddModal(false);
+      setNotes("");
 
-    // If the current relevant date has changed, update the collapsed states
-    if (currentDate !== currentRelevantDate) {
-      const newCollapsedState = { ...collapsedDates };
+      // Refresh vaccination progress
+      await loadVaccinationProgress();
 
-      // Collapse the previous current date if it's not the same as the new one
-      if (currentRelevantDate && currentRelevantDate !== currentDate) {
-        newCollapsedState[currentRelevantDate] = true;
+      // After marking a vaccine as completed, recalculate the relevant dates
+      const groupedByDate = groupVaccinationsByDate(vaccinations);
+      const { currentDate, nextDate } = findRelevantDates(groupedByDate);
+
+      // If the current relevant date has changed, update the collapsed states
+      if (currentDate !== currentRelevantDate) {
+        const newCollapsedState = { ...collapsedDates };
+
+        // Collapse the previous current date if it's not the same as the new one
+        if (currentRelevantDate && currentRelevantDate !== currentDate) {
+          newCollapsedState[currentRelevantDate] = true;
+        }
+
+        // Expand the new current date
+        if (currentDate) {
+          newCollapsedState[currentDate] = false;
+        }
+
+        setCollapsedDates(newCollapsedState);
+        setCurrentRelevantDate(currentDate);
+        setNextRelevantDate(nextDate);
       }
-
-      // Expand the new current date
-      if (currentDate) {
-        newCollapsedState[currentDate] = false;
-      }
-
-      setCollapsedDates(newCollapsedState);
-      setCurrentRelevantDate(currentDate);
-      setNextRelevantDate(nextDate);
+    } catch (error) {
+      console.error("Error saving vaccination completion:", error);
+      Alert.alert(
+        "Error",
+        "Failed to save vaccination completion. Please try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setSavingVaccination(false);
     }
   };
 
@@ -553,18 +800,15 @@ export default function HealthDetailsScreen({ navigation }) {
 
   // Calculate vaccination progress
   const calculateVaccinationProgress = () => {
-    if (vaccinations.length === 0) return 0;
-
-    const completedCount = Object.keys(completedVaccines).length;
-    const totalCount = vaccinations.length;
-
-    return Math.round((completedCount / totalCount) * 100);
+    return progress.percentage || 0;
   };
 
   // Group vaccinations by date
   const groupVaccinationsByDate = (vaccinationList) => {
     return vaccinationList.reduce((groups, vaccine) => {
-      const dateKey = formatDate(vaccine.date);
+      const dateKey = formatDate(
+        new Date(vaccine.scheduledDate || vaccine.date)
+      );
       if (!groups[dateKey]) {
         groups[dateKey] = [];
       }
@@ -584,7 +828,9 @@ export default function HealthDetailsScreen({ navigation }) {
   // Count vaccines for a date
   const countVaccinesForDate = (vaccines) => {
     const total = vaccines.length;
-    const completed = vaccines.filter((v) => completedVaccines[v.id]).length;
+    const completed = vaccines.filter(
+      (v) => completedVaccines[v.vaccineId || v.id]
+    ).length;
     return { total, completed };
   };
 
@@ -600,7 +846,7 @@ export default function HealthDetailsScreen({ navigation }) {
 
   // Check if all vaccines for a date are completed
   const areAllVaccinesCompletedForDate = (vaccines) => {
-    return vaccines.every((v) => completedVaccines[v.id]);
+    return vaccines.every((v) => completedVaccines[v.vaccineId || v.id]);
   };
 
   // Render the add completion modal
@@ -614,90 +860,141 @@ export default function HealthDetailsScreen({ navigation }) {
         animationType="slide"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View
-          style={[styles.modalOverlay, { backgroundColor: theme.modalOverlay }]}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: theme.cardBackground },
-            ]}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>
-                Record Vaccination
-              </Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color={theme.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={[styles.vaccineTitle, { color: theme.text }]}>
-                {selectedVaccine.vaccine} - {selectedVaccine.dose}
-              </Text>
-
-              <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>
-                Scheduled Date:
-              </Text>
-              <Text style={[styles.modalValue, { color: theme.text }]}>
-                {formatDate(selectedVaccine.date)}
-              </Text>
-
-              <Text
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View
+              style={[
+                styles.modalOverlay,
+                { backgroundColor: theme.modalOverlay },
+              ]}
+            >
+              <View
                 style={[
-                  styles.modalLabel,
-                  { color: theme.textSecondary, marginTop: 16 },
+                  styles.modalContent,
+                  { backgroundColor: theme.cardBackground },
                 ]}
               >
-                Notes (optional):
-              </Text>
-              <TextInput
-                style={[
-                  styles.notesInput,
-                  {
-                    backgroundColor: theme.backgroundSecondary,
-                    color: theme.text,
-                    borderColor: theme.borderLight,
-                  },
-                ]}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Add any notes about this vaccination"
-                placeholderTextColor={theme.textTertiary}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: theme.text }]}>
+                    Record Vaccination
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowAddModal(false)}
+                    disabled={savingVaccination}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={24}
+                      color={theme.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[
-                  styles.cancelButton,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                onPress={() => setShowAddModal(false)}
-              >
-                <Text
-                  style={[
-                    styles.cancelButtonText,
-                    { color: theme.textSecondary },
-                  ]}
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
+                <ScrollView style={styles.modalBody}>
+                  <Text style={[styles.vaccineTitle, { color: theme.text }]}>
+                    {selectedVaccine.vaccineName || selectedVaccine.vaccine} -{" "}
+                    {selectedVaccine.dose}
+                  </Text>
 
-              <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: theme.primary }]}
-                onPress={saveCompletion}
-              >
-                <Text style={styles.saveButtonText}>Mark as Completed</Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[styles.modalLabel, { color: theme.textSecondary }]}
+                  >
+                    Scheduled Date:
+                  </Text>
+                  <Text style={[styles.modalValue, { color: theme.text }]}>
+                    {formatDate(
+                      new Date(
+                        selectedVaccine.scheduledDate || selectedVaccine.date
+                      )
+                    )}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.modalLabel,
+                      { color: theme.textSecondary, marginTop: 16 },
+                    ]}
+                  >
+                    Notes (optional):
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.notesInput,
+                      {
+                        backgroundColor: theme.backgroundSecondary,
+                        color: theme.text,
+                        borderColor: theme.borderLight,
+                      },
+                    ]}
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="Add any notes about this vaccination"
+                    placeholderTextColor={theme.textTertiary}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    editable={!savingVaccination}
+                    returnKeyType="done"
+                    blurOnSubmit={true}
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                </ScrollView>
+
+                <View style={styles.modalFooter}>
+                  <TouchableOpacity
+                    style={[
+                      styles.cancelButton,
+                      {
+                        backgroundColor: theme.backgroundSecondary,
+                        opacity: savingVaccination ? 0.5 : 1,
+                      },
+                    ]}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setShowAddModal(false);
+                    }}
+                    disabled={savingVaccination}
+                  >
+                    <Text
+                      style={[
+                        styles.cancelButtonText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.saveButton,
+                      {
+                        backgroundColor: theme.primary,
+                        opacity: savingVaccination ? 0.5 : 1,
+                      },
+                    ]}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      saveCompletion();
+                    }}
+                    disabled={savingVaccination}
+                  >
+                    {savingVaccination ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>
+                        Mark as Completed
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     );
   };
@@ -711,7 +1008,7 @@ export default function HealthDetailsScreen({ navigation }) {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-            Generating vaccination schedule...
+            Loading vaccination schedule...
           </Text>
         </View>
       </SafeAreaView>
@@ -769,7 +1066,11 @@ export default function HealthDetailsScreen({ navigation }) {
                 Vaccination Progress
               </Text>
               <Text style={[styles.progressPercentage, { color: "#4CAF50" }]}>
-                {calculateVaccinationProgress()}% Complete
+                {loadingProgress ? (
+                  <ActivityIndicator size="small" color="#4CAF50" />
+                ) : (
+                  `${calculateVaccinationProgress()}% Complete`
+                )}
               </Text>
             </View>
 
@@ -794,14 +1095,12 @@ export default function HealthDetailsScreen({ navigation }) {
               <Text
                 style={[styles.progressStat, { color: theme.textSecondary }]}
               >
-                {Object.keys(completedVaccines).length} of {vaccinations.length}{" "}
-                vaccinations completed
+                {progress.completed} of {progress.total} vaccinations completed
               </Text>
               <Text
                 style={[styles.progressStat, { color: theme.textSecondary }]}
               >
-                {vaccinations.length - Object.keys(completedVaccines).length}{" "}
-                remaining
+                {progress.total - progress.completed} remaining
               </Text>
             </View>
           </View>
@@ -818,9 +1117,17 @@ export default function HealthDetailsScreen({ navigation }) {
             );
             const isCurrent = isCurrentRelevantDate(dateKey);
             const isNext = isNextRelevantDate(dateKey);
-            const isPast = isDatePast(groupedVaccinations[dateKey][0].date);
+            const isPast = isDatePast(
+              new Date(
+                groupedVaccinations[dateKey][0].scheduledDate ||
+                  groupedVaccinations[dateKey][0].date
+              )
+            );
             const isCurrentMonthDate = isCurrentMonth(
-              groupedVaccinations[dateKey][0].date
+              new Date(
+                groupedVaccinations[dateKey][0].scheduledDate ||
+                  groupedVaccinations[dateKey][0].date
+              )
             );
             const allCompleted = areAllVaccinesCompletedForDate(
               groupedVaccinations[dateKey]
@@ -938,7 +1245,8 @@ export default function HealthDetailsScreen({ navigation }) {
                 {!isCollapsed &&
                   groupedVaccinations[dateKey].map((vaccine) => {
                     // Determine the card color based on status
-                    const isCompleted = completedVaccines[vaccine.id];
+                    const vaccineId = vaccine.vaccineId || vaccine.id;
+                    const isCompleted = completedVaccines[vaccineId];
 
                     let cardBgColor = "#FFFFFF"; // Default white
                     let cardBorderColor = theme.borderLight;
@@ -968,7 +1276,7 @@ export default function HealthDetailsScreen({ navigation }) {
 
                     return (
                       <View
-                        key={vaccine.id}
+                        key={vaccineId}
                         style={[
                           styles.vaccineCard,
                           {
@@ -987,7 +1295,7 @@ export default function HealthDetailsScreen({ navigation }) {
                                 { color: theme.text },
                               ]}
                             >
-                              {vaccine.vaccine}
+                              {vaccine.vaccineName || vaccine.vaccine}
                             </Text>
                             <Text
                               style={[
@@ -1036,7 +1344,7 @@ export default function HealthDetailsScreen({ navigation }) {
                                   backgroundColor: buttonBgColor,
                                 },
                               ]}
-                              onPress={() => markAsCompleted(vaccine.id)}
+                              onPress={() => markAsCompleted(vaccineId)}
                             >
                               <Text
                                 style={[
@@ -1062,7 +1370,7 @@ export default function HealthDetailsScreen({ navigation }) {
                           {vaccine.notes}
                         </Text>
 
-                        {completedVaccines[vaccine.id]?.notes && (
+                        {completedVaccines[vaccineId]?.notes && (
                           <View
                             style={[
                               styles.completionNotes,
@@ -1075,7 +1383,7 @@ export default function HealthDetailsScreen({ navigation }) {
                                 { color: theme.text },
                               ]}
                             >
-                              {completedVaccines[vaccine.id].notes}
+                              {completedVaccines[vaccineId].notes}
                             </Text>
                           </View>
                         )}
@@ -1338,6 +1646,7 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     marginBottom: 20,
+    maxHeight: 300, // Add a max height to ensure scrolling works
   },
   vaccineTitle: {
     fontSize: 16,

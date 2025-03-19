@@ -24,6 +24,7 @@ export const protect = async (req, res, next) => {
       });
 
       if (!req.user) {
+        console.error("User not found for token with id:", decoded.id);
         return res.status(401).json({ message: "User not found" });
       }
 

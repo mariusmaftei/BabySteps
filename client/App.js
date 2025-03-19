@@ -2,11 +2,11 @@ import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { Dimensions, StatusBar, Text } from "react-native";
+import { Dimensions, StatusBar } from "react-native";
 
 // Add these imports at the top
 import { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, Image, Animated } from "react-native";
+import { View, StyleSheet, Image } from "react-native";
 
 // Screens
 import ActivityScreen from "./screens/activity/activity";
@@ -35,6 +35,9 @@ import {
 import { AuthProvider, useAuth } from "./context/auth-context";
 import LoginScreen from "./screens/login/login-screen";
 import RegisterScreen from "./screens/register/register-screen";
+import NotificationHandler from "./components/notification-handler/notification-handler";
+import { NotificationProvider } from "./context/notification-context";
+
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 const AuthStack = createStackNavigator();
@@ -178,12 +181,18 @@ function SplashScreen() {
   );
 }
 
-// Update the MainApp component to make sure it responds to auth state changes
+// Update the MainApp component to include the NotificationHandler
 function MainApp() {
   const { theme, setThemeByGender } = useTheme();
-  const { isLoading: authLoading, isAuthenticated } = useAuth();
+  const {
+    isLoading: authLoading,
+    isAuthenticated,
+    logout,
+    getCurrentUser,
+  } = useAuth();
   const { currentChild } = useChildActivity();
   const [isSplashVisible, setIsSplashVisible] = useState(true);
+  const userChecked = useRef(false);
 
   useEffect(() => {
     // Show splash screen for a minimum time
@@ -193,6 +202,34 @@ function MainApp() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Check user authentication status and log out if user not found
+  // Only run this once when isAuthenticated changes from false to true
+  useEffect(() => {
+    const checkUser = async () => {
+      if (isAuthenticated && !userChecked.current) {
+        userChecked.current = true;
+        try {
+          await getCurrentUser();
+        } catch (error) {
+          console.error("Failed to fetch user profile:", error);
+          // If user not found (401), log out
+          if (
+            error.message === "User not found" ||
+            (error.response && error.response.status === 401)
+          ) {
+            console.log("User not found, logging out");
+            logout();
+          }
+        }
+      } else if (!isAuthenticated) {
+        // Reset the flag when user logs out
+        userChecked.current = false;
+      }
+    };
+
+    checkUser();
+  }, [isAuthenticated]);
 
   // Keep only this effect for theme updates based on child gender
   useEffect(() => {
@@ -242,7 +279,14 @@ function MainApp() {
     <>
       <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
       <NavigationContainer theme={customTheme}>
-        {isAuthenticated ? <MainTabs /> : <AuthStackNavigator />}
+        {isAuthenticated ? (
+          <>
+            <NotificationHandler />
+            <MainTabs />
+          </>
+        ) : (
+          <AuthStackNavigator />
+        )}
       </NavigationContainer>
     </>
   );
@@ -254,10 +298,12 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <ChildActivityProvider>
-          <SafeAreaProvider>
-            <ThemeChildConnector />
-            <MainApp />
-          </SafeAreaProvider>
+          <NotificationProvider>
+            <SafeAreaProvider>
+              <ThemeChildConnector />
+              <MainApp />
+            </SafeAreaProvider>
+          </NotificationProvider>
         </ChildActivityProvider>
       </AuthProvider>
     </ThemeProvider>
