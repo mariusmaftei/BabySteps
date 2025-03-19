@@ -1,318 +1,618 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useLayoutEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
-  Dimensions,
+  ActivityIndicator,
   Modal,
+  TextInput,
+  SectionList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LineChart } from "react-native-chart-kit";
-
 import { useTheme } from "../../../context/theme-context";
 import { useChildActivity } from "../../../context/child-activity-context";
-
-const screenWidth = Dimensions.get("window").width;
-
 export default function HealthDetailsScreen({ navigation }) {
   const { theme } = useTheme();
   const { currentChild } = useChildActivity();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [showAddRecordModal, setShowAddRecordModal] = useState(false);
+  const [vaccinations, setVaccinations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedVaccine, setSelectedVaccine] = useState(null);
+  const [notes, setNotes] = useState("");
+  const [completedVaccines, setCompletedVaccines] = useState({});
+  const [collapsedDates, setCollapsedDates] = useState({});
+  const [currentRelevantDate, setCurrentRelevantDate] = useState(null);
+  const [nextRelevantDate, setNextRelevantDate] = useState(null);
+  const [birthDate, setBirthDate] = useState(null);
 
-  // Get child's age as a number for recommendations
-  const childAgeText = currentChild.age;
-  const childAgeNum = Number.parseInt(childAgeText.split(" ")[0]) || 0;
-  const childAgeUnit = childAgeText.includes("month") ? "months" : "years";
+  // Set up the header title
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      title: `${currentChild.name.split(" ")[0]}'s Vaccinations`,
+    });
+  }, [navigation, currentChild]);
 
-  // Convert age to months if in years for more precise recommendations
-  const childAgeInMonths =
-    childAgeUnit === "months" ? childAgeNum : childAgeNum * 12;
+  // Load completed vaccines from storage (in a real app)
+  useEffect(() => {
+    // This would load from AsyncStorage or API in a real app
+    const savedCompletedVaccines = {};
+    setCompletedVaccines(savedCompletedVaccines);
+  }, [currentChild.id]);
 
-  // Health record input state
-  const [symptomInput, setSymptomInput] = useState("");
-  const [temperatureInput, setTemperatureInput] = useState("");
-  const [medicationInput, setMedicationInput] = useState("");
-  const [notesInput, setNotesInput] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedSeverity, setSelectedSeverity] = useState(1); // 1-5 scale
+  // Generate vaccination schedule based on birth date
+  useEffect(() => {
+    setLoading(true);
 
-  // Mock health records data - in a real app, this would come from a database
-  const [healthRecords, setHealthRecords] = useState([
-    {
-      id: "1",
-      date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-      symptoms: "Runny nose, cough",
-      temperature: "37.5",
-      severity: 2,
-      medication: "Children's Tylenol",
-      notes: "Started showing symptoms in the evening",
-    },
-    {
-      id: "2",
-      date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), // 15 days ago
-      symptoms: "Fever, irritability",
-      temperature: "38.2",
-      severity: 4,
-      medication: "Ibuprofen",
-      notes: "Visited pediatrician, possible ear infection",
-    },
-    {
-      id: "3",
-      date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000), // 45 days ago
-      symptoms: "Rash on arms",
-      temperature: "36.8",
-      severity: 2,
-      medication: "Hydrocortisone cream",
-      notes: "Possibly from new detergent",
-    },
-    {
-      id: "4",
-      date: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // 90 days ago
-      symptoms: "Sore throat",
-      temperature: "37.8",
-      severity: 3,
-      medication: "Honey and warm water",
-      notes: "Difficulty swallowing",
-    },
-    {
-      id: "5",
-      date: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000), // 120 days ago
-      symptoms: "Vomiting, diarrhea",
-      temperature: "37.9",
-      severity: 4,
-      medication: "Oral rehydration solution",
-      notes: "Possible stomach bug, keeping hydrated",
-    },
-  ]);
+    try {
+      // Parse birth date from child's age
+      // In a real app, you would store and use the actual birth date
+      // For this example, we'll calculate an approximate birth date based on age
+      const calculatedBirthDate = new Date();
+      const ageText = currentChild.age.toLowerCase();
 
-  // Health recommendations based on age
-  const getHealthRecommendations = (ageInMonths) => {
-    if (ageInMonths < 12) {
-      // 0-12 months
+      if (ageText.includes("day")) {
+        // Handle days old
+        const days = Number.parseInt(ageText.split(" ")[0]) || 0;
+        calculatedBirthDate.setDate(calculatedBirthDate.getDate() - days);
+      } else if (ageText.includes("month")) {
+        // Handle months old
+        const months = Number.parseInt(ageText.split(" ")[0]) || 0;
+        calculatedBirthDate.setMonth(calculatedBirthDate.getMonth() - months);
+      } else if (ageText.includes("year")) {
+        // Handle years old
+        const years = Number.parseInt(ageText.split(" ")[0]) || 0;
+        calculatedBirthDate.setFullYear(
+          calculatedBirthDate.getFullYear() - years
+        );
+      }
+
+      setBirthDate(calculatedBirthDate);
+
+      // Generate vaccination schedule
+      const schedule = generateVaccinationSchedule(calculatedBirthDate);
+      setVaccinations(schedule);
+
+      // Group vaccinations by date
+      const groupedByDate = groupVaccinationsByDate(schedule);
+
+      // Find the current and next relevant dates
+      const { currentDate, nextDate } = findRelevantDates(groupedByDate);
+      setCurrentRelevantDate(currentDate);
+      setNextRelevantDate(nextDate);
+
+      // Initialize collapsed state for each date - only expand the current relevant date
+      const initialCollapsedState = {};
+      Object.keys(groupedByDate).forEach((dateKey) => {
+        initialCollapsedState[dateKey] = dateKey !== currentDate;
+      });
+
+      setCollapsedDates(initialCollapsedState);
+    } catch (error) {
+      console.error("Error generating vaccination schedule:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentChild]);
+
+  // Function to find the current and next relevant vaccination dates
+  const findRelevantDates = (groupedVaccinations) => {
+    const today = new Date();
+    const todayString = formatDate(today);
+
+    // Get all date keys and sort them chronologically
+    const dateKeys = Object.keys(groupedVaccinations);
+    const sortedDates = dateKeys
+      .map((dateKey) => {
+        const firstVaccine = groupedVaccinations[dateKey][0];
+        return {
+          dateKey,
+          date: firstVaccine.date,
+          // Check if all vaccines for this date are completed
+          allCompleted: groupedVaccinations[dateKey].every(
+            (v) => completedVaccines[v.id]
+          ),
+        };
+      })
+      .sort((a, b) => a.date - b.date);
+
+    // Check if today matches any vaccination date
+    const todayMatch = sortedDates.find(
+      (d) => formatDate(d.date) === todayString
+    );
+
+    // If today matches a vaccination date and not all vaccines are completed, that's our current date
+    if (todayMatch && !todayMatch.allCompleted) {
+      // Find the next date after today
+      const nextDate = sortedDates.find(
+        (d) =>
+          d.date > today &&
+          formatDate(d.date) !== todayString &&
+          !d.allCompleted
+      );
+
       return {
-        ageGroup: "Infant (0-12 months)",
-        checkupSchedule: "2, 4, 6, 9, and 12 months",
-        vaccinations:
-          "Hepatitis B, Rotavirus, DTaP, Hib, PCV, IPV, Influenza (yearly after 6 months)",
-        commonConcerns: "Colic, diaper rash, teething, ear infections, colds",
-        emergencySigns:
-          "Fever above 100.4°F (38°C), difficulty breathing, dehydration, lethargy",
-        preventiveCare:
-          "Breastfeeding or formula feeding, safe sleep practices, tummy time",
-      };
-    } else if (ageInMonths >= 12 && ageInMonths < 36) {
-      // 1-3 years
-      return {
-        ageGroup: "Toddler (1-3 years)",
-        checkupSchedule: "15, 18, 24, and 30 months",
-        vaccinations: "MMR, Varicella, Hepatitis A, annual influenza",
-        commonConcerns:
-          "Ear infections, colds, stomach bugs, teething, sleep issues",
-        emergencySigns:
-          "Fever above 102°F (38.9°C) for more than 2 days, severe dehydration, difficulty breathing",
-        preventiveCare:
-          "Dental visits, balanced nutrition, physical activity, limited screen time",
-      };
-    } else if (ageInMonths >= 36 && ageInMonths < 72) {
-      // 3-6 years
-      return {
-        ageGroup: "Preschooler (3-6 years)",
-        checkupSchedule: "Annual well-child visits",
-        vaccinations:
-          "DTaP, IPV, MMR, Varicella boosters at 4-6 years, annual influenza",
-        commonConcerns:
-          "Colds, ear infections, strep throat, allergies, asthma",
-        emergencySigns:
-          "Fever above 103°F (39.4°C), severe headache with fever, difficulty breathing, severe abdominal pain",
-        preventiveCare:
-          "Regular dental checkups, vision screening, balanced nutrition, physical activity",
-      };
-    } else {
-      // 6+ years
-      return {
-        ageGroup: "School-age (6+ years)",
-        checkupSchedule: "Annual well-child visits",
-        vaccinations:
-          "Tdap, HPV (starting at 9-11 years), Meningococcal, annual influenza",
-        commonConcerns:
-          "Strep throat, influenza, allergies, sports injuries, behavioral concerns",
-        emergencySigns:
-          "Severe headache, difficulty breathing, severe abdominal pain, signs of dehydration, high fever with rash",
-        preventiveCare:
-          "Regular dental and vision checkups, balanced nutrition, physical activity, adequate sleep",
+        currentDate: todayMatch.dateKey,
+        nextDate: nextDate ? nextDate.dateKey : null,
       };
     }
+
+    // If today doesn't match, find the next upcoming date
+    const nextUpcoming = sortedDates.find(
+      (d) => d.date >= today && !d.allCompleted
+    );
+
+    // If there's an upcoming date, that's our current relevant date
+    if (nextUpcoming) {
+      // Find the date after the upcoming one
+      const indexOfUpcoming = sortedDates.indexOf(nextUpcoming);
+      const nextAfterUpcoming = sortedDates
+        .slice(indexOfUpcoming + 1)
+        .find((d) => !d.allCompleted);
+
+      return {
+        currentDate: nextUpcoming.dateKey,
+        nextDate: nextAfterUpcoming ? nextAfterUpcoming.dateKey : null,
+      };
+    }
+
+    // If all future dates are completed, find the most recent past date that's not completed
+    const mostRecentPast = [...sortedDates]
+      .reverse()
+      .find((d) => d.date < today && !d.allCompleted);
+
+    if (mostRecentPast) {
+      return {
+        currentDate: mostRecentPast.dateKey,
+        nextDate: null,
+      };
+    }
+
+    // If everything is completed or there are no dates, return null for both
+    return { currentDate: null, nextDate: null };
   };
 
-  const recommendations = getHealthRecommendations(childAgeInMonths);
-
-  // Add a new health record
-  const addHealthRecord = () => {
-    if (!symptomInput.trim()) {
-      return; // Don't add empty records
+  // Function to generate vaccination schedule based on birth date
+  const generateVaccinationSchedule = (birthDate) => {
+    if (!birthDate || isNaN(birthDate.getTime())) {
+      console.error(
+        "Invalid birth date provided to generateVaccinationSchedule"
+      );
+      return [];
     }
 
-    const newRecord = {
-      id: Date.now().toString(),
-      date: selectedDate,
-      symptoms: symptomInput,
-      temperature: temperatureInput,
-      severity: selectedSeverity,
-      medication: medicationInput,
-      notes: notesInput,
+    const schedule = [];
+
+    // Helper function to add months to a date
+    const addMonths = (date, months) => {
+      const newDate = new Date(date);
+      newDate.setMonth(newDate.getMonth() + months);
+      return newDate;
     };
 
-    setHealthRecords([newRecord, ...healthRecords]);
+    // Helper function to add days to a date
+    const addDays = (date, days) => {
+      const newDate = new Date(date);
+      newDate.setDate(newDate.getDate() + days);
+      return newDate;
+    };
 
-    // Reset form
-    setSymptomInput("");
-    setTemperatureInput("");
-    setMedicationInput("");
-    setNotesInput("");
-    setSelectedSeverity(1);
-    setSelectedDate(new Date());
+    // Birth (0 months) - Hepatitis B is given at birth
+    schedule.push({
+      id: "hepb-1",
+      date: new Date(birthDate),
+      vaccine: "Hepatitis B (HepB)",
+      dose: "1st dose",
+      notes: "Given at birth",
+      ageMonths: 0,
+      ageDays: 0,
+    });
 
-    // Close modal
-    setShowAddRecordModal(false);
+    // 1-2 months
+    schedule.push({
+      id: "hepb-2",
+      date: addMonths(birthDate, 1),
+      vaccine: "Hepatitis B (HepB)",
+      dose: "2nd dose",
+      notes: "1–2 months after birth",
+      ageMonths: 1,
+      ageDays: 30,
+    });
+
+    // 2 months
+    const twoMonthDate = addMonths(birthDate, 2);
+    schedule.push({
+      id: "dtap-1",
+      date: twoMonthDate,
+      vaccine: "DTaP (Diphtheria, Tetanus, Pertussis)",
+      dose: "1st dose",
+      notes: "Part of 3-dose primary series",
+      ageMonths: 2,
+      ageDays: 60,
+    });
+
+    schedule.push({
+      id: "hib-1",
+      date: twoMonthDate,
+      vaccine: "Hib (Haemophilus influenzae type B)",
+      dose: "1st dose",
+      notes: "Protects against bacterial infections",
+      ageMonths: 2,
+      ageDays: 60,
+    });
+
+    schedule.push({
+      id: "ipv-1",
+      date: twoMonthDate,
+      vaccine: "Polio (IPV)",
+      dose: "1st dose",
+      notes: "Inactivated polio vaccine",
+      ageMonths: 2,
+      ageDays: 60,
+    });
+
+    schedule.push({
+      id: "pcv13-1",
+      date: twoMonthDate,
+      vaccine: "Pneumococcal (PCV13)",
+      dose: "1st dose",
+      notes: "Prevents pneumonia & meningitis",
+      ageMonths: 2,
+      ageDays: 60,
+    });
+
+    schedule.push({
+      id: "rv-1",
+      date: twoMonthDate,
+      vaccine: "Rotavirus (RV)",
+      dose: "1st dose",
+      notes: "Oral vaccine against diarrhea",
+      ageMonths: 2,
+      ageDays: 60,
+    });
+
+    // 4 months
+    const fourMonthDate = addMonths(birthDate, 4);
+    schedule.push({
+      id: "dtap-2",
+      date: fourMonthDate,
+      vaccine: "DTaP",
+      dose: "2nd dose",
+      notes: "Second dose of primary series",
+      ageMonths: 4,
+      ageDays: 120,
+    });
+
+    schedule.push({
+      id: "hib-2",
+      date: fourMonthDate,
+      vaccine: "Hib",
+      dose: "2nd dose",
+      notes: "Second dose of primary series",
+      ageMonths: 4,
+      ageDays: 120,
+    });
+
+    schedule.push({
+      id: "ipv-2",
+      date: fourMonthDate,
+      vaccine: "Polio (IPV)",
+      dose: "2nd dose",
+      notes: "Second dose of primary series",
+      ageMonths: 4,
+      ageDays: 120,
+    });
+
+    schedule.push({
+      id: "pcv13-2",
+      date: fourMonthDate,
+      vaccine: "Pneumococcal (PCV13)",
+      dose: "2nd dose",
+      notes: "Second dose of primary series",
+      ageMonths: 4,
+      ageDays: 120,
+    });
+
+    schedule.push({
+      id: "rv-2",
+      date: fourMonthDate,
+      vaccine: "Rotavirus (RV)",
+      dose: "2nd dose",
+      notes: "Second dose of oral vaccine",
+      ageMonths: 4,
+      ageDays: 120,
+    });
+
+    // 6 months
+    const sixMonthDate = addMonths(birthDate, 6);
+    schedule.push({
+      id: "dtap-3",
+      date: sixMonthDate,
+      vaccine: "DTaP",
+      dose: "3rd dose",
+      notes: "Third dose of primary series",
+      ageMonths: 6,
+      ageDays: 180,
+    });
+
+    schedule.push({
+      id: "hib-3",
+      date: sixMonthDate,
+      vaccine: "Hib",
+      dose: "3rd dose",
+      notes: "Third dose (if 4-dose schedule)",
+      ageMonths: 6,
+      ageDays: 180,
+    });
+
+    schedule.push({
+      id: "ipv-3",
+      date: sixMonthDate,
+      vaccine: "Polio (IPV)",
+      dose: "3rd dose",
+      notes: "Third dose of primary series",
+      ageMonths: 6,
+      ageDays: 180,
+    });
+
+    schedule.push({
+      id: "pcv13-3",
+      date: sixMonthDate,
+      vaccine: "Pneumococcal (PCV13)",
+      dose: "3rd dose",
+      notes: "Third dose of primary series",
+      ageMonths: 6,
+      ageDays: 180,
+    });
+
+    schedule.push({
+      id: "rv-3",
+      date: sixMonthDate,
+      vaccine: "Rotavirus (RV)",
+      dose: "3rd dose (if needed)",
+      notes: "Only for 3-dose series",
+      ageMonths: 6,
+      ageDays: 180,
+    });
+
+    schedule.push({
+      id: "hepb-3",
+      date: sixMonthDate,
+      vaccine: "Hepatitis B (HepB)",
+      dose: "3rd dose",
+      notes: "Final dose in infant schedule",
+      ageMonths: 6,
+      ageDays: 180,
+    });
+
+    schedule.push({
+      id: "flu-1",
+      date: sixMonthDate,
+      vaccine: "Influenza (Flu)",
+      dose: "1st dose",
+      notes: "Given annually from 6 months onward",
+      ageMonths: 6,
+      ageDays: 180,
+    });
+
+    // 7 months (second flu shot)
+    schedule.push({
+      id: "flu-2",
+      date: addMonths(birthDate, 7),
+      vaccine: "Influenza (Flu)",
+      dose: "2nd dose",
+      notes: "Second flu shot (needed first year)",
+      ageMonths: 7,
+      ageDays: 210,
+    });
+
+    // 12 months
+    const twelveMonthDate = addMonths(birthDate, 12);
+    schedule.push({
+      id: "mmr-1",
+      date: twelveMonthDate,
+      vaccine: "MMR (Measles, Mumps, Rubella)",
+      dose: "1st dose",
+      notes: "Typically given at 12 months",
+      ageMonths: 12,
+      ageDays: 365,
+    });
+
+    schedule.push({
+      id: "pcv13-4",
+      date: twelveMonthDate,
+      vaccine: "Pneumococcal (PCV13)",
+      dose: "4th dose (booster)",
+      notes: "Final booster dose",
+      ageMonths: 12,
+      ageDays: 365,
+    });
+
+    schedule.push({
+      id: "var-1",
+      date: twelveMonthDate,
+      vaccine: "Varicella (Chickenpox)",
+      dose: "1st dose",
+      notes: "Protects against chickenpox",
+      ageMonths: 12,
+      ageDays: 365,
+    });
+
+    schedule.push({
+      id: "hepa-1",
+      date: twelveMonthDate,
+      vaccine: "Hepatitis A",
+      dose: "1st dose",
+      notes: "First of two-dose series",
+      ageMonths: 12,
+      ageDays: 365,
+    });
+
+    return schedule.sort((a, b) => a.date - b.date);
   };
 
   // Format date for display
   const formatDate = (date) => {
+    if (!date || isNaN(date.getTime())) {
+      return "Invalid Date";
+    }
+
     return date.toLocaleDateString("en-US", {
-      month: "short",
+      month: "long",
       day: "numeric",
       year: "numeric",
     });
   };
 
-  // Get severity color
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 1:
-        return "#4CD964"; // Green - mild
-      case 2:
-        return "#FFCC00"; // Yellow - moderate
-      case 3:
-        return "#FF9500"; // Orange - concerning
-      case 4:
-        return "#FF3B30"; // Red - severe
-      case 5:
-        return "#AF52DE"; // Purple - emergency
-      default:
-        return "#4CD964";
+  // Format age for display
+  const formatAge = (vaccine) => {
+    if (vaccine.ageMonths === 0) {
+      return "At birth";
+    } else if (vaccine.ageMonths < 1) {
+      return `${vaccine.ageDays} days old`;
+    } else if (vaccine.ageMonths === 1) {
+      return "1 month old";
+    } else {
+      return `${vaccine.ageMonths} months old`;
     }
   };
 
-  // Get severity text
-  const getSeverityText = (severity) => {
-    switch (severity) {
-      case 1:
-        return "Mild";
-      case 2:
-        return "Moderate";
-      case 3:
-        return "Concerning";
-      case 4:
-        return "Severe";
-      case 5:
-        return "Emergency";
-      default:
-        return "Mild";
+  // Check if a date is in the current month
+  const isCurrentMonth = (date) => {
+    if (!date || isNaN(date.getTime())) {
+      return false;
     }
-  };
 
-  // Prepare data for 6-month health timeline chart
-  const getHealthTimelineData = () => {
-    // Get dates for the last 6 months
     const today = new Date();
-    const months = [];
-    const monthLabels = [];
-
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date(today);
-      date.setMonth(today.getMonth() - i);
-      months.push(date);
-      monthLabels.push(date.toLocaleDateString("en-US", { month: "short" }));
-    }
-
-    // Count health incidents per month
-    const monthCounts = months.map((month) => {
-      const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
-      const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-
-      return healthRecords.filter(
-        (record) => record.date >= startOfMonth && record.date <= endOfMonth
-      ).length;
-    });
-
-    // Calculate average severity per month (if there are records)
-    const severityData = months.map((month) => {
-      const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
-      const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-
-      const monthRecords = healthRecords.filter(
-        (record) => record.date >= startOfMonth && record.date <= endOfMonth
-      );
-
-      if (monthRecords.length === 0) return 0;
-
-      const totalSeverity = monthRecords.reduce(
-        (sum, record) => sum + record.severity,
-        0
-      );
-      return totalSeverity / monthRecords.length;
-    });
-
-    return {
-      labels: monthLabels,
-      datasets: [
-        {
-          data: monthCounts,
-          color: (opacity = 1) => `rgba(88, 86, 214, ${opacity})`, // Purple
-          strokeWidth: 2,
-        },
-        {
-          data: severityData,
-          color: (opacity = 1) => `rgba(255, 59, 48, ${opacity})`, // Red
-          strokeWidth: 2,
-        },
-      ],
-      legend: ["Number of Incidents", "Average Severity"],
-    };
+    return (
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    );
   };
 
-  // Set up the notification button in the header
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => setNotificationsEnabled(!notificationsEnabled)}
-        >
-          <Ionicons
-            name={notificationsEnabled ? "notifications" : "notifications-off"}
-            size={24}
-            color={theme.primary}
-          />
-        </TouchableOpacity>
-      ),
-      title: `${currentChild.name.split(" ")[0]}'s Health Details`,
-    });
-  }, [navigation, notificationsEnabled, theme, currentChild]);
+  // Mark a vaccine as completed
+  const markAsCompleted = (vaccineId) => {
+    setSelectedVaccine(vaccinations.find((v) => v.id === vaccineId));
+    setShowAddModal(true);
+  };
 
-  // Render the add record modal
-  const renderAddRecordModal = () => {
+  // Save completion details
+  const saveCompletion = () => {
+    if (!selectedVaccine) return;
+
+    const updatedCompletedVaccines = {
+      ...completedVaccines,
+      [selectedVaccine.id]: {
+        completedDate: new Date(),
+        notes: notes,
+      },
+    };
+
+    setCompletedVaccines(updatedCompletedVaccines);
+    setShowAddModal(false);
+    setNotes("");
+
+    // In a real app, you would save this to AsyncStorage or API
+    console.log("Saved completion:", updatedCompletedVaccines);
+
+    // After marking a vaccine as completed, recalculate the relevant dates
+    const groupedByDate = groupVaccinationsByDate(vaccinations);
+    const { currentDate, nextDate } = findRelevantDates(groupedByDate);
+
+    // If the current relevant date has changed, update the collapsed states
+    if (currentDate !== currentRelevantDate) {
+      const newCollapsedState = { ...collapsedDates };
+
+      // Collapse the previous current date if it's not the same as the new one
+      if (currentRelevantDate && currentRelevantDate !== currentDate) {
+        newCollapsedState[currentRelevantDate] = true;
+      }
+
+      // Expand the new current date
+      if (currentDate) {
+        newCollapsedState[currentDate] = false;
+      }
+
+      setCollapsedDates(newCollapsedState);
+      setCurrentRelevantDate(currentDate);
+      setNextRelevantDate(nextDate);
+    }
+  };
+
+  // Check if a date is in the past
+  const isDatePast = (date) => {
+    if (!date || isNaN(date.getTime())) {
+      return false;
+    }
+
+    const today = new Date();
+    return date < today;
+  };
+
+  // Calculate vaccination progress
+  const calculateVaccinationProgress = () => {
+    if (vaccinations.length === 0) return 0;
+
+    const completedCount = Object.keys(completedVaccines).length;
+    const totalCount = vaccinations.length;
+
+    return Math.round((completedCount / totalCount) * 100);
+  };
+
+  // Group vaccinations by date
+  const groupVaccinationsByDate = (vaccinationList) => {
+    return vaccinationList.reduce((groups, vaccine) => {
+      const dateKey = formatDate(vaccine.date);
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(vaccine);
+      return groups;
+    }, {});
+  };
+
+  // Toggle collapse state for a date group
+  const toggleDateCollapse = (dateKey) => {
+    setCollapsedDates((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey],
+    }));
+  };
+
+  // Count vaccines for a date
+  const countVaccinesForDate = (vaccines) => {
+    const total = vaccines.length;
+    const completed = vaccines.filter((v) => completedVaccines[v.id]).length;
+    return { total, completed };
+  };
+
+  // Check if a date is the current relevant date
+  const isCurrentRelevantDate = (dateKey) => {
+    return dateKey === currentRelevantDate;
+  };
+
+  // Check if a date is the next relevant date
+  const isNextRelevantDate = (dateKey) => {
+    return dateKey === nextRelevantDate;
+  };
+
+  // Check if all vaccines for a date are completed
+  const areAllVaccinesCompletedForDate = (vaccines) => {
+    return vaccines.every((v) => completedVaccines[v.id]);
+  };
+
+  // Render the add completion modal
+  const renderAddCompletionModal = () => {
+    if (!selectedVaccine) return null;
+
     return (
       <Modal
-        visible={showAddRecordModal}
-        animationType="slide"
+        visible={showAddModal}
         transparent={true}
-        onRequestClose={() => setShowAddRecordModal(false)}
+        animationType="slide"
+        onRequestClose={() => setShowAddModal(false)}
       >
         <View
           style={[styles.modalOverlay, { backgroundColor: theme.modalOverlay }]}
@@ -320,215 +620,64 @@ export default function HealthDetailsScreen({ navigation }) {
           <View
             style={[
               styles.modalContent,
-              {
-                backgroundColor: theme.modalBackground,
-                shadowColor: theme.isDark ? "#000" : "#000",
-              },
+              { backgroundColor: theme.cardBackground },
             ]}
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>
-                Add Health Record
+                Record Vaccination
               </Text>
-              <TouchableOpacity
-                onPress={() => setShowAddRecordModal(false)}
-                style={styles.closeButton}
-              >
+              <TouchableOpacity onPress={() => setShowAddModal(false)}>
                 <Ionicons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalScrollContent}>
-              {/* Date Selector */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Date
-                </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.dateSelector,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                  onPress={() => {
-                    // In a real app, you would show a date picker here
-                    console.log("Show date picker");
-                  }}
-                >
-                  <Text style={[styles.dateText, { color: theme.text }]}>
-                    {formatDate(selectedDate)}
-                  </Text>
-                  <Ionicons name="calendar" size={20} color={theme.primary} />
-                </TouchableOpacity>
-              </View>
+            <View style={styles.modalBody}>
+              <Text style={[styles.vaccineTitle, { color: theme.text }]}>
+                {selectedVaccine.vaccine} - {selectedVaccine.dose}
+              </Text>
 
-              {/* Symptoms Input */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Symptoms
-                </Text>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                      color: theme.text,
-                    },
-                  ]}
-                  value={symptomInput}
-                  onChangeText={setSymptomInput}
-                  placeholder="Describe symptoms"
-                  placeholderTextColor={theme.textTertiary}
-                />
-              </View>
+              <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>
+                Scheduled Date:
+              </Text>
+              <Text style={[styles.modalValue, { color: theme.text }]}>
+                {formatDate(selectedVaccine.date)}
+              </Text>
 
-              {/* Temperature Input */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Temperature (°F)
-                </Text>
-                <View style={styles.temperatureInputContainer}>
-                  <TextInput
-                    style={[
-                      styles.temperatureInput,
-                      {
-                        borderColor: theme.borderLight,
-                        backgroundColor: theme.backgroundSecondary,
-                        color: theme.text,
-                      },
-                    ]}
-                    value={temperatureInput}
-                    onChangeText={setTemperatureInput}
-                    placeholder="98.6"
-                    placeholderTextColor={theme.textTertiary}
-                    keyboardType="numeric"
-                  />
-                  <Text
-                    style={[
-                      styles.temperatureUnit,
-                      { color: theme.textSecondary },
-                    ]}
-                  >
-                    °F
-                  </Text>
-                </View>
-              </View>
+              <Text
+                style={[
+                  styles.modalLabel,
+                  { color: theme.textSecondary, marginTop: 16 },
+                ]}
+              >
+                Notes (optional):
+              </Text>
+              <TextInput
+                style={[
+                  styles.notesInput,
+                  {
+                    backgroundColor: theme.backgroundSecondary,
+                    color: theme.text,
+                    borderColor: theme.borderLight,
+                  },
+                ]}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Add any notes about this vaccination"
+                placeholderTextColor={theme.textTertiary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
 
-              {/* Severity Selector */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Severity
-                </Text>
-                <View style={styles.severityContainer}>
-                  {[1, 2, 3, 4, 5].map((level) => (
-                    <TouchableOpacity
-                      key={level}
-                      style={[
-                        styles.severityButton,
-                        {
-                          backgroundColor:
-                            selectedSeverity === level
-                              ? getSeverityColor(level)
-                              : theme.backgroundSecondary,
-                          borderColor: getSeverityColor(level),
-                        },
-                      ]}
-                      onPress={() => setSelectedSeverity(level)}
-                    >
-                      <Text
-                        style={[
-                          styles.severityButtonText,
-                          {
-                            color:
-                              selectedSeverity === level
-                                ? "#FFFFFF"
-                                : getSeverityColor(level),
-                          },
-                        ]}
-                      >
-                        {level}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text
-                  style={[
-                    styles.severityLabelText,
-                    { color: getSeverityColor(selectedSeverity) },
-                  ]}
-                >
-                  {getSeverityText(selectedSeverity)}
-                </Text>
-              </View>
-
-              {/* Medication Input */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Medication
-                </Text>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                      color: theme.text,
-                    },
-                  ]}
-                  value={medicationInput}
-                  onChangeText={setMedicationInput}
-                  placeholder="Medication given (if any)"
-                  placeholderTextColor={theme.textTertiary}
-                />
-              </View>
-
-              {/* Notes Input */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Notes
-                </Text>
-                <TextInput
-                  style={[
-                    styles.textAreaInput,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                      color: theme.text,
-                    },
-                  ]}
-                  value={notesInput}
-                  onChangeText={setNotesInput}
-                  placeholder="Additional notes"
-                  placeholderTextColor={theme.textTertiary}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                />
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalButtonsContainer}>
+            <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={[
                   styles.cancelButton,
                   { backgroundColor: theme.backgroundSecondary },
                 ]}
-                onPress={() => setShowAddRecordModal(false)}
+                onPress={() => setShowAddModal(false)}
               >
                 <Text
                   style={[
@@ -539,11 +688,12 @@ export default function HealthDetailsScreen({ navigation }) {
                   Cancel
                 </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={[styles.saveButton, { backgroundColor: theme.primary }]}
-                onPress={addHealthRecord}
+                onPress={saveCompletion}
               >
-                <Text style={styles.saveButtonText}>Save Record</Text>
+                <Text style={styles.saveButtonText}>Mark as Completed</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -552,553 +702,436 @@ export default function HealthDetailsScreen({ navigation }) {
     );
   };
 
+  // Render loading state
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+            Generating vaccination schedule...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Group vaccinations by date
+  const groupedVaccinations = groupVaccinationsByDate(vaccinations);
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Age Group Info */}
-        <View style={styles.ageGroupContainer}>
-          <Text style={[styles.ageGroupLabel, { color: theme.textSecondary }]}>
-            Age Group:
-          </Text>
+        {/* Vaccination Schedule Header */}
+        <View style={styles.headerContainer}>
           <View
             style={[
-              styles.ageGroupInfo,
+              styles.headerCard,
               { backgroundColor: `${theme.primary}20` },
             ]}
           >
             <Ionicons
-              name="information-circle"
-              size={18}
-              color={theme.primary}
-              style={styles.ageGroupIcon}
-            />
-            <Text style={[styles.ageGroupText, { color: theme.text }]}>
-              {recommendations.ageGroup}
-            </Text>
-          </View>
-        </View>
-
-        {/* 6-Month Health Timeline Chart */}
-        <View
-          style={[
-            styles.chartContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <View style={styles.chartHeader}>
-            <Ionicons
-              name="analytics"
+              name="medical"
               size={24}
-              color={theme.text}
-              style={styles.sectionIcon}
+              color={theme.primary}
+              style={styles.headerIcon}
             />
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              6-Month Health Timeline
-            </Text>
+            <View style={styles.headerTextContainer}>
+              <Text style={[styles.headerTitle, { color: theme.text }]}>
+                Vaccination Schedule
+              </Text>
+              <Text
+                style={[styles.headerSubtitle, { color: theme.textSecondary }]}
+              >
+                Based on {currentChild.name}'s birth date
+              </Text>
+              {birthDate && (
+                <Text
+                  style={[styles.birthDateText, { color: theme.textSecondary }]}
+                >
+                  Birth date: {formatDate(birthDate)}
+                </Text>
+              )}
+            </View>
           </View>
-
-          <View style={styles.chartWrapper}>
-            <LineChart
-              data={getHealthTimelineData()}
-              width={screenWidth - 64}
-              height={220}
-              chartConfig={{
-                backgroundGradientFrom: theme.cardBackground,
-                backgroundGradientTo: theme.cardBackground,
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                style: {
-                  borderRadius: 16,
-                },
-                propsForDots: {
-                  r: "6",
-                  strokeWidth: "2",
-                  stroke: theme.cardBackground,
-                },
-              }}
-              style={styles.chart}
-              bezier
-              fromZero
-              yAxisSuffix=""
-              yAxisInterval={1}
-              segments={5}
-              legend={["Incidents", "Avg. Severity"]}
-            />
-          </View>
-
           <View
             style={[
-              styles.chartInfoContainer,
-              { borderTopColor: theme.borderLight },
+              styles.progressContainer,
+              { backgroundColor: theme.cardBackground },
             ]}
           >
-            <Text
-              style={[styles.chartInfoText, { color: theme.textSecondary }]}
+            <View style={styles.progressTextContainer}>
+              <Text style={[styles.progressTitle, { color: theme.text }]}>
+                Vaccination Progress
+              </Text>
+              <Text style={[styles.progressPercentage, { color: "#4CAF50" }]}>
+                {calculateVaccinationProgress()}% Complete
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.progressBarContainer,
+                { backgroundColor: "#E8F5E9" },
+              ]}
             >
-              {healthRecords.length > 0
-                ? `${healthRecords.length} health incidents recorded in the last 6 months`
-                : "No health incidents recorded in the last 6 months"}
-            </Text>
-          </View>
-        </View>
-
-        {/* Add Health Record Button */}
-        <TouchableOpacity
-          style={[styles.addRecordButton, { backgroundColor: theme.primary }]}
-          onPress={() => setShowAddRecordModal(true)}
-        >
-          <Ionicons
-            name="add-circle"
-            size={20}
-            color="#FFFFFF"
-            style={styles.addRecordIcon}
-          />
-          <Text style={styles.addRecordText}>Add Health Record</Text>
-        </TouchableOpacity>
-
-        {/* Health Records List */}
-        <View
-          style={[
-            styles.recordsContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Health Records
-          </Text>
-
-          {healthRecords.length > 0 ? (
-            healthRecords.map((record, index) => (
               <View
-                key={record.id}
                 style={[
-                  styles.recordCard,
-                  index < healthRecords.length - 1 && {
-                    borderBottomColor: theme.borderLight,
-                    borderBottomWidth: 1,
+                  styles.progressBar,
+                  {
+                    backgroundColor: "#4CAF50",
+                    width: `${calculateVaccinationProgress()}%`,
                   },
                 ]}
+              />
+            </View>
+
+            <View style={styles.progressStatsContainer}>
+              <Text
+                style={[styles.progressStat, { color: theme.textSecondary }]}
               >
-                <View style={styles.recordHeader}>
-                  <View style={styles.recordDateContainer}>
-                    <Ionicons
-                      name="calendar"
-                      size={16}
-                      color={theme.primary}
-                      style={styles.recordIcon}
-                    />
-                    <Text style={[styles.recordDate, { color: theme.text }]}>
-                      {formatDate(record.date)}
-                    </Text>
-                  </View>
+                {Object.keys(completedVaccines).length} of {vaccinations.length}{" "}
+                vaccinations completed
+              </Text>
+              <Text
+                style={[styles.progressStat, { color: theme.textSecondary }]}
+              >
+                {vaccinations.length - Object.keys(completedVaccines).length}{" "}
+                remaining
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Vaccination Timeline */}
+        <View style={styles.timelineContainer}>
+          {Object.keys(groupedVaccinations).map((dateKey, dateIndex) => {
+            if (dateKey === "Invalid Date") return null;
+
+            const isCollapsed = collapsedDates[dateKey];
+            const { total, completed } = countVaccinesForDate(
+              groupedVaccinations[dateKey]
+            );
+            const isCurrent = isCurrentRelevantDate(dateKey);
+            const isNext = isNextRelevantDate(dateKey);
+            const isPast = isDatePast(groupedVaccinations[dateKey][0].date);
+            const isCurrentMonthDate = isCurrentMonth(
+              groupedVaccinations[dateKey][0].date
+            );
+            const allCompleted = areAllVaccinesCompletedForDate(
+              groupedVaccinations[dateKey]
+            );
+
+            // Determine section color based on status
+            let sectionBgColor = theme.cardBackground;
+            let sectionBorderColor = "transparent";
+            let warningMessage = null;
+            let headerTextColor = theme.text;
+            let statusText = "";
+
+            if (allCompleted) {
+              // Completed section - green
+              sectionBgColor = "#E8F5E9"; // Light green
+              sectionBorderColor = "#4CAF50"; // Green
+              headerTextColor = "#4CAF50"; // Green
+              statusText = "Completed";
+            } else if (isPast && !isCurrentMonthDate) {
+              // Overdue section from previous months - red
+              sectionBgColor = "#FFEBEE"; // Light red
+              sectionBorderColor = "#F44336"; // Red
+              headerTextColor = "#F44336"; // Red
+              warningMessage =
+                "Overdue vaccinations! Please consult your doctor.";
+              statusText = "Overdue";
+            } else if (isCurrentMonthDate) {
+              // Current month section - blue
+              sectionBgColor = "#E3F2FD"; // Light blue
+              sectionBorderColor = "#2196F3"; // Blue
+              headerTextColor = "#2196F3"; // Blue
+              statusText = "Due Now";
+            }
+
+            return (
+              <View key={dateKey} style={styles.dateGroup}>
+                {/* Date Header - Clickable to expand/collapse */}
+                <TouchableOpacity
+                  style={styles.dateHeaderContainer}
+                  onPress={() => toggleDateCollapse(dateKey)}
+                  activeOpacity={0.7}
+                >
                   <View
                     style={[
-                      styles.severityBadge,
-                      { backgroundColor: getSeverityColor(record.severity) },
+                      styles.dateHeader,
+                      {
+                        backgroundColor: sectionBgColor,
+                        borderWidth: 1,
+                        borderColor: sectionBorderColor,
+                      },
                     ]}
                   >
-                    <Text style={styles.severityBadgeText}>
-                      {getSeverityText(record.severity)}
-                    </Text>
+                    <View style={styles.dateHeaderContent}>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.dateText,
+                            {
+                              color: headerTextColor,
+                              fontWeight: "700",
+                            },
+                          ]}
+                        >
+                          {dateKey}
+                          {statusText && (
+                            <Text style={{ fontSize: 12, marginLeft: 8 }}>
+                              {" "}
+                              ({statusText})
+                            </Text>
+                          )}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.ageText,
+                            {
+                              color: theme.textSecondary,
+                            },
+                          ]}
+                        >
+                          {formatAge(groupedVaccinations[dateKey][0])}
+                        </Text>
+
+                        {/* Warning message for missed vaccinations */}
+                        {isPast && !isCurrentMonthDate && !allCompleted && (
+                          <Text
+                            style={[styles.warningText, { color: "#F44336" }]}
+                          >
+                            {warningMessage}
+                          </Text>
+                        )}
+                      </View>
+
+                      <View style={styles.dateHeaderRight}>
+                        <Text
+                          style={[
+                            styles.vaccineCount,
+                            {
+                              color: headerTextColor,
+                            },
+                          ]}
+                        >
+                          {completed}/{total} vaccines
+                        </Text>
+                        <Ionicons
+                          name={isCollapsed ? "chevron-down" : "chevron-up"}
+                          size={20}
+                          color={headerTextColor}
+                        />
+                      </View>
+                    </View>
                   </View>
-                </View>
+                </TouchableOpacity>
 
-                <View style={styles.recordContent}>
-                  <View style={styles.recordItem}>
-                    <Text
-                      style={[
-                        styles.recordLabel,
-                        { color: theme.textSecondary },
-                      ]}
-                    >
-                      Symptoms:
-                    </Text>
-                    <Text style={[styles.recordValue, { color: theme.text }]}>
-                      {record.symptoms}
-                    </Text>
-                  </View>
+                {/* Vaccines for this date - Only show if not collapsed */}
+                {!isCollapsed &&
+                  groupedVaccinations[dateKey].map((vaccine) => {
+                    // Determine the card color based on status
+                    const isCompleted = completedVaccines[vaccine.id];
 
-                  {record.temperature && (
-                    <View style={styles.recordItem}>
-                      <Text
+                    let cardBgColor = "#FFFFFF"; // Default white
+                    let cardBorderColor = theme.borderLight;
+                    let buttonBgColor = theme.backgroundSecondary;
+                    let buttonTextColor = theme.textSecondary;
+                    let buttonText = "Mark Complete";
+
+                    if (isCompleted) {
+                      // Completed vaccination - green
+                      cardBgColor = "#E8F5E9"; // Light green
+                      cardBorderColor = "#4CAF50"; // Green
+                    } else if (isPast && !isCurrentMonthDate) {
+                      // Overdue vaccination - red
+                      cardBgColor = "#FFEBEE"; // Light red
+                      cardBorderColor = "#F44336"; // Red
+                      buttonBgColor = "#F44336"; // Red
+                      buttonTextColor = "#FFFFFF"; // White
+                      buttonText = "Overdue";
+                    } else if (isCurrentMonthDate) {
+                      // Current month vaccination - blue
+                      cardBgColor = "#E3F2FD"; // Light blue
+                      cardBorderColor = "#2196F3"; // Blue
+                      buttonBgColor = "#2196F3"; // Blue
+                      buttonTextColor = "#FFFFFF"; // White
+                      buttonText = "Due Now";
+                    }
+
+                    return (
+                      <View
+                        key={vaccine.id}
                         style={[
-                          styles.recordLabel,
-                          { color: theme.textSecondary },
+                          styles.vaccineCard,
+                          {
+                            backgroundColor: cardBgColor,
+                            borderLeftColor: cardBorderColor,
+                            borderColor: cardBorderColor,
+                            borderWidth: 1,
+                          },
                         ]}
                       >
-                        Temperature:
-                      </Text>
-                      <Text style={[styles.recordValue, { color: theme.text }]}>
-                        {record.temperature}°F
-                      </Text>
-                    </View>
-                  )}
+                        <View style={styles.vaccineHeader}>
+                          <View style={styles.vaccineInfo}>
+                            <Text
+                              style={[
+                                styles.vaccineName,
+                                { color: theme.text },
+                              ]}
+                            >
+                              {vaccine.vaccine}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.vaccineDose,
+                                {
+                                  color: isCompleted
+                                    ? "#4CAF50" // Green
+                                    : isPast && !isCurrentMonthDate
+                                    ? "#F44336" // Red
+                                    : isCurrentMonthDate
+                                    ? "#2196F3" // Blue
+                                    : theme.textSecondary,
+                                },
+                              ]}
+                            >
+                              {vaccine.dose}
+                            </Text>
+                          </View>
 
-                  {record.medication && (
-                    <View style={styles.recordItem}>
-                      <Text
-                        style={[
-                          styles.recordLabel,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        Medication:
-                      </Text>
-                      <Text style={[styles.recordValue, { color: theme.text }]}>
-                        {record.medication}
-                      </Text>
-                    </View>
-                  )}
+                          {isCompleted ? (
+                            <View
+                              style={[
+                                styles.completedBadge,
+                                { backgroundColor: "#E8F5E9" },
+                              ]}
+                            >
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={16}
+                                color="#4CAF50"
+                              />
+                              <Text
+                                style={[
+                                  styles.completedText,
+                                  { color: "#4CAF50" },
+                                ]}
+                              >
+                                Completed
+                              </Text>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              style={[
+                                styles.actionButton,
+                                {
+                                  backgroundColor: buttonBgColor,
+                                },
+                              ]}
+                              onPress={() => markAsCompleted(vaccine.id)}
+                            >
+                              <Text
+                                style={[
+                                  styles.actionButtonText,
+                                  {
+                                    color: buttonTextColor,
+                                    fontWeight: "600",
+                                  },
+                                ]}
+                              >
+                                {buttonText}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
 
-                  {record.notes && (
-                    <View style={styles.recordItem}>
-                      <Text
-                        style={[
-                          styles.recordLabel,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        Notes:
-                      </Text>
-                      <Text style={[styles.recordValue, { color: theme.text }]}>
-                        {record.notes}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                        <Text
+                          style={[
+                            styles.vaccineNotes,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          {vaccine.notes}
+                        </Text>
+
+                        {completedVaccines[vaccine.id]?.notes && (
+                          <View
+                            style={[
+                              styles.completionNotes,
+                              { backgroundColor: "#E8F5E9" },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.completionNotesText,
+                                { color: theme.text },
+                              ]}
+                            >
+                              {completedVaccines[vaccine.id].notes}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+
+                {/* Timeline connector (except for last group) */}
+                {dateIndex < Object.keys(groupedVaccinations).length - 1 && (
+                  <View
+                    style={[
+                      styles.timelineConnector,
+                      { backgroundColor: theme.borderLight },
+                    ]}
+                  />
+                )}
               </View>
-            ))
-          ) : (
-            <View style={styles.emptyRecordsContainer}>
-              <Ionicons
-                name="document-text-outline"
-                size={48}
-                color={theme.textTertiary}
-              />
-              <Text
-                style={[
-                  styles.emptyRecordsText,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                No health records yet. Add your first record.
-              </Text>
-            </View>
-          )}
+            );
+          })}
         </View>
 
-        {/* Health Recommendations */}
+        {/* Vaccination Information */}
         <View
-          style={[
-            styles.recommendationsContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
+          style={[styles.infoCard, { backgroundColor: theme.cardBackground }]}
         >
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Health Recommendations
+          <View style={styles.infoHeader}>
+            <Ionicons
+              name="information-circle"
+              size={24}
+              color={theme.primary}
+            />
+            <Text style={[styles.infoTitle, { color: theme.text }]}>
+              Important Information
+            </Text>
+          </View>
+
+          <Text style={[styles.infoText, { color: theme.textSecondary }]}>
+            This vaccination schedule is based on CDC recommendations. Always
+            consult with your pediatrician for the most appropriate schedule for
+            your child.
           </Text>
 
-          <View style={styles.recommendationCard}>
-            <View
-              style={[
-                styles.recommendationIconContainer,
-                { backgroundColor: "#5856D620" },
-              ]}
-            >
-              <Ionicons name="calendar-number" size={24} color="#5856D6" />
-            </View>
-            <View style={styles.recommendationContent}>
-              <Text style={[styles.recommendationTitle, { color: theme.text }]}>
-                Checkup Schedule
-              </Text>
-              <Text
-                style={[
-                  styles.recommendationText,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {recommendations.checkupSchedule}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.recommendationCard}>
-            <View
-              style={[
-                styles.recommendationIconContainer,
-                { backgroundColor: "#4CD96420" },
-              ]}
-            >
-              <Ionicons name="medical" size={24} color="#4CD964" />
-            </View>
-            <View style={styles.recommendationContent}>
-              <Text style={[styles.recommendationTitle, { color: theme.text }]}>
-                Vaccinations
-              </Text>
-              <Text
-                style={[
-                  styles.recommendationText,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {recommendations.vaccinations}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.recommendationCard}>
-            <View
-              style={[
-                styles.recommendationIconContainer,
-                { backgroundColor: "#FF950020" },
-              ]}
-            >
-              <Ionicons name="alert-circle" size={24} color="#FF9500" />
-            </View>
-            <View style={styles.recommendationContent}>
-              <Text style={[styles.recommendationTitle, { color: theme.text }]}>
-                Common Concerns
-              </Text>
-              <Text
-                style={[
-                  styles.recommendationText,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {recommendations.commonConcerns}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.recommendationCard}>
-            <View
-              style={[
-                styles.recommendationIconContainer,
-                { backgroundColor: "#FF3B3020" },
-              ]}
-            >
-              <Ionicons name="warning" size={24} color="#FF3B30" />
-            </View>
-            <View style={styles.recommendationContent}>
-              <Text style={[styles.recommendationTitle, { color: theme.text }]}>
-                Emergency Signs
-              </Text>
-              <Text
-                style={[
-                  styles.recommendationText,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {recommendations.emergencySigns}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.recommendationCard}>
-            <View
-              style={[
-                styles.recommendationIconContainer,
-                { backgroundColor: "#5A87FF20" },
-              ]}
-            >
-              <Ionicons name="shield-checkmark" size={24} color="#5A87FF" />
-            </View>
-            <View style={styles.recommendationContent}>
-              <Text style={[styles.recommendationTitle, { color: theme.text }]}>
-                Preventive Care
-              </Text>
-              <Text
-                style={[
-                  styles.recommendationText,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {recommendations.preventiveCare}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Health Tips */}
-        <View
-          style={[
-            styles.tipsContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Age-Appropriate Health Tips
+          <Text
+            style={[
+              styles.infoText,
+              { color: theme.textSecondary, marginTop: 8 },
+            ]}
+          >
+            Some vaccines may be combined into a single shot. Your healthcare
+            provider may also recommend additional vaccines based on your
+            child's specific needs.
           </Text>
-          <View style={styles.tipsList}>
-            {childAgeInMonths < 12 ? (
-              // 0-12 months tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Keep all vaccination appointments to ensure proper immunity
-                    development
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Practice safe sleep: place baby on back, use firm mattress,
-                    keep crib free of toys and blankets
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Call doctor immediately for fever above 100.4°F (38°C) in
-                    babies under 3 months
-                  </Text>
-                </View>
-              </>
-            ) : childAgeInMonths >= 12 && childAgeInMonths < 36 ? (
-              // 1-3 years tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Begin regular dental care with first tooth; first dental
-                    visit by first birthday
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Childproof your home: secure furniture, cover outlets, lock
-                    cabinets with chemicals
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Establish healthy eating habits with a variety of fruits,
-                    vegetables, and proteins
-                  </Text>
-                </View>
-              </>
-            ) : childAgeInMonths >= 36 && childAgeInMonths < 72 ? (
-              // 3-6 years tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Schedule annual vision and hearing screenings to detect
-                    early developmental issues
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Teach proper handwashing technique to prevent illness and
-                    establish good hygiene habits
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Limit screen time to 1 hour per day of high-quality
-                    programming and be present during viewing
-                  </Text>
-                </View>
-              </>
-            ) : (
-              // 6+ years tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Encourage daily physical activity for at least 60 minutes to
-                    support healthy development
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Establish healthy sleep routines with 9-12 hours of sleep
-                    per night
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Monitor screen time and social media use, and keep
-                    communication open about online safety
-                  </Text>
-                </View>
-              </>
-            )}
-          </View>
         </View>
       </ScrollView>
 
-      {renderAddRecordModal()}
+      {renderAddCompletionModal()}
     </SafeAreaView>
   );
 }
@@ -1111,214 +1144,170 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 30,
   },
-  headerButton: {
-    padding: 10,
-  },
-  ageGroupContainer: {
-    marginBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  ageGroupLabel: {
-    fontSize: 15,
-    fontWeight: "500",
-    marginRight: 8,
-  },
-  ageGroupInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  ageGroupIcon: {
-    marginRight: 6,
-  },
-  ageGroupText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  chartContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  chartHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionIcon: {
-    marginRight: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  chartWrapper: {
-    alignItems: "center",
+  loadingContainer: {
+    flex: 1,
     justifyContent: "center",
-  },
-  chart: {
-    marginVertical: 8,
-    borderRadius: 16,
-  },
-  chartInfoContainer: {
     alignItems: "center",
+  },
+  loadingText: {
     marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-  },
-  chartInfoText: {
-    fontSize: 14,
-    textAlign: "center",
-  },
-  addRecordButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    paddingVertical: 14,
-    marginBottom: 16,
-  },
-  addRecordIcon: {
-    marginRight: 8,
-  },
-  addRecordText: {
-    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "600",
   },
-  recordsContainer: {
-    borderRadius: 16,
+  headerContainer: {
+    marginBottom: 20,
+  },
+  headerCard: {
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  emptyRecordsContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 30,
-  },
-  emptyRecordsText: {
-    marginTop: 12,
-    fontSize: 14,
-    textAlign: "center",
-  },
-  recordCard: {
-    paddingVertical: 16,
-  },
-  recordHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  recordDateContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  recordIcon: {
-    marginRight: 6,
-  },
-  recordDate: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  severityBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
     borderRadius: 12,
   },
-  severityBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
+  headerIcon: {
+    marginRight: 12,
   },
-  recordContent: {
-    marginLeft: 22,
-  },
-  recordItem: {
-    marginBottom: 8,
-  },
-  recordLabel: {
-    fontSize: 13,
-    marginBottom: 2,
-  },
-  recordValue: {
-    fontSize: 15,
-  },
-  recommendationsContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  recommendationCard: {
-    flexDirection: "row",
-    marginTop: 12,
-    marginBottom: 12,
-  },
-  recommendationIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 16,
-  },
-  recommendationContent: {
+  headerTextContainer: {
     flex: 1,
   },
-  recommendationTitle: {
-    fontSize: 16,
+  headerTitle: {
+    fontSize: 18,
     fontWeight: "600",
     marginBottom: 4,
   },
-  recommendationText: {
+  headerSubtitle: {
+    fontSize: 14,
+  },
+  birthDateText: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  timelineContainer: {
+    marginBottom: 20,
+  },
+  dateGroup: {
+    marginBottom: 16,
+  },
+  dateHeaderContainer: {
+    alignItems: "flex-start",
+    marginBottom: 12,
+    width: "100%",
+  },
+  dateHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    width: "100%",
+  },
+  dateHeaderContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  dateHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  vaccineCount: {
+    marginRight: 8,
+    fontSize: 14,
+  },
+  dateText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  ageText: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  warningText: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 4,
+  },
+  vaccineCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  vaccineHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  vaccineInfo: {
+    flex: 1,
+  },
+  vaccineName: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  vaccineDose: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  vaccineNotes: {
     fontSize: 14,
     lineHeight: 20,
   },
-  tipsContainer: {
+  actionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 16,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  completedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  completedText: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginLeft: 4,
+  },
+  completionNotes: {
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 8,
+  },
+  completionNotesText: {
+    fontSize: 13,
+    fontStyle: "italic",
+  },
+  timelineConnector: {
+    width: 2,
+    height: 20,
+    marginLeft: 16,
+  },
+  infoCard: {
+    borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  tipsList: {
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 16,
-  },
-  tipItem: {
+  infoHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     marginBottom: 12,
   },
-  tipIcon: {
-    marginRight: 8,
-    marginTop: 2,
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
   },
-  tipText: {
-    flex: 1,
+  infoText: {
     fontSize: 14,
     lineHeight: 20,
   },
@@ -1328,14 +1317,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalContent: {
-    borderRadius: 16,
     width: "90%",
-    maxHeight: "80%",
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-    padding: 20,
   },
   modalHeader: {
     flexDirection: "row",
@@ -1344,91 +1333,35 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "600",
   },
-  closeButton: {
-    padding: 4,
+  modalBody: {
+    marginBottom: 20,
   },
-  modalScrollContent: {
-    maxHeight: 400,
-  },
-  inputContainer: {
+  vaccineTitle: {
+    fontSize: 16,
+    fontWeight: "600",
     marginBottom: 16,
   },
-  inputLabel: {
+  modalLabel: {
     fontSize: 14,
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  textInput: {
+  modalValue: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  notesInput: {
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  textAreaInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    minHeight: 100,
-  },
-  dateSelector: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  dateText: {
-    fontSize: 16,
-  },
-  temperatureInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  temperatureInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  temperatureUnit: {
-    marginLeft: 8,
-    fontSize: 16,
-  },
-  severityContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  severityButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  severityButtonText: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  severityLabelText: {
+    padding: 12,
     fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
+    minHeight: 80,
   },
-  modalButtonsContainer: {
+  modalFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 16,
   },
   cancelButton: {
     flex: 1,
@@ -1450,5 +1383,46 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  progressContainer: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  progressTextContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  progressPercentage: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  progressBarContainer: {
+    height: 12,
+    borderRadius: 6,
+    marginBottom: 12,
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    borderRadius: 6,
+  },
+  progressStatsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  progressStat: {
+    fontSize: 13,
   },
 });
