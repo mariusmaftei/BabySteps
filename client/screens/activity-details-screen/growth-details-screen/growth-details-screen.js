@@ -231,21 +231,21 @@ export default function GrowthDetailsScreen({ navigation }) {
 
   // Handle input change with validation for weight (kg)
   const handleWeightChange = (type, value) => {
-    // Validate input to only allow numbers with max 2 digits before decimal point
+    // Validate input to only allow numbers with max 4 digits total
     const validatedValue = value.replace(/[^0-9.]/g, "");
 
-    // Limit to max 2 digits before decimal point
+    // Limit to max 4 digits total (including decimal part)
     if (validatedValue.includes(".")) {
       const [whole, decimal] = validatedValue.split(".");
-      if (whole.length > 2) {
+      if (whole.length > 4 || whole.length + decimal.length > 4) {
         return;
       }
       if (type === "current") {
-        setCurrentWeight(whole.substring(0, 2) + "." + decimal);
+        setCurrentWeight(whole + "." + decimal);
       } else {
-        setPreviousWeight(whole.substring(0, 2) + "." + decimal);
+        setPreviousWeight(whole + "." + decimal);
       }
-    } else if (validatedValue.length > 2) {
+    } else if (validatedValue.length > 4) {
       return;
     } else {
       if (type === "current") {
@@ -258,16 +258,16 @@ export default function GrowthDetailsScreen({ navigation }) {
 
   // Handle input change with validation for height and head circumference (cm)
   const handleMeasurementChange = (type, value, setter) => {
-    // Validate input to only allow numbers with max 3 digits before decimal point
+    // Validate input to only allow numbers with max 3 digits total
     const validatedValue = value.replace(/[^0-9.]/g, "");
 
-    // Limit to max 3 digits before decimal point
+    // Limit to max 3 digits total (including decimal part)
     if (validatedValue.includes(".")) {
       const [whole, decimal] = validatedValue.split(".");
-      if (whole.length > 3) {
+      if (whole.length > 3 || whole.length + decimal.length > 3) {
         return;
       }
-      setter(whole.substring(0, 3) + "." + decimal);
+      setter(whole + "." + decimal);
     } else if (validatedValue.length > 3) {
       return;
     } else {

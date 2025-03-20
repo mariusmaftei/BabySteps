@@ -22,7 +22,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function RegisterScreen({ navigation }) {
   const { theme } = useTheme();
-  const { setUser, setToken, setIsAuthenticated } = useAuth();
+  const { register } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -134,33 +134,21 @@ export default function RegisterScreen({ navigation }) {
 
     setIsLoading(true);
     try {
-      // Create a clean object with only the necessary properties
+      // Prepare user data for API
       const userData = {
-        username: name.trim(),
-        email: email.trim().toLowerCase(),
+        username: name,
+        email: email,
         password: password,
-        imageSrc: null,
+        imageSrc: null, // Default to null, can be updated later
       };
 
-      console.log("Sending registration data:", JSON.stringify(userData));
-
-      // Call the API service to register the user directly
+      // Call the API service to register the user
       const response = await authService.register(userData);
 
-      // If successful, set the auth state directly
+      // If successful, use the auth context to log in the user
       if (response && response.token) {
-        const { token, user } = response;
-
-        // Store token and user in AsyncStorage
-        await AsyncStorage.setItem("token", token);
-        await AsyncStorage.setItem("user", JSON.stringify(user));
-
-        // Update auth context state directly
-        setToken(token);
-        setUser(user);
-        setIsAuthenticated(true);
-
-        // Navigation will be handled by the auth state change
+        await register(name, email, password);
+        // The navigation will be handled by the auth state change
       }
     } catch (error) {
       const errorMessage =
@@ -233,8 +221,14 @@ export default function RegisterScreen({ navigation }) {
                   placeholder="Enter your name"
                   placeholderTextColor={theme.textTertiary}
                   value={name}
-                  onChangeText={validateName}
+                  onChangeText={(text) => {
+                    // Limit to 30 characters
+                    if (text.length <= 30) {
+                      validateName(text);
+                    }
+                  }}
                   autoCapitalize="words"
+                  maxLength={30}
                 />
               </View>
               {nameError ? (

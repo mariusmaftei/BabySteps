@@ -28,6 +28,21 @@ const Child = sequelize.define(
       allowNull: true,
       defaultValue: null,
     },
+    weight: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Weight in grams",
+    },
+    height: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Height in millimeters",
+    },
+    headCircumference: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Head circumference in millimeters",
+    },
     userId: {
       type: DataTypes.INTEGER,
       allowNull: false,

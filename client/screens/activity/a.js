@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -23,126 +17,28 @@ import defaultChildImage from "../../assets/images/default-child.png";
 import { useTheme } from "../../context/theme-context";
 import { useChildActivity } from "../../context/child-activity-context";
 import { useNotification } from "../../context/notification-context";
-
 function Activity({ navigation }) {
-  // All hooks must be called at the top level, before any conditional logic
   const { theme } = useTheme();
   const { currentChild, currentChildId, children, switchChild } =
     useChildActivity();
-  const { updateCurrentScreen } = useNotification();
 
-  // State hooks
+  // Add this state for the child switcher modal
   const [showChildSwitcherModal, setShowChildSwitcherModal] = useState(false);
+
+  // Add this state to track the local list of children
   const [localChildren, setLocalChildren] = useState([]);
+
+  // Add this state for the add child prompt
   const [showAddChildPrompt, setShowAddChildPrompt] = useState(false);
 
-  // Derived state
+  // Add a check for no children
   const noChildren = !currentChild || currentChild.id === "default";
 
-  // Helper function to get the correct image source
-  const getChildImageSource = useCallback((child) => {
-    // Check for imageSrc first (this is what's used in your database)
-    if (child?.imageSrc && child.imageSrc !== "default") {
-      return { uri: child.imageSrc };
-    }
-    // Then check for image (alternative property name)
-    else if (child?.image && child.image !== "default") {
-      return { uri: child.image };
-    }
-    // Use default image if no valid image URL is found
-    return defaultChildImage;
-  }, []);
-
-  // Activity card data with trend information
-  const activityCards = useMemo(
-    () => [
-      {
-        title: "Sleep",
-        subtitle: "Track sleep patterns",
-        icon: "moon",
-        color: "#5A87FF",
-        gradient: ["#5A87FF", "#709DFF"],
-        image:
-          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/sleeping-child.jpg-kFbvedsqniZ96VLUXSOV0eJkAur7TZ.jpeg",
-        trend: currentChild?.activities?.sleep?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.sleep?.trend || "0%",
-        screen: "SleepDetails",
-      },
-      {
-        title: "Feeding",
-        subtitle: "Meal tracking",
-        icon: "restaurant",
-        color: "#FF9500",
-        gradient: ["#FF9500", "#FFAC30"],
-        image:
-          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Feeding-child.jpg-zD7Y5eQyPiLnGi7o7ph6xNgLw9bdVW.jpeg",
-        trend: currentChild?.activities?.feeding?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.feeding?.trend || "0%",
-        screen: "FeedingDetails",
-      },
-      {
-        title: "Growth",
-        subtitle: "Track development",
-        icon: "trending-up",
-        color: "#4CD964",
-        gradient: ["#4CD964", "#7AE28C"],
-        image:
-          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/child-growth.jpg-UWt4Kw8CtpknvXrh0f4NDTDbNovWuy.jpeg",
-        trend: currentChild?.activities?.growth?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.growth?.trend || "0%",
-        screen: "GrowthDetails",
-      },
-      {
-        title: "Diaper",
-        subtitle: "Track changes & hygiene",
-        icon: "water",
-        color: "#00B4D8",
-        gradient: ["#00B4D8", "#48CAE4"],
-        image:
-          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-        trend: currentChild?.activities?.diaper?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.diaper?.trend || "0%",
-        screen: "DiaperDetails",
-      },
-      {
-        title: "Health",
-        subtitle: "Medical checkups",
-        icon: "medkit",
-        color: "#007AFF", // Changed to blue
-        gradient: ["#007AFF", "#4DA3FF"], // Changed to blue gradient
-        image:
-          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/heatly-child.jpg-kyeSB4d3cISzh9dPjtHnSvLRzZG6D1.jpeg",
-        trend: currentChild?.activities?.health?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.health?.trend || "0%",
-        screen: "HealthDetails",
-      },
-      {
-        title: "Relaxing",
-        subtitle: "Soothing music & sounds",
-        icon: "musical-notes",
-        color: "#F472B6",
-        gradient: ["#F472B6", "#F9A8D4"],
-        image:
-          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/relaxing.jpg-njSGsa3qQi5ELgv3r4dECK349CakfZ.jpeg",
-        // Removed trend and trendValue properties
-        screen: "RelaxingMusic",
-      },
-    ],
-    [currentChild]
-  );
+  // Add this near the top of the file, inside the component
+  const { updateCurrentScreen } = useNotification();
 
   // Calculate overall mood based on trends
-  const isHappyMood = useMemo(() => {
+  const calculateOverallMood = () => {
     const positiveCount = activityCards.filter(
       (card) => card.trend === "up"
     ).length;
@@ -150,230 +46,128 @@ function Activity({ navigation }) {
       (card) => card.trend === "down"
     ).length;
     return positiveCount > negativeCount;
-  }, [activityCards]);
+  };
+
+  const isHappyMood = calculateOverallMood();
 
   // Handle card press
-  const handleCardPress = useCallback(
-    (item) => {
-      if (item.screen) {
-        navigation.navigate(item.screen);
-      } else {
-        console.log(`${item.title} pressed`);
-      }
-    },
-    [navigation]
-  );
-
-  // Add this function to handle child selection with improved logging
-  const handleSelectChild = useCallback(
-    (childId) => {
-      console.log(`Attempting to switch to child with ID: ${childId}`);
-
-      // Check if the child exists in our local children array
-      const childExists = localChildren.some(
-        (child) => String(child.id) === String(childId)
-      );
-
-      if (!childExists) {
-        console.warn(
-          `Child with ID ${childId} not found in local children list`
-        );
-        return;
-      }
-
-      // Call the switchChild function from context
-      const success = switchChild(childId);
-      console.log(`Switch child result: ${success ? "success" : "failed"}`);
-
-      // Close the modal
-      setShowChildSwitcherModal(false);
-    },
-    [switchChild, localChildren]
-  );
-
-  // Update local children whenever the children prop changes
-  useEffect(() => {
-    if (children && Array.isArray(children)) {
-      console.log(
-        "Children updated in Activity screen:",
-        children.length,
-        "children"
-      );
-      setLocalChildren(children);
+  const handleCardPress = (item) => {
+    if (item.screen) {
+      navigation.navigate(item.screen);
+    } else {
+      console.log(`${item.title} pressed`);
     }
-  }, [children]);
+  };
 
-  // Show the add child prompt when there are no children
-  useEffect(() => {
-    setShowAddChildPrompt(noChildren);
-  }, [noChildren]);
-
-  // Add this useEffect to refresh the modal data when it's opened
-  useEffect(() => {
-    if (showChildSwitcherModal) {
-      console.log("Child switcher modal opened, refreshing children data");
-      // This ensures we have the latest children data when the modal opens
-      setLocalChildren([...children]);
-    }
-  }, [showChildSwitcherModal, children]);
-
-  // Add this useLayoutEffect to set up the header right button
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => setShowChildSwitcherModal(true)}
-          disabled={noChildren}
-        >
-          <Ionicons
-            name="people"
-            size={24}
-            color={noChildren ? theme.textTertiary : theme.primary}
-          />
-        </TouchableOpacity>
-      ),
-      title: noChildren
-        ? "Add a Child"
-        : `${currentChild.name.split(" ")[0]}'s Activity`,
-      headerTitle: () => (
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
-          {noChildren
-            ? "Add a Child"
-            : `${currentChild.name.split(" ")[0]}'s Activity`}
-        </Text>
-      ),
-    });
-
-    // Update current screen to Activity
-    updateCurrentScreen("Activity");
-  }, [navigation, theme, currentChild, noChildren, updateCurrentScreen]);
-
-  // Add a focus listener to refresh data when returning to this screen
-  useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
-      console.log("Activity screen focused, refreshing data");
-      // This will ensure we have the latest children data when returning to this screen
-      setLocalChildren([...children]);
-    });
-
-    return unsubscribe;
-  }, [navigation, children]);
-
-  // Render activity card - defined as a memoized function to avoid recreating on every render
-  const renderActivityCard = useCallback(
-    (item, index) => {
-      if (item.image) {
-        return (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.card,
-              {
-                shadowColor: theme.isDark ? "#000" : "#000",
-              },
-            ]}
-            activeOpacity={0.9}
-            onPress={() => handleCardPress(item)}
-          >
-            <ImageBackground
-              source={{ uri: item.image }}
-              style={styles.cardBackground}
-              imageStyle={styles.cardImage}
-              resizeMode="cover"
-            >
-              {/* Trend Icon - Only show if trend property exists */}
-              {item.trend && (
-                <View style={styles.trendIconContainer}>
-                  <View
-                    style={[
-                      styles.trendIconBackground,
-                      {
-                        backgroundColor:
-                          item.title === "Health"
-                            ? "#007AFF" // Blue for Health card regardless of trend
-                            : item.trend === "up"
-                            ? "#4CD964" // Green for up trend (other cards)
-                            : "#FF3B30", // Red for down trend (other cards)
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={
-                        item.trend === "up" ? "trending-up" : "trending-down"
-                      }
-                      size={14}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.trendText}>{item.trendValue}</Text>
-                  </View>
-                </View>
-              )}
-
-              <View style={styles.imageTextContainer}>
-                <Text style={styles.imageCardTitle}>{item.title}</Text>
-                {item.subtitle && (
-                  <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
-                )}
-              </View>
-            </ImageBackground>
-          </TouchableOpacity>
-        );
-      }
-
-      // Also update the second part (for cards without images):
+  // Render activity card
+  const renderActivityCard = (item, index) => {
+    if (item.image) {
       return (
         <TouchableOpacity
           key={index}
           style={[
             styles.card,
             {
-              backgroundColor: item.color,
               shadowColor: theme.isDark ? "#000" : "#000",
             },
           ]}
           activeOpacity={0.9}
           onPress={() => handleCardPress(item)}
         >
-          {/* Trend Icon - Only show if trend property exists */}
-          {item.trend && (
-            <View style={styles.trendIconContainer}>
-              <View
-                style={[
-                  styles.trendIconBackground,
-                  {
-                    backgroundColor:
-                      item.title === "Health"
-                        ? "#007AFF" // Blue for Health card regardless of trend
-                        : item.trend === "up"
-                        ? "#4CD964" // Green for up trend (other cards)
-                        : "#FF3B30", // Red for down trend (other cards)
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={item.trend === "up" ? "trending-up" : "trending-down"}
-                  size={14}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.trendText}>{item.trendValue}</Text>
+          <ImageBackground
+            source={{ uri: item.image }}
+            style={styles.cardBackground}
+            imageStyle={styles.cardImage}
+            resizeMode="cover"
+          >
+            {/* Trend Icon - Only show if trend property exists */}
+            {item.trend && (
+              <View style={styles.trendIconContainer}>
+                <View
+                  style={[
+                    styles.trendIconBackground,
+                    {
+                      backgroundColor:
+                        item.title === "Health"
+                          ? "#007AFF" // Blue for Health card regardless of trend
+                          : item.trend === "up"
+                          ? "#4CD964" // Green for up trend (other cards)
+                          : "#FF3B30", // Red for down trend (other cards)
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={item.trend === "up" ? "trending-up" : "trending-down"}
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.trendText}>{item.trendValue}</Text>
+                </View>
               </View>
-            </View>
-          )}
+            )}
 
-          <View style={styles.cardContent}>
-            <Ionicons name={item.icon} size={36} color="#FFFFFF" />
-            <Text style={styles.cardTitle}>{item.title}</Text>
-          </View>
+            <View style={styles.imageTextContainer}>
+              <Text style={styles.imageCardTitle}>{item.title}</Text>
+              {item.subtitle && (
+                <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
+              )}
+            </View>
+          </ImageBackground>
         </TouchableOpacity>
       );
-    },
-    [theme, handleCardPress]
-  );
+    }
 
-  // Child switcher modal component - memoized to avoid recreating on every render
-  const childSwitcherModal = useMemo(
-    () => (
+    // Also update the second part (for cards without images):
+    return (
+      <TouchableOpacity
+        key={index}
+        style={[
+          styles.card,
+          {
+            backgroundColor: item.color,
+            shadowColor: theme.isDark ? "#000" : "#000",
+          },
+        ]}
+        activeOpacity={0.9}
+        onPress={() => handleCardPress(item)}
+      >
+        {/* Trend Icon - Only show if trend property exists */}
+        {item.trend && (
+          <View style={styles.trendIconContainer}>
+            <View
+              style={[
+                styles.trendIconBackground,
+                {
+                  backgroundColor:
+                    item.title === "Health"
+                      ? "#007AFF" // Blue for Health card regardless of trend
+                      : item.trend === "up"
+                      ? "#4CD964" // Green for up trend (other cards)
+                      : "#FF3B30", // Red for down trend (other cards)
+                },
+              ]}
+            >
+              <Ionicons
+                name={item.trend === "up" ? "trending-up" : "trending-down"}
+                size={14}
+                color="#FFFFFF"
+              />
+              <Text style={styles.trendText}>{item.trendValue}</Text>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.cardContent}>
+          <Ionicons name={item.icon} size={36} color="#FFFFFF" />
+          <Text style={styles.cardTitle}>{item.title}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Add this child switcher modal component
+  const renderChildSwitcherModal = () => {
+    return (
       <Modal
         visible={showChildSwitcherModal}
         animationType="slide"
@@ -506,19 +300,207 @@ function Activity({ navigation }) {
           </View>
         </View>
       </Modal>
-    ),
-    [
-      showChildSwitcherModal,
-      theme,
-      localChildren,
-      currentChildId,
-      getChildImageSource,
-      handleSelectChild,
-      navigation,
-    ]
+    );
+  };
+
+  // Update local children whenever the children prop changes
+  useEffect(() => {
+    if (children && Array.isArray(children)) {
+      console.log(
+        "Children updated in Activity screen:",
+        children.length,
+        "children"
+      );
+      setLocalChildren(children);
+    }
+  }, [children]);
+
+  // Add this function to handle child selection with improved logging
+  const handleSelectChild = useCallback(
+    (childId) => {
+      console.log(`Attempting to switch to child with ID: ${childId}`);
+
+      // Check if the child exists in our local children array
+      const childExists = localChildren.some(
+        (child) => String(child.id) === String(childId)
+      );
+
+      if (!childExists) {
+        console.warn(
+          `Child with ID ${childId} not found in local children list`
+        );
+        return;
+      }
+
+      // Call the switchChild function from context
+      const success = switchChild(childId);
+      console.log(`Switch child result: ${success ? "success" : "failed"}`);
+
+      // Close the modal
+      setShowChildSwitcherModal(false);
+    },
+    [switchChild, localChildren]
   );
 
-  // Main render
+  // Show the add child prompt when there are no children
+  useEffect(() => {
+    setShowAddChildPrompt(noChildren);
+  }, [noChildren]);
+
+  // Helper function to get the correct image source
+  const getChildImageSource = (child) => {
+    // Check for imageSrc first (this is what's used in your database)
+    if (child.imageSrc && child.imageSrc !== "default") {
+      return { uri: child.imageSrc };
+    }
+    // Then check for image (alternative property name)
+    else if (child.image && child.image !== "default") {
+      return { uri: child.image };
+    }
+    // Use default image if no valid image URL is found
+    return defaultChildImage;
+  };
+
+  // Add this useEffect to refresh the modal data when it's opened
+  useEffect(() => {
+    if (showChildSwitcherModal) {
+      console.log("Child switcher modal opened, refreshing children data");
+      // This ensures we have the latest children data when the modal opens
+      setLocalChildren([...children]);
+    }
+  }, [showChildSwitcherModal, children]);
+
+  // Add this useLayoutEffect to set up the header right button
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => setShowChildSwitcherModal(true)}
+          disabled={noChildren}
+        >
+          <Ionicons
+            name="people"
+            size={24}
+            color={noChildren ? theme.textTertiary : theme.primary}
+          />
+        </TouchableOpacity>
+      ),
+      title: noChildren
+        ? "Add a Child"
+        : `${currentChild.name.split(" ")[0]}'s Activity`,
+      headerTitle: () => (
+        <Text style={[styles.headerTitle, { color: theme.text }]}>
+          {noChildren
+            ? "Add a Child"
+            : `${currentChild.name.split(" ")[0]}'s Activity`}
+        </Text>
+      ),
+    });
+
+    // Update current screen to Activity
+    updateCurrentScreen("Activity");
+  }, [navigation, theme, currentChild, noChildren, updateCurrentScreen]);
+
+  // Add a focus listener to refresh data when returning to this screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      console.log("Activity screen focused, refreshing data");
+      // This will ensure we have the latest children data when returning to this screen
+      setLocalChildren([...children]);
+    });
+
+    return unsubscribe;
+  }, [navigation, children]);
+
+  // Update the activity cards section to safely access nested properties
+  // Replace the activityCards array definition with this code:
+
+  // Activity card data with trend information
+  const activityCards = [
+    {
+      title: "Sleep",
+      subtitle: "Track sleep patterns",
+      icon: "moon",
+      color: "#5A87FF",
+      gradient: ["#5A87FF", "#709DFF"],
+      image:
+        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/sleeping-child.jpg-kFbvedsqniZ96VLUXSOV0eJkAur7TZ.jpeg",
+      trend: currentChild?.activities?.sleep?.trend?.startsWith("+")
+        ? "up"
+        : "down",
+      trendValue: currentChild?.activities?.sleep?.trend || "0%",
+      screen: "SleepDetails",
+    },
+    {
+      title: "Feeding",
+      subtitle: "Meal tracking",
+      icon: "restaurant",
+      color: "#FF9500",
+      gradient: ["#FF9500", "#FFAC30"],
+      image:
+        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Feeding-child.jpg-zD7Y5eQyPiLnGi7o7ph6xNgLw9bdVW.jpeg",
+      trend: currentChild?.activities?.feeding?.trend?.startsWith("+")
+        ? "up"
+        : "down",
+      trendValue: currentChild?.activities?.feeding?.trend || "0%",
+      screen: "FeedingDetails",
+    },
+    {
+      title: "Growth",
+      subtitle: "Track development",
+      icon: "trending-up",
+      color: "#4CD964",
+      gradient: ["#4CD964", "#7AE28C"],
+      image:
+        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/child-growth.jpg-UWt4Kw8CtpknvXrh0f4NDTDbNovWuy.jpeg",
+      trend: currentChild?.activities?.growth?.trend?.startsWith("+")
+        ? "up"
+        : "down",
+      trendValue: currentChild?.activities?.growth?.trend || "0%",
+      screen: "GrowthDetails",
+    },
+    {
+      title: "Diaper",
+      subtitle: "Track changes & hygiene",
+      icon: "water",
+      color: "#00B4D8",
+      gradient: ["#00B4D8", "#48CAE4"],
+      image:
+        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
+      trend: currentChild?.activities?.diaper?.trend?.startsWith("+")
+        ? "up"
+        : "down",
+      trendValue: currentChild?.activities?.diaper?.trend || "0%",
+      screen: "DiaperDetails",
+    },
+    {
+      title: "Health",
+      subtitle: "Medical checkups",
+      icon: "medkit",
+      color: "#007AFF", // Changed to blue
+      gradient: ["#007AFF", "#4DA3FF"], // Changed to blue gradient
+      image:
+        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/heatly-child.jpg-kyeSB4d3cISzh9dPjtHnSvLRzZG6D1.jpeg",
+      trend: currentChild?.activities?.health?.trend?.startsWith("+")
+        ? "up"
+        : "down",
+      trendValue: currentChild?.activities?.health?.trend || "0%",
+      screen: "HealthDetails",
+    },
+    {
+      title: "Relaxing",
+      subtitle: "Soothing music & sounds",
+      icon: "musical-notes",
+      color: "#F472B6",
+      gradient: ["#F472B6", "#F9A8D4"],
+      image:
+        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/relaxing.jpg-njSGsa3qQi5ELgv3r4dECK349CakfZ.jpeg",
+      // Removed trend and trendValue properties
+      screen: "RelaxingMusic",
+    },
+  ];
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
@@ -585,7 +567,7 @@ function Activity({ navigation }) {
           </View>
         </ScrollView>
       )}
-      {childSwitcherModal}
+      {renderChildSwitcherModal()}
     </SafeAreaView>
   );
 }

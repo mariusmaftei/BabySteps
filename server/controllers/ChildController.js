@@ -44,7 +44,8 @@ export const getChildById = async (req, res) => {
 // Create a new child
 export const createChild = async (req, res) => {
   try {
-    const { name, age, gender, imageSrc } = req.body;
+    const { name, age, gender, imageSrc, weight, height, headCircumference } =
+      req.body;
     const userId = req.user.id;
 
     // Validate required fields
@@ -57,6 +58,9 @@ export const createChild = async (req, res) => {
       age,
       gender: gender || "other",
       imageSrc,
+      weight: weight || null,
+      height: height || null,
+      headCircumference: headCircumference || null,
       userId,
     });
 
@@ -71,7 +75,8 @@ export const createChild = async (req, res) => {
 export const updateChild = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, age, gender, imageSrc } = req.body;
+    const { name, age, gender, imageSrc, weight, height, headCircumference } =
+      req.body;
     const userId = req.user.id;
 
     const child = await Child.findOne({
@@ -90,6 +95,10 @@ export const updateChild = async (req, res) => {
     if (age) child.age = age;
     if (gender) child.gender = gender;
     if (imageSrc !== undefined) child.imageSrc = imageSrc;
+    if (weight !== undefined) child.weight = weight;
+    if (height !== undefined) child.height = height;
+    if (headCircumference !== undefined)
+      child.headCircumference = headCircumference;
 
     await child.save();
 

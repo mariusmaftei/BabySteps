@@ -11,6 +11,8 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,6 +25,7 @@ import { useTheme } from "../../context/theme-context";
 import { useChildActivity } from "../../context/child-activity-context";
 import { useNotification } from "../../context/notification-context";
 
+// Handle profile image selection with improved error handling
 const handleSelectImage = async () => {
   try {
     console.log("Starting image selection process");
@@ -101,8 +104,12 @@ export default function SettingsScreen({ navigation }) {
   const [showAddChildModal, setShowAddChildModal] = useState(false);
   const [newChildName, setNewChildName] = useState("");
   const [newChildAge, setNewChildAge] = useState("");
-  const [newChildGender, setNewChildGender] = useState("other");
+  const [newChildGender, setNewChildGender] = useState("male");
   const [newChildImage, setNewChildImage] = useState(null);
+  const [newChildWeight, setNewChildWeight] = useState("");
+  const [newChildHeight, setNewChildHeight] = useState("");
+  const [newChildHeadCircumference, setNewChildHeadCircumference] =
+    useState("");
 
   // User profile state
   const [userProfile, setUserProfile] = useState(null);
@@ -125,10 +132,27 @@ export default function SettingsScreen({ navigation }) {
   const [editChildImage, setEditChildImage] = useState(null);
   const [isUsingDefaultChildImage, setIsUsingDefaultChildImage] =
     useState(false);
+  const [editChildWeight, setEditChildWeight] = useState("");
+  const [editChildHeight, setEditChildHeight] = useState("");
+  const [editChildHeadCircumference, setEditChildHeadCircumference] =
+    useState("");
 
   // Add this inside your SettingsScreen component, right after the other useState declarations
   const { settings, toggleNotifications, toggleHealthReminders } =
     useNotification();
+  // Find the line where we're using the useNotification hook
+  // Make sure this hook is called at the top level of the component, not inside a condition or loop
+  // Also ensure that all hooks are called in the same order on every render
+
+  // Check if there's any conditional rendering of hooks in the component
+  // For example, make sure we're not doing something like:
+  // if (condition) {
+  //   useState(...) // This would cause the error
+  // }
+
+  // The most likely issue is that the useNotification hook might not be properly imported or defined
+  // Make sure the import is correct:
+  // import { useNotification } from "../contexts/notification-context"
 
   // Fetch user profile on component mount
   useEffect(() => {
@@ -366,15 +390,84 @@ export default function SettingsScreen({ navigation }) {
       return;
     }
 
-    // Calculate age
+    // Create date objects for validation
     const birthDate = new Date(year, month - 1, day); // month is 0-indexed in JS Date
     const today = new Date();
-    let ageYears = today.getFullYear() - birthDate.getFullYear();
-    let ageMonths = today.getMonth() - birthDate.getMonth();
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(today.getFullYear() - 1);
+
+    // Check if birth date is in the future
+    if (birthDate > today) {
+      Alert.alert("Invalid Date", "Birth date cannot be in the future");
+      return;
+    }
+
+    // Check if birth date is more than one year ago
+    if (birthDate < oneYearAgo) {
+      Alert.alert(
+        "Invalid Date",
+        "This app is only for infants under one year of age"
+      );
+      return;
+    }
+
+    // Validate weight, height, and head circumference
+    if (newChildWeight.trim() === "") {
+      Alert.alert("Required Field", "Please enter the child's weight in grams");
+      return;
+    }
+
+    if (newChildHeight.trim() === "") {
+      Alert.alert(
+        "Required Field",
+        "Please enter the child's height in millimeters"
+      );
+      return;
+    }
+
+    if (newChildHeadCircumference.trim() === "") {
+      Alert.alert(
+        "Required Field",
+        "Please enter the child's head circumference in millimeters"
+      );
+      return;
+    }
+
+    // Validate that weight, height, and head circumference are numbers
+    const weight = Number.parseInt(newChildWeight, 10);
+    const height = Number.parseInt(newChildHeight, 10);
+    const headCircumference = Number.parseInt(newChildHeadCircumference, 10);
+
+    if (isNaN(weight) || weight <= 0) {
+      Alert.alert("Invalid Weight", "Please enter a valid weight in grams");
+      return;
+    }
+
+    if (isNaN(height) || height <= 0) {
+      Alert.alert(
+        "Invalid Height",
+        "Please enter a valid height in millimeters"
+      );
+      return;
+    }
+
+    if (isNaN(headCircumference) || headCircumference <= 0) {
+      Alert.alert(
+        "Invalid Head Circumference",
+        "Please enter a valid head circumference in millimeters"
+      );
+      return;
+    }
+
+    // Calculate age
+    const birthDateForAge = new Date(year, month - 1, day); // month is 0-indexed in JS Date
+    const current = new Date();
+    let ageYears = current.getFullYear() - birthDateForAge.getFullYear();
+    let ageMonths = current.getMonth() - birthDateForAge.getMonth();
 
     if (
       ageMonths < 0 ||
-      (ageMonths === 0 && today.getDate() < birthDate.getDate())
+      (ageMonths === 0 && current.getDate() < birthDateForAge.getDate())
     ) {
       ageYears--;
       ageMonths += 12;
@@ -399,6 +492,9 @@ export default function SettingsScreen({ navigation }) {
       birthDate: newChildAge, // Store the birth date for future reference
       gender: newChildGender,
       imageSrc: newChildImage || "default", // Use a marker string to indicate default image
+      weight: weight,
+      height: height,
+      headCircumference: headCircumference,
     };
 
     try {
@@ -407,8 +503,11 @@ export default function SettingsScreen({ navigation }) {
         Alert.alert("Success", "Child added successfully");
         setNewChildName("");
         setNewChildAge("");
-        setNewChildGender("other");
+        setNewChildGender("male");
         setNewChildImage(null);
+        setNewChildWeight("");
+        setNewChildHeight("");
+        setNewChildHeadCircumference("");
         setShowAddChildModal(false);
       } else {
         Alert.alert("Error", "Failed to add child");
@@ -431,6 +530,11 @@ export default function SettingsScreen({ navigation }) {
     setEditChildName(child.name);
     setEditChildAge(child.birthDate || "");
     setEditChildGender(child.gender || "other");
+    setEditChildWeight(child.weight ? child.weight.toString() : "");
+    setEditChildHeight(child.height ? child.height.toString() : "");
+    setEditChildHeadCircumference(
+      child.headCircumference ? child.headCircumference.toString() : ""
+    );
 
     // Check if the child has a custom image or is using the default
     if (!child.imageSrc || child.imageSrc === "default") {
@@ -448,71 +552,13 @@ export default function SettingsScreen({ navigation }) {
 
   // Function to save edited child data
   const saveEditedChild = async () => {
-    if (editChildName.trim() === "" || editChildAge.trim() === "") {
-      Alert.alert("Required Fields", "Please enter both name and birth date");
+    if (editChildName.trim() === "") {
+      Alert.alert("Required Field", "Please enter the child's name");
       return;
-    }
-
-    // Validate date format (DD/MM/YYYY)
-    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-    if (!dateRegex.test(editChildAge)) {
-      Alert.alert(
-        "Invalid Date",
-        "Please enter the birth date in DD/MM/YYYY format"
-      );
-      return;
-    }
-
-    // Parse the date parts
-    const [day, month, year] = editChildAge
-      .split("/")
-      .map((part) => Number.parseInt(part, 10));
-
-    // Validate date values
-    if (
-      day < 1 ||
-      day > 31 ||
-      month < 1 ||
-      month > 12 ||
-      year < 1900 ||
-      year > new Date().getFullYear()
-    ) {
-      Alert.alert("Invalid Date", "Please enter a valid birth date");
-      return;
-    }
-
-    // Calculate age
-    const birthDate = new Date(year, month - 1, day); // month is 0-indexed in JS Date
-    const today = new Date();
-    let ageYears = today.getFullYear() - birthDate.getFullYear();
-    let ageMonths = today.getMonth() - birthDate.getMonth();
-
-    if (
-      ageMonths < 0 ||
-      (ageMonths === 0 && today.getDate() < birthDate.getDate())
-    ) {
-      ageYears--;
-      ageMonths += 12;
-    }
-
-    // Format age string
-    let ageString = "";
-    if (ageYears > 0) {
-      ageString += `${ageYears} year${ageYears !== 1 ? "s" : ""}`;
-    }
-    if (ageMonths > 0) {
-      if (ageString.length > 0) ageString += ", ";
-      ageString += `${ageMonths} month${ageMonths !== 1 ? "s" : ""}`;
-    }
-    if (ageString === "") {
-      ageString = "Less than 1 month";
     }
 
     const updatedChildData = {
       name: editChildName,
-      age: ageString,
-      birthDate: editChildAge, // Store the birth date for future reference
-      gender: editChildGender,
     };
 
     // Handle image - if using default, set to "default", otherwise use the selected image
@@ -689,6 +735,36 @@ export default function SettingsScreen({ navigation }) {
                 ? "Female"
                 : "Other"}
             </Text>
+            {child.weight && (
+              <Text
+                style={[
+                  styles.childMeasurement,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                Weight: {child.weight}g
+              </Text>
+            )}
+            {child.height && (
+              <Text
+                style={[
+                  styles.childMeasurement,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                Height: {child.height}mm
+              </Text>
+            )}
+            {child.headCircumference && (
+              <Text
+                style={[
+                  styles.childMeasurement,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                Head: {child.headCircumference}mm
+              </Text>
+            )}
           </View>
           {isCurrentChild && (
             <View
@@ -729,331 +805,424 @@ export default function SettingsScreen({ navigation }) {
         animationType="slide"
         transparent={true}
       >
-        <View
-          style={[styles.modalOverlay, { backgroundColor: theme.modalOverlay }]}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
           <View
             style={[
-              styles.modalContent,
-              {
-                backgroundColor: theme.modalBackground,
-                shadowColor: theme.isDark ? "#000" : "#000",
-                width: "90%",
-                maxHeight: "80%",
-              },
+              styles.modalOverlay,
+              { backgroundColor: theme.modalOverlay },
             ]}
           >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>
-                Add New Child
-              </Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setShowAddChildModal(false)}
-              >
-                <Ionicons name="close" size={24} color={theme.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              {/* Child Image */}
-              <TouchableOpacity
-                style={styles.childImageContainer}
-                onPress={onSelectChildImage}
-                disabled={isSelectingImage}
-              >
-                {newChildImage ? (
-                  <Image
-                    source={{ uri: newChildImage }}
-                    style={styles.addChildImage}
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: theme.modalBackground,
+                  shadowColor: theme.isDark ? "#000" : "#000",
+                  width: "90%",
+                  maxHeight: "90%",
+                },
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  Add New Child
+                </Text>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={() => setShowAddChildModal(false)}
+                >
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={theme.textSecondary}
                   />
-                ) : (
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalBody}>
+                {/* Child Image */}
+                <TouchableOpacity
+                  style={styles.childImageContainer}
+                  onPress={onSelectChildImage}
+                  disabled={isSelectingImage}
+                >
+                  {newChildImage ? (
+                    <Image
+                      source={{ uri: newChildImage }}
+                      style={styles.addChildImage}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.childImagePlaceholder,
+                        { backgroundColor: `${theme.primary}30` },
+                      ]}
+                    >
+                      {isSelectingImage ? (
+                        <ActivityIndicator size="small" color={theme.primary} />
+                      ) : (
+                        <Image
+                          source={defaultChildImage}
+                          style={styles.addChildImage}
+                        />
+                      )}
+                    </View>
+                  )}
                   <View
                     style={[
-                      styles.childImagePlaceholder,
-                      { backgroundColor: `${theme.primary}30` },
+                      styles.editImageBadge,
+                      { backgroundColor: theme.primary + "80" },
                     ]}
                   >
-                    {isSelectingImage ? (
-                      <ActivityIndicator size="small" color={theme.primary} />
-                    ) : (
-                      <Image
-                        source={defaultChildImage}
-                        style={styles.addChildImage}
-                      />
-                    )}
+                    <Ionicons name="camera" size={16} color="#FFFFFF" />
                   </View>
-                )}
-                <View
-                  style={[
-                    styles.editImageBadge,
-                    { backgroundColor: theme.primary + "80" },
-                  ]}
-                >
-                  <Ionicons name="camera" size={16} color="#FFFFFF" />
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              {/* Child Name */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Child's Name *
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      borderColor: theme.border,
-                      color: theme.text,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                  value={newChildName}
-                  onChangeText={setNewChildName}
-                  placeholder="Enter name"
-                  placeholderTextColor={theme.textTertiary}
-                />
-              </View>
-
-              {/* Child Birth Date */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Child's Birth Date *
-                </Text>
-                <View
-                  style={[
-                    styles.datePickerContainer,
-                    {
-                      borderColor: theme.border,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                >
+                {/* Child Name */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Child's Name *
+                  </Text>
                   <TextInput
-                    style={[styles.dateInput, { color: theme.text }]}
-                    value={newChildAge}
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: theme.border,
+                        color: theme.text,
+                        backgroundColor: theme.backgroundSecondary,
+                      },
+                    ]}
+                    value={newChildName}
                     onChangeText={(text) => {
-                      // Remove any non-numeric characters
-                      const cleaned = text.replace(/[^0-9]/g, "");
-
-                      // Format as DD/MM/YYYY automatically as user types
-                      let formatted = "";
-                      if (cleaned.length > 0) {
-                        // Add first digit of day
-                        formatted = cleaned.substring(
-                          0,
-                          Math.min(1, cleaned.length)
-                        );
-
-                        // Add second digit of day
-                        if (cleaned.length > 1) {
-                          formatted = cleaned.substring(0, 2);
-                        }
-
-                        // Add first slash and first digit of month
-                        if (cleaned.length > 2) {
-                          formatted = `${cleaned.substring(
-                            0,
-                            2
-                          )}/${cleaned.substring(2, 3)}`;
-                        }
-
-                        // Add second digit of month
-                        if (cleaned.length > 3) {
-                          formatted = `${cleaned.substring(
-                            0,
-                            2
-                          )}/${cleaned.substring(2, 4)}`;
-                        }
-
-                        // Add second slash and start of year
-                        if (cleaned.length > 4) {
-                          formatted = `${cleaned.substring(
-                            0,
-                            2
-                          )}/${cleaned.substring(2, 4)}/${cleaned.substring(
-                            4,
-                            Math.min(8, cleaned.length)
-                          )}`;
-                        }
+                      // Limit to 30 characters
+                      if (text.length <= 30) {
+                        setNewChildName(text);
                       }
-
-                      setNewChildAge(formatted);
                     }}
-                    placeholder="DD/MM/YYYY"
+                    placeholder="Enter name"
                     placeholderTextColor={theme.textTertiary}
-                    keyboardType="numeric"
-                    maxLength={10}
+                    maxLength={30}
                   />
                 </View>
-                <Text style={[styles.dateHint, { color: theme.textTertiary }]}>
-                  Format: DD/MM/YYYY (e.g., 15/06/2022)
-                </Text>
-              </View>
 
-              {/* Child Gender */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Gender
-                </Text>
-                <View style={styles.genderOptions}>
-                  <TouchableOpacity
+                {/* Child Birth Date */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Child's Birth Date *
+                  </Text>
+                  <View
                     style={[
-                      styles.genderOption,
-                      newChildGender === "male" && {
-                        backgroundColor: `${theme.primary}20`,
-                        borderColor: theme.primary,
+                      styles.datePickerContainer,
+                      {
+                        borderColor: theme.border,
+                        backgroundColor: theme.backgroundSecondary,
                       },
                     ]}
-                    onPress={() => setNewChildGender("male")}
                   >
-                    <Ionicons
-                      name="male"
-                      size={20}
-                      color={
-                        newChildGender === "male"
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.genderText,
-                        {
-                          color:
-                            newChildGender === "male"
-                              ? theme.primary
-                              : theme.textSecondary,
-                        },
-                      ]}
-                    >
-                      Male
-                    </Text>
-                  </TouchableOpacity>
+                    <TextInput
+                      style={[styles.dateInput, { color: theme.text }]}
+                      value={newChildAge}
+                      onChangeText={(text) => {
+                        // Remove any non-numeric characters
+                        const cleaned = text.replace(/[^0-9]/g, "");
 
-                  <TouchableOpacity
-                    style={[
-                      styles.genderOption,
-                      newChildGender === "female" && {
-                        backgroundColor: `${theme.primary}20`,
-                        borderColor: theme.primary,
-                      },
-                    ]}
-                    onPress={() => setNewChildGender("female")}
-                  >
-                    <Ionicons
-                      name="female"
-                      size={20}
-                      color={
-                        newChildGender === "female"
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.genderText,
-                        {
-                          color:
-                            newChildGender === "female"
-                              ? theme.primary
-                              : theme.textSecondary,
-                        },
-                      ]}
-                    >
-                      Female
-                    </Text>
-                  </TouchableOpacity>
+                        // Format as DD/MM/YYYY automatically as user types
+                        let formatted = "";
+                        if (cleaned.length > 0) {
+                          // Add first digit of day
+                          formatted = cleaned.substring(
+                            0,
+                            Math.min(1, cleaned.length)
+                          );
 
-                  <TouchableOpacity
-                    style={[
-                      styles.genderOption,
-                      newChildGender === "other" && {
-                        backgroundColor: `${theme.primary}20`,
-                        borderColor: theme.primary,
-                      },
-                    ]}
-                    onPress={() => setNewChildGender("other")}
-                  >
-                    <Ionicons
-                      name="person"
-                      size={20}
-                      color={
-                        newChildGender === "other"
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
+                          // Add second digit of day
+                          if (cleaned.length > 1) {
+                            formatted = cleaned.substring(0, 2);
+                          }
+
+                          // Add first slash and first digit of month
+                          if (cleaned.length > 2) {
+                            formatted = `${cleaned.substring(
+                              0,
+                              2
+                            )}/${cleaned.substring(2, 3)}`;
+                          }
+
+                          // Add second digit of month
+                          if (cleaned.length > 3) {
+                            formatted = `${cleaned.substring(
+                              0,
+                              2
+                            )}/${cleaned.substring(2, 4)}`;
+                          }
+
+                          // Add second slash and start of year
+                          if (cleaned.length > 4) {
+                            formatted = `${cleaned.substring(
+                              0,
+                              2
+                            )}/${cleaned.substring(2, 4)}/${cleaned.substring(
+                              4,
+                              Math.min(8, cleaned.length)
+                            )}`;
+                          }
+                        }
+
+                        setNewChildAge(formatted);
+                      }}
+                      placeholder="DD/MM/YYYY"
+                      placeholderTextColor={theme.textTertiary}
+                      keyboardType="numeric"
+                      maxLength={10}
                     />
-                    <Text
-                      style={[
-                        styles.genderText,
-                        {
-                          color:
-                            newChildGender === "other"
-                              ? theme.primary
-                              : theme.textSecondary,
-                        },
-                      ]}
-                    >
-                      Other
-                    </Text>
-                  </TouchableOpacity>
+                  </View>
+                  <Text
+                    style={[styles.dateHint, { color: theme.textTertiary }]}
+                  >
+                    Format: DD/MM/YYYY (e.g., 15/06/2022)
+                  </Text>
                 </View>
-              </View>
 
-              <Text
-                style={[
-                  styles.requiredFieldsNote,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                * Required fields
-              </Text>
-            </ScrollView>
+                {/* Child Gender */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Gender *
+                  </Text>
+                  <View style={styles.genderOptions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderOption,
+                        newChildGender === "male" && {
+                          backgroundColor: `${theme.primary}20`,
+                          borderColor: theme.primary,
+                        },
+                      ]}
+                      onPress={() => setNewChildGender("male")}
+                    >
+                      <Ionicons
+                        name="male"
+                        size={20}
+                        color={
+                          newChildGender === "male"
+                            ? theme.primary
+                            : theme.textSecondary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.genderText,
+                          {
+                            color:
+                              newChildGender === "male"
+                                ? theme.primary
+                                : theme.textSecondary,
+                          },
+                        ]}
+                      >
+                        Male
+                      </Text>
+                    </TouchableOpacity>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.cancelButton,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                onPress={() => setShowAddChildModal(false)}
-              >
+                    <TouchableOpacity
+                      style={[
+                        styles.genderOption,
+                        newChildGender === "female" && {
+                          backgroundColor: `${theme.primary}20`,
+                          borderColor: theme.primary,
+                        },
+                      ]}
+                      onPress={() => setNewChildGender("female")}
+                    >
+                      <Ionicons
+                        name="female"
+                        size={20}
+                        color={
+                          newChildGender === "female"
+                            ? theme.primary
+                            : theme.textSecondary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.genderText,
+                          {
+                            color:
+                              newChildGender === "female"
+                                ? theme.primary
+                                : theme.textSecondary,
+                          },
+                        ]}
+                      >
+                        Female
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Child Weight */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Weight (grams) *
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: theme.border,
+                        color: theme.text,
+                        backgroundColor: theme.backgroundSecondary,
+                      },
+                    ]}
+                    value={newChildWeight}
+                    onChangeText={(text) => {
+                      // Remove non-numeric characters and limit to 4 digits
+                      const numericText = text.replace(/[^0-9]/g, "");
+                      if (numericText.length <= 4) {
+                        setNewChildWeight(numericText);
+                      }
+                    }}
+                    placeholder="Enter weight in grams"
+                    placeholderTextColor={theme.textTertiary}
+                    keyboardType="numeric"
+                    maxLength={4}
+                  />
+                  <Text
+                    style={[styles.dateHint, { color: theme.textTertiary }]}
+                  >
+                    Example: 3500 (for 3.5kg)
+                  </Text>
+                </View>
+
+                {/* Child Height */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Height (millimeters) *
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: theme.border,
+                        color: theme.text,
+                        backgroundColor: theme.backgroundSecondary,
+                      },
+                    ]}
+                    value={newChildHeight}
+                    onChangeText={(text) => {
+                      // Remove non-numeric characters and limit to 3 digits
+                      const numericText = text.replace(/[^0-9]/g, "");
+                      if (numericText.length <= 3) {
+                        setNewChildHeight(numericText);
+                      }
+                    }}
+                    placeholder="Enter height in millimeters"
+                    placeholderTextColor={theme.textTertiary}
+                    keyboardType="numeric"
+                    maxLength={3}
+                  />
+                  <Text
+                    style={[styles.dateHint, { color: theme.textTertiary }]}
+                  >
+                    Example: 500 (for 50cm)
+                  </Text>
+                </View>
+
+                {/* Child Head Circumference */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Head Circumference (millimeters) *
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: theme.border,
+                        color: theme.text,
+                        backgroundColor: theme.backgroundSecondary,
+                      },
+                    ]}
+                    value={newChildHeadCircumference}
+                    onChangeText={(text) => {
+                      // Remove non-numeric characters and limit to 3 digits
+                      const numericText = text.replace(/[^0-9]/g, "");
+                      if (numericText.length <= 3) {
+                        setNewChildHeadCircumference(numericText);
+                      }
+                    }}
+                    placeholder="Enter head circumference in millimeters"
+                    placeholderTextColor={theme.textTertiary}
+                    keyboardType="numeric"
+                    maxLength={3}
+                  />
+                  <Text
+                    style={[styles.dateHint, { color: theme.textTertiary }]}
+                  >
+                    Example: 350 (for 35cm)
+                  </Text>
+                </View>
+
                 <Text
                   style={[
-                    styles.cancelButtonText,
+                    styles.requiredFieldsNote,
                     { color: theme.textSecondary },
                   ]}
                 >
-                  Cancel
+                  * Required fields
                 </Text>
-              </TouchableOpacity>
+              </ScrollView>
 
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.addButton,
-                  { backgroundColor: theme.primary },
-                ]}
-                onPress={handleAddChild}
-              >
-                <Text style={styles.addButtonText}>Add Child</Text>
-              </TouchableOpacity>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.cancelButton,
+                    { backgroundColor: theme.backgroundSecondary },
+                  ]}
+                  onPress={() => setShowAddChildModal(false)}
+                >
+                  <Text
+                    style={[
+                      styles.cancelButtonText,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.addButton,
+                    { backgroundColor: theme.primary },
+                  ]}
+                  onPress={handleAddChild}
+                >
+                  <Text style={styles.addButtonText}>Add Child</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
   };
 
-  // Add this new function after renderAddChildModal
   // Render Edit Child Modal
   const renderEditChildModal = () => {
     return (
@@ -1062,326 +1231,356 @@ export default function SettingsScreen({ navigation }) {
         animationType="slide"
         transparent={true}
       >
-        <View
-          style={[styles.modalOverlay, { backgroundColor: theme.modalOverlay }]}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
           <View
             style={[
-              styles.modalContent,
-              {
-                backgroundColor: theme.modalBackground,
-                shadowColor: theme.isDark ? "#000" : "#000",
-                width: "90%",
-                maxHeight: "80%",
-              },
+              styles.modalOverlay,
+              { backgroundColor: theme.modalOverlay },
             ]}
           >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>
-                Edit Child
-              </Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setShowEditChildModal(false)}
-              >
-                <Ionicons name="close" size={24} color={theme.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              {/* Child Image */}
-              <TouchableOpacity
-                style={styles.childImageContainer}
-                onPress={onSelectEditChildImage}
-                disabled={isSelectingImage}
-              >
-                {editChildImage ? (
-                  <Image
-                    source={{ uri: editChildImage }}
-                    style={styles.addChildImage}
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: theme.modalBackground,
+                  shadowColor: theme.isDark ? "#000" : "#000",
+                  width: "90%",
+                  maxHeight: "90%",
+                },
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  Edit Child
+                </Text>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={() => setShowEditChildModal(false)}
+                >
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={theme.textSecondary}
                   />
-                ) : (
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalBody}>
+                {/* Child Image */}
+                <TouchableOpacity
+                  style={styles.childImageContainer}
+                  onPress={onSelectEditChildImage}
+                  disabled={isSelectingImage}
+                >
+                  {editChildImage ? (
+                    <Image
+                      source={{ uri: editChildImage }}
+                      style={styles.addChildImage}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.childImagePlaceholder,
+                        { backgroundColor: `${theme.primary}30` },
+                      ]}
+                    >
+                      {isSelectingImage ? (
+                        <ActivityIndicator size="small" color={theme.primary} />
+                      ) : (
+                        <Image
+                          source={defaultChildImage}
+                          style={styles.addChildImage}
+                        />
+                      )}
+                    </View>
+                  )}
                   <View
                     style={[
-                      styles.childImagePlaceholder,
-                      { backgroundColor: `${theme.primary}30` },
+                      styles.editImageBadge,
+                      { backgroundColor: theme.primary + "80" },
                     ]}
                   >
-                    {isSelectingImage ? (
-                      <ActivityIndicator size="small" color={theme.primary} />
-                    ) : (
-                      <Image
-                        source={defaultChildImage}
-                        style={styles.addChildImage}
-                      />
-                    )}
+                    <Ionicons name="camera" size={16} color="#FFFFFF" />
                   </View>
-                )}
-                <View
-                  style={[
-                    styles.editImageBadge,
-                    { backgroundColor: theme.primary + "80" },
-                  ]}
-                >
-                  <Ionicons name="camera" size={16} color="#FFFFFF" />
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              {/* Child Name */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Child's Name *
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      borderColor: theme.border,
-                      color: theme.text,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                  value={editChildName}
-                  onChangeText={setEditChildName}
-                  placeholder="Enter name"
-                  placeholderTextColor={theme.textTertiary}
-                />
-              </View>
-
-              {/* Child Birth Date */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Child's Birth Date *
-                </Text>
-                <View
-                  style={[
-                    styles.datePickerContainer,
-                    {
-                      borderColor: theme.border,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                >
+                {/* Child Name */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Child's Name *
+                  </Text>
                   <TextInput
-                    style={[styles.dateInput, { color: theme.text }]}
-                    value={editChildAge}
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: theme.border,
+                        color: theme.text,
+                        backgroundColor: theme.backgroundSecondary,
+                      },
+                    ]}
+                    value={editChildName}
                     onChangeText={(text) => {
-                      // Remove any non-numeric characters
-                      const cleaned = text.replace(/[^0-9]/g, "");
-
-                      // Format as DD/MM/YYYY automatically as user types
-                      let formatted = "";
-                      if (cleaned.length > 0) {
-                        // Add first digit of day
-                        formatted = cleaned.substring(
-                          0,
-                          Math.min(1, cleaned.length)
-                        );
-
-                        // Add second digit of day
-                        if (cleaned.length > 1) {
-                          formatted = cleaned.substring(0, 2);
-                        }
-
-                        // Add first slash and first digit of month
-                        if (cleaned.length > 2) {
-                          formatted = `${cleaned.substring(
-                            0,
-                            2
-                          )}/${cleaned.substring(2, 3)}`;
-                        }
-
-                        // Add second digit of month
-                        if (cleaned.length > 3) {
-                          formatted = `${cleaned.substring(
-                            0,
-                            2
-                          )}/${cleaned.substring(2, 4)}`;
-                        }
-
-                        // Add second slash and start of year
-                        if (cleaned.length > 4) {
-                          formatted = `${cleaned.substring(
-                            0,
-                            2
-                          )}/${cleaned.substring(2, 4)}/${cleaned.substring(
-                            4,
-                            Math.min(8, cleaned.length)
-                          )}`;
-                        }
+                      // Limit to 30 characters
+                      if (text.length <= 30) {
+                        setEditChildName(text);
                       }
-
-                      setEditChildAge(formatted);
                     }}
-                    placeholder="DD/MM/YYYY"
+                    placeholder="Enter name"
                     placeholderTextColor={theme.textTertiary}
-                    keyboardType="numeric"
-                    maxLength={10}
+                    maxLength={30}
                   />
                 </View>
-                <Text style={[styles.dateHint, { color: theme.textTertiary }]}>
-                  Format: DD/MM/YYYY (e.g., 15/06/2022)
-                </Text>
-              </View>
 
-              {/* Child Gender */}
-              <View style={styles.inputContainer}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Gender
-                </Text>
-                <View style={styles.genderOptions}>
-                  <TouchableOpacity
+                {/* Child Birth Date - Disabled */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Child's Birth Date
+                  </Text>
+                  <View
                     style={[
-                      styles.genderOption,
-                      editChildGender === "male" && {
-                        backgroundColor: `${theme.primary}20`,
-                        borderColor: theme.primary,
+                      styles.datePickerContainer,
+                      {
+                        borderColor: theme.border,
+                        backgroundColor: theme.backgroundSecondary,
+                        opacity: 0.7,
                       },
                     ]}
-                    onPress={() => setEditChildGender("male")}
                   >
-                    <Ionicons
-                      name="male"
-                      size={20}
-                      color={
-                        editChildGender === "male"
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
+                    <TextInput
+                      style={[styles.dateInput, { color: theme.textTertiary }]}
+                      value={editChildAge}
+                      editable={false}
+                      placeholder="DD/MM/YYYY"
+                      placeholderTextColor={theme.textTertiary}
                     />
-                    <Text
-                      style={[
-                        styles.genderText,
-                        {
-                          color:
-                            editChildGender === "male"
-                              ? theme.primary
-                              : theme.textSecondary,
-                        },
-                      ]}
-                    >
-                      Male
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.genderOption,
-                      editChildGender === "female" && {
-                        backgroundColor: `${theme.primary}20`,
-                        borderColor: theme.primary,
-                      },
-                    ]}
-                    onPress={() => setEditChildGender("female")}
+                  </View>
+                  <Text
+                    style={[styles.dateHint, { color: theme.textTertiary }]}
                   >
-                    <Ionicons
-                      name="female"
-                      size={20}
-                      color={
-                        editChildGender === "female"
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.genderText,
-                        {
-                          color:
-                            editChildGender === "female"
-                              ? theme.primary
-                              : theme.textSecondary,
-                        },
-                      ]}
-                    >
-                      Female
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.genderOption,
-                      editChildGender === "other" && {
-                        backgroundColor: `${theme.primary}20`,
-                        borderColor: theme.primary,
-                      },
-                    ]}
-                    onPress={() => setEditChildGender("other")}
-                  >
-                    <Ionicons
-                      name="person"
-                      size={20}
-                      color={
-                        editChildGender === "other"
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.genderText,
-                        {
-                          color:
-                            editChildGender === "other"
-                              ? theme.primary
-                              : theme.textSecondary,
-                        },
-                      ]}
-                    >
-                      Other
-                    </Text>
-                  </TouchableOpacity>
+                    Birth date cannot be changed after creation
+                  </Text>
                 </View>
-              </View>
 
-              <Text
-                style={[
-                  styles.requiredFieldsNote,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                * Required fields
-              </Text>
-            </ScrollView>
+                {/* Child Gender - Disabled */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Gender
+                  </Text>
+                  <View style={[styles.genderOptions, { opacity: 0.7 }]}>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderOption,
+                        editChildGender === "male" && {
+                          backgroundColor: `${theme.primary}20`,
+                          borderColor: theme.primary,
+                        },
+                      ]}
+                      disabled={true}
+                    >
+                      <Ionicons
+                        name="male"
+                        size={20}
+                        color={
+                          editChildGender === "male"
+                            ? theme.primary
+                            : theme.textSecondary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.genderText,
+                          {
+                            color:
+                              editChildGender === "male"
+                                ? theme.primary
+                                : theme.textSecondary,
+                          },
+                        ]}
+                      >
+                        Male
+                      </Text>
+                    </TouchableOpacity>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.cancelButton,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                onPress={() => setShowEditChildModal(false)}
-              >
+                    <TouchableOpacity
+                      style={[
+                        styles.genderOption,
+                        editChildGender === "female" && {
+                          backgroundColor: `${theme.primary}20`,
+                          borderColor: theme.primary,
+                        },
+                      ]}
+                      disabled={true}
+                    >
+                      <Ionicons
+                        name="female"
+                        size={20}
+                        color={
+                          editChildGender === "female"
+                            ? theme.primary
+                            : theme.textSecondary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.genderText,
+                          {
+                            color:
+                              editChildGender === "female"
+                                ? theme.primary
+                                : theme.textSecondary,
+                          },
+                        ]}
+                      >
+                        Female
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text
+                    style={[styles.dateHint, { color: theme.textTertiary }]}
+                  >
+                    Gender cannot be changed after creation
+                  </Text>
+                </View>
+
+                {/* Child Weight - Disabled */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Weight (grams)
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: theme.border,
+                        color: theme.textTertiary,
+                        backgroundColor: theme.backgroundSecondary,
+                        opacity: 0.7,
+                      },
+                    ]}
+                    value={editChildWeight}
+                    editable={false}
+                    placeholder="Weight in grams"
+                    placeholderTextColor={theme.textTertiary}
+                  />
+                  <Text
+                    style={[styles.dateHint, { color: theme.textTertiary }]}
+                  >
+                    Weight cannot be changed after creation
+                  </Text>
+                </View>
+
+                {/* Child Height - Disabled */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Height (millimeters)
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: theme.border,
+                        color: theme.textTertiary,
+                        backgroundColor: theme.backgroundSecondary,
+                        opacity: 0.7,
+                      },
+                    ]}
+                    value={editChildHeight}
+                    editable={false}
+                    placeholder="Height in millimeters"
+                    placeholderTextColor={theme.textTertiary}
+                  />
+                  <Text
+                    style={[styles.dateHint, { color: theme.textTertiary }]}
+                  >
+                    Height cannot be changed after creation
+                  </Text>
+                </View>
+
+                {/* Child Head Circumference - Disabled */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Head Circumference (millimeters)
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: theme.border,
+                        color: theme.textTertiary,
+                        backgroundColor: theme.backgroundSecondary,
+                        opacity: 0.7,
+                      },
+                    ]}
+                    value={editChildHeadCircumference}
+                    editable={false}
+                    placeholder="Head circumference in millimeters"
+                    placeholderTextColor={theme.textTertiary}
+                  />
+                  <Text
+                    style={[styles.dateHint, { color: theme.textTertiary }]}
+                  >
+                    Head circumference cannot be changed after creation
+                  </Text>
+                </View>
+
                 <Text
                   style={[
-                    styles.cancelButtonText,
+                    styles.requiredFieldsNote,
                     { color: theme.textSecondary },
                   ]}
                 >
-                  Cancel
+                  * Required fields
                 </Text>
-              </TouchableOpacity>
+              </ScrollView>
 
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.addButton,
-                  { backgroundColor: theme.primary },
-                ]}
-                onPress={saveEditedChild}
-              >
-                <Text style={styles.addButtonText}>Save Changes</Text>
-              </TouchableOpacity>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.cancelButton,
+                    { backgroundColor: theme.backgroundSecondary },
+                  ]}
+                  onPress={() => setShowEditChildModal(false)}
+                >
+                  <Text
+                    style={[
+                      styles.cancelButtonText,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.addButton,
+                    { backgroundColor: theme.primary },
+                  ]}
+                  onPress={saveEditedChild}
+                >
+                  <Text style={styles.addButtonText}>Save Changes</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
   };
@@ -1460,9 +1659,15 @@ export default function SettingsScreen({ navigation }) {
                     },
                   ]}
                   value={editUsername}
-                  onChangeText={setEditUsername}
+                  onChangeText={(text) => {
+                    // Limit to 30 characters
+                    if (text.length <= 30) {
+                      setEditUsername(text);
+                    }
+                  }}
                   placeholder="Enter username"
                   placeholderTextColor={theme.textTertiary}
+                  maxLength={30}
                 />
               </View>
 
@@ -1869,6 +2074,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   childGender: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  childMeasurement: {
     fontSize: 12,
     marginTop: 2,
   },
