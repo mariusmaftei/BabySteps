@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api } from "./api";
+import api, { ensureToken } from "./api";
 
 // Sleep data structure for frontend
 const createSleepRecord = (data) => {
@@ -14,6 +14,7 @@ const createSleepRecord = (data) => {
       Number.parseFloat(data.napHours || 0) +
       Number.parseFloat(data.nightHours || 0)
     ).toFixed(1),
+    autoFilled: data.autoFilled || false,
   };
 };
 
@@ -41,12 +42,8 @@ export const isToday = (dateString) => {
 // Get all sleep data for a child
 export const getChildSleepData = async (childId) => {
   try {
-    // Check if API is available
-    if (!api || !api.get) {
-      throw new Error(
-        "API not available, cannot fetch sleep data from database"
-      );
-    }
+    // Ensure API has auth token before making request
+    await ensureToken();
 
     console.log(`Fetching sleep data for child ID: ${childId}`);
     const response = await api.get(`/sleep/child/${childId}`);
@@ -69,12 +66,8 @@ export const getChildSleepData = async (childId) => {
 // Get today's sleep data for a child
 export const getTodaySleepData = async (childId) => {
   try {
-    // Check if API is available
-    if (!api || !api.get) {
-      throw new Error(
-        "API not available, cannot fetch today's sleep data from database"
-      );
-    }
+    // Ensure API has auth token before making request
+    await ensureToken();
 
     console.log(`Fetching today's sleep data for child ID: ${childId}`);
     const response = await api.get(`/sleep/child/${childId}/today`);
@@ -102,12 +95,8 @@ export const getTodaySleepData = async (childId) => {
 // Get sleep data for a specific date range
 export const getSleepDataByDateRange = async (childId, startDate, endDate) => {
   try {
-    // Check if API is available
-    if (!api || !api.get) {
-      throw new Error(
-        "API not available, cannot fetch sleep data by date range from database"
-      );
-    }
+    // Ensure API has auth token before making request
+    await ensureToken();
 
     const formattedStartDate = startDate.toISOString().split("T")[0];
     const formattedEndDate = endDate.toISOString().split("T")[0];
@@ -143,13 +132,108 @@ export const getWeeklySleepData = async (childId) => {
   return await getSleepDataByDateRange(childId, startDate, endDate);
 };
 
+// Helper function to calculate child's age in months
+const getChildAgeInMonths = (child) => {
+  if (!child || !child.age) return 24; // Default to toddler if no age
+
+  const ageText = child.age;
+  const ageNum = Number.parseInt(ageText.split(" ")[0]) || 0;
+  const ageUnit = ageText.includes("month") ? "months" : "years";
+
+  // Convert age to months if in years for more precise recommendations
+  return ageUnit === "months" ? ageNum : ageNum * 12;
+};
+
+// Helper function to get recommended sleep hours based on age
+const getRecommendedSleepHours = (ageInMonths) => {
+  let recommendedNapHours = 2;
+  let recommendedNightHours = 10;
+
+  if (ageInMonths < 4) {
+    // Newborn (0-3 months)
+    recommendedNapHours = 8;
+    recommendedNightHours = 8;
+  } else if (ageInMonths >= 4 && ageInMonths <= 12) {
+    // Infant (4-12 months)
+    recommendedNapHours = 4;
+    recommendedNightHours = 10;
+  } else if (ageInMonths > 12 && ageInMonths <= 24) {
+    // Toddler (1-2 years)
+    recommendedNapHours = 2;
+    recommendedNightHours = 11;
+  } else if (ageInMonths > 24 && ageInMonths <= 60) {
+    // Preschooler (3-5 years)
+    recommendedNapHours = 1;
+    recommendedNightHours = 11;
+  } else {
+    // School-age (6-12 years)
+    recommendedNapHours = 0;
+    recommendedNightHours = 10;
+  }
+
+  return { recommendedNapHours, recommendedNightHours };
+};
+
+// Add this new function to get current sleep data based on time of day
+export const getCurrentSleepData = async (childId) => {
+  try {
+    // Ensure API has auth token before making request
+    await ensureToken();
+
+    console.log(`Fetching current sleep data for child ID: ${childId}`);
+    const response = await api.get(`/sleep/child/${childId}/current`);
+    console.log("Current sleep data response:", response.data);
+
+    // Return the data with additional info about whether it's yesterday's data
+    return {
+      ...createSleepRecord(response.data),
+      isBeforeNoon: response.data.isBeforeNoon,
+      targetDate: response.data.targetDate,
+    };
+  } catch (error) {
+    console.log("Error in getCurrentSleepData:", error.message);
+
+    // Create a default record with zeros
+    const today = new Date().toISOString().split("T")[0];
+    let targetDate = today;
+    let isBeforeNoon = false;
+
+    // Try to extract data from error response if available
+    if (error.response && error.response.status === 404) {
+      console.log("404 error - No sleep record found");
+      console.log("Error response data:", error.response.data);
+
+      if (error.response.data) {
+        targetDate = error.response.data.targetDate || today;
+        isBeforeNoon = error.response.data.isBeforeNoon || false;
+      }
+    }
+
+    console.log(
+      `Creating default sleep record for date: ${targetDate}, isBeforeNoon: ${isBeforeNoon}`
+    );
+
+    // Return a default record with zeros
+    return {
+      id: null,
+      childId,
+      napHours: 0,
+      nightHours: 0,
+      date: targetDate,
+      notes: "",
+      totalHours: "0",
+      isBeforeNoon: isBeforeNoon,
+      targetDate: targetDate,
+      isDefaultData: true, // Mark this as default data
+    };
+  }
+};
+
 // Save sleep data
 export const saveSleepData = async (sleepData) => {
   try {
-    // Check if API is available
-    if (!api || !api.post) {
-      throw new Error("API not available, cannot save sleep data to database");
-    }
+    // Ensure API has auth token before making request
+    await ensureToken();
 
     // If we have an ID, update existing record
     if (sleepData.id) {
@@ -166,11 +250,6 @@ export const saveSleepData = async (sleepData) => {
     };
 
     console.log("Saving sleep data to database:", formattedData);
-
-    // Log the API object to verify it's correctly initialized
-    console.log("API object:", api);
-    console.log("API base URL:", api.defaults.baseURL);
-    console.log("API headers:", api.defaults.headers);
 
     // Otherwise create a new record
     const response = await api.post("/sleep", formattedData);
@@ -197,12 +276,8 @@ export const saveSleepData = async (sleepData) => {
 // Update existing sleep data
 export const updateSleepData = async (sleepData) => {
   try {
-    // Check if API is available
-    if (!api || !api.put) {
-      throw new Error(
-        "API not available, cannot update sleep data in database"
-      );
-    }
+    // Ensure API has auth token before making request
+    await ensureToken();
 
     // Ensure data is properly formatted
     const formattedData = {
@@ -241,9 +316,8 @@ export const updateSleepData = async (sleepData) => {
 // Delete sleep data
 export const deleteSleepData = async (sleepId) => {
   try {
-    if (!api || !api.delete) {
-      throw new Error("API not available, cannot delete from database");
-    }
+    // Ensure API has auth token before making request
+    await ensureToken();
 
     console.log(`Deleting sleep data with ID: ${sleepId} from database`);
     await api.delete(`/sleep/${sleepId}`);

@@ -16,10 +16,10 @@ import CustomButton from "../../../components/Button/Button";
 import { Ionicons } from "@expo/vector-icons";
 import {
   getChildSleepData,
-  getTodaySleepData,
   saveSleepData,
   updateSleepData,
   isToday,
+  getCurrentSleepData,
 } from "../../../services/sleep-service";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -40,8 +40,23 @@ const SleepDetailsScreen = () => {
     new Date().toISOString().split("T")[0]
   );
   const [customTotalHours, setCustomTotalHours] = useState(0);
+  const [showingYesterdayData, setShowingYesterdayData] = useState(false);
+  const [isDefaultData, setIsDefaultData] = useState(false);
+  // Add a new state variable for edit mode
+  const [isEditMode, setIsEditMode] = useState(true);
 
-  // Get child's age as a number for recommendations
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      month: "2-digit",
+      day: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  // Update the getChildAgeInMonths function to be more precise
   const getChildAgeInMonths = () => {
     if (!currentChild || !currentChild.age) return 24; // Default to toddler if no age
 
@@ -53,10 +68,25 @@ const SleepDetailsScreen = () => {
     return ageUnit === "months" ? ageNum : ageNum * 12;
   };
 
-  // Sleep recommendations based on age
+  // Add a function to get the WHO age group description
+  const getWHOAgeGroup = (ageInMonths) => {
+    if (ageInMonths < 4) {
+      return "0-3 months";
+    } else if (ageInMonths >= 4 && ageInMonths <= 12) {
+      return "4-12 months";
+    } else if (ageInMonths > 12 && ageInMonths <= 24) {
+      return "1-2 years";
+    } else if (ageInMonths > 24 && ageInMonths <= 60) {
+      return "3-5 years";
+    } else {
+      return "6-12 years";
+    }
+  };
+
+  // Update the getSleepRecommendations function to match WHO guidelines
   const getSleepRecommendations = (ageInMonths) => {
     if (ageInMonths < 4) {
-      // Newborn (0-3 months)
+      // Newborn (0-3 months) - WHO recommendation: 14-17 hours
       return {
         ageGroup: "Newborn (0-3 months)",
         totalSleep: "14-17 hours/day",
@@ -70,7 +100,7 @@ const SleepDetailsScreen = () => {
         recommendedNightHours: 8,
       };
     } else if (ageInMonths >= 4 && ageInMonths <= 12) {
-      // Infant (4-12 months)
+      // Infant (4-12 months) - WHO recommendation: 12-16 hours
       return {
         ageGroup: "Infant (4-12 months)",
         totalSleep: "12-16 hours/day",
@@ -84,7 +114,7 @@ const SleepDetailsScreen = () => {
         recommendedNightHours: 10,
       };
     } else if (ageInMonths > 12 && ageInMonths <= 24) {
-      // Toddler (1-2 years)
+      // Toddler (1-2 years) - WHO recommendation: 11-14 hours
       return {
         ageGroup: "Toddler (1-2 years)",
         totalSleep: "11-14 hours/day",
@@ -98,7 +128,7 @@ const SleepDetailsScreen = () => {
         recommendedNightHours: 11,
       };
     } else if (ageInMonths > 24 && ageInMonths <= 60) {
-      // Preschooler (3-5 years)
+      // Preschooler (3-5 years) - WHO recommendation: 10-13 hours
       return {
         ageGroup: "Preschooler (3-5 years)",
         totalSleep: "10-13 hours/day",
@@ -112,7 +142,7 @@ const SleepDetailsScreen = () => {
         recommendedNightHours: 11,
       };
     } else {
-      // School-age (6-12 years)
+      // School-age (6-12 years) - WHO recommendation: 9-12 hours
       return {
         ageGroup: "School-age (6-12 years)",
         totalSleep: "9-12 hours/day",
@@ -183,40 +213,14 @@ const SleepDetailsScreen = () => {
     return value * scaleFactor;
   };
 
-  // Update the useEffect hook to properly initialize the API and handle errors
   useEffect(() => {
     if (!currentChildId) {
       setLoading(false);
       return;
     }
 
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        // Initialize the API before loading data
-        const apiInitialized = await initializeApi();
-        if (!apiInitialized) {
-          console.error("Failed to initialize API connection");
-          Alert.alert(
-            "Connection Error",
-            "Could not connect to the server. Please check your connection and try again."
-          );
-          setLoading(false);
-          return;
-        }
-
-        await loadSleepData();
-      } catch (error) {
-        console.error("Error in initial data loading:", error);
-        Alert.alert(
-          "Error",
-          "An error occurred while loading data. Please try again later."
-        );
-        setLoading(false);
-      }
-    };
-
-    loadData();
+    // Load sleep data directly without explicit API initialization
+    loadSleepData();
   }, [currentChildId]);
 
   // Set up the notification button in the header
@@ -242,15 +246,10 @@ const SleepDetailsScreen = () => {
     }
   }, [navigation, notificationsEnabled, theme, currentChild]);
 
+  // Update the loadSleepData function to better handle the case when there's no data
   const loadSleepData = async () => {
     setLoading(true);
     try {
-      // Ensure API is initialized
-      const apiInitialized = await initializeApi();
-      if (!apiInitialized) {
-        throw new Error("API not initialized");
-      }
-
       // Load sleep history
       const history = await getChildSleepData(currentChildId);
       setSleepHistory(
@@ -259,51 +258,104 @@ const SleepDetailsScreen = () => {
           : []
       );
 
-      // Load today's data if not editing a specific record
+      // For a new child, don't even try to fetch current data, just create a default record
+      if (history.length === 0) {
+        console.log("No sleep history found, creating default record");
+        const today = new Date().toISOString().split("T")[0];
+
+        // Create a default record with zeros
+        const defaultRecord = {
+          id: null,
+          childId: currentChildId,
+          napHours: 0,
+          nightHours: 0,
+          date: today,
+          notes: "",
+          totalHours: "0",
+          isBeforeNoon: false,
+          targetDate: today,
+          isDefaultData: true,
+        };
+
+        setNapHours("0");
+        setNightHours("0");
+        setNotes("");
+        setSelectedRecord(defaultRecord);
+        setCurrentDate(today);
+        updateTotalHours("0", "0");
+        setIsDefaultData(true);
+        setIsEditMode(true);
+
+        setLoading(false);
+        return;
+      }
+
+      // If we have history, try to load current data
       if (!selectedRecord) {
-        const todayData = await getTodaySleepData(currentChildId);
-        if (todayData) {
-          setNapHours(todayData.napHours.toString());
-          setNightHours(todayData.nightHours.toString());
-          setNotes(todayData.notes || "");
-          setSelectedRecord(todayData);
-          updateTotalHours(
-            todayData.napHours.toString(),
-            todayData.nightHours.toString()
-          );
-        } else {
+        try {
+          console.log("Fetching current sleep data...");
+          const currentData = await getCurrentSleepData(currentChildId);
+          console.log("Current sleep data loaded:", currentData);
+
+          if (currentData) {
+            setNapHours(currentData.napHours.toString());
+            setNightHours(currentData.nightHours.toString());
+            setNotes(currentData.notes || "");
+            setSelectedRecord(currentData);
+            setCurrentDate(
+              currentData.date ||
+                currentData.targetDate ||
+                new Date().toISOString().split("T")[0]
+            );
+            updateTotalHours(
+              currentData.napHours.toString(),
+              currentData.nightHours.toString()
+            );
+            setShowingYesterdayData(currentData.isBeforeNoon);
+            setIsDefaultData(currentData.isDefaultData || false);
+            setIsEditMode(!currentData.id);
+          } else {
+            resetForm();
+          }
+        } catch (error) {
+          console.error("Error fetching current sleep data:", error);
+          // If there's an error, just create a default record
           resetForm();
         }
       }
     } catch (error) {
       console.error("Error loading sleep data:", error);
-
-      if (error.response && error.response.status === 404) {
-        // This is normal for new users or new days - no need for an alert
-        console.log("No sleep data found - this is normal for new records");
-        resetForm();
-      } else {
-        // Only show alert for unexpected errors
-        Alert.alert(
-          "Data Loading Error",
-          "Could not load sleep data. Please try again later."
-        );
-        resetForm();
-      }
+      // Reset the form with zeros
+      resetForm();
     } finally {
       setLoading(false);
     }
   };
 
+  // Update the resetForm function to set edit mode to true
   const resetForm = () => {
+    const today = new Date().toISOString().split("T")[0];
+
     setNapHours("0");
     setNightHours("0");
     setNotes("");
-    setSelectedRecord(null);
-    setCurrentDate(new Date().toISOString().split("T")[0]);
+    setSelectedRecord({
+      id: null,
+      childId: currentChildId,
+      napHours: 0,
+      nightHours: 0,
+      date: today,
+      notes: "",
+      totalHours: "0",
+      isDefaultData: true,
+    });
+    setCurrentDate(today);
     updateTotalHours("0", "0");
+    setIsDefaultData(true);
+    setIsEditMode(true);
   };
 
+  // Update the handleSelectSleepRecord function to set edit mode to false initially
   const handleSelectSleepRecord = (record) => {
     setSelectedRecord(record);
     setNapHours(record.napHours.toString());
@@ -311,6 +363,8 @@ const SleepDetailsScreen = () => {
     setNotes(record.notes || "");
     setCurrentDate(record.date);
     updateTotalHours(record.napHours.toString(), record.nightHours.toString());
+    setIsDefaultData(false);
+    setIsEditMode(false);
   };
 
   const handleNapHoursChange = (value) => {
@@ -353,18 +407,17 @@ const SleepDetailsScreen = () => {
     }
   };
 
-  // Update the handleSaveSleepData function to improve validation and error handling
+  // Update the handleSaveSleepData function to prioritize database saving
   const handleSaveSleepData = async () => {
     if (!currentChildId) {
       Alert.alert("Error", "No child selected");
       return;
     }
 
-    // Validate input values
-    const napValue = Number.parseFloat(napHours);
-    const nightValue = Number.parseFloat(nightHours);
-
-    if (isNaN(napValue) || isNaN(nightValue)) {
+    if (
+      isNaN(Number.parseFloat(napHours)) ||
+      isNaN(Number.parseFloat(nightHours))
+    ) {
       Alert.alert(
         "Invalid Input",
         "Please enter valid numbers for sleep hours"
@@ -372,37 +425,24 @@ const SleepDetailsScreen = () => {
       return;
     }
 
-    if (napValue < 0 || napValue > 24 || nightValue < 0 || nightValue > 24) {
-      Alert.alert("Invalid Input", "Sleep hours must be between 0 and 24");
-      return;
-    }
-
-    if (napValue + nightValue > 24) {
-      Alert.alert(
-        "Invalid Input",
-        "Total sleep hours cannot exceed 24 hours per day"
-      );
+    // If we're in view mode, switch to edit mode and return
+    if (!isEditMode) {
+      setIsEditMode(true);
       return;
     }
 
     setSaving(true);
     try {
-      // Ensure the API is initialized
-      const apiInitialized = await initializeApi();
-      if (!apiInitialized) {
-        throw new Error("Failed to initialize API connection");
-      }
-
       console.log("Current child ID:", currentChildId);
       console.log("Selected record:", selectedRecord);
 
       const sleepData = {
         id: selectedRecord?.id,
         childId: currentChildId,
-        napHours: napValue,
-        nightHours: nightValue,
+        napHours: Number.parseFloat(napHours) || 0,
+        nightHours: Number.parseFloat(nightHours) || 0,
         date: currentDate,
-        notes: notes.trim(),
+        notes: notes,
       };
 
       console.log("Sleep data prepared for saving to database:", sleepData);
@@ -430,51 +470,23 @@ const SleepDetailsScreen = () => {
         // If we were editing a past record, reset to today
         if (selectedRecord && !isToday(selectedRecord.date)) {
           resetForm();
+        } else {
+          // Switch to view mode after saving
+          setIsEditMode(false);
         }
+
+        // Clear the default data flag after saving
+        setIsDefaultData(false);
       } else {
         // This should not happen if the database save was successful
         Alert.alert("Error", "Failed to save sleep data to database");
       }
     } catch (error) {
       console.error("Error in handleSaveSleepData:", error);
-
-      // Provide more specific error messages based on the error
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        console.error("Error response data:", error.response.data);
-        console.error("Error response status:", error.response.status);
-
-        if (error.response.status === 401) {
-          Alert.alert(
-            "Authentication Error",
-            "Your session has expired. Please log in again."
-          );
-        } else if (error.response.status === 403) {
-          Alert.alert(
-            "Permission Error",
-            "You don't have permission to save this data."
-          );
-        } else {
-          Alert.alert(
-            "Server Error",
-            error.response.data.message || "An error occurred on the server."
-          );
-        }
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error("Error request:", error.request);
-        Alert.alert(
-          "Connection Error",
-          "Could not connect to the server. Please check your connection and try again."
-        );
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        Alert.alert(
-          "Error",
-          "An unexpected error occurred. Please try again later."
-        );
-      }
+      Alert.alert(
+        "Database Error",
+        "Failed to save sleep data to database. Please check your connection and try again."
+      );
     } finally {
       setSaving(false);
     }
@@ -482,6 +494,11 @@ const SleepDetailsScreen = () => {
 
   const handleNewRecord = () => {
     resetForm();
+  };
+
+  // Add a function to handle edit mode toggle:
+  const toggleEditMode = () => {
+    setIsEditMode(!isEditMode);
   };
 
   // Display a message if no child is selected
@@ -517,11 +534,16 @@ const SleepDetailsScreen = () => {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {/* Age Group Banner */}
           <View style={styles.ageGroupContainer}>
-            <Text
-              style={[styles.ageGroupLabel, { color: theme.textSecondary }]}
-            >
-              Age Group:
-            </Text>
+            <View style={styles.ageGroupRow}>
+              <Text
+                style={[styles.ageGroupLabel, { color: theme.textSecondary }]}
+              >
+                Child's Age:
+              </Text>
+              <Text style={[styles.childAge, { color: theme.text }]}>
+                {currentChild?.age || "Unknown"}
+              </Text>
+            </View>
             <View
               style={[
                 styles.ageGroupInfo,
@@ -534,11 +556,94 @@ const SleepDetailsScreen = () => {
                 color={theme.primary}
                 style={styles.ageGroupIcon}
               />
-              <Text style={[styles.ageGroupText, { color: theme.text }]}>
-                {recommendations.ageGroup}
-              </Text>
+              <View style={styles.ageGroupTextContainer}>
+                <Text style={[styles.ageGroupText, { color: theme.text }]}>
+                  WHO Recommendation Group: {getWHOAgeGroup(childAgeInMonths)}
+                </Text>
+                <Text
+                  style={[
+                    styles.ageGroupSubtext,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  {recommendations.totalSleep} of sleep recommended
+                </Text>
+              </View>
             </View>
           </View>
+
+          {/* Reset Time Info Banner */}
+          <View
+            style={[
+              styles.infoBanner,
+              { backgroundColor: `${theme.primary}15` },
+            ]}
+          >
+            <Ionicons
+              name="time-outline"
+              size={18}
+              color={theme.primary}
+              style={styles.bannerIcon}
+            />
+            <Text style={[styles.bannerText, { color: theme.text }]}>
+              Sleep data resets daily at 12:00 PM
+            </Text>
+          </View>
+
+          {/* Date of Sleep Banner */}
+          <View
+            style={[styles.dateBanner, { backgroundColor: `${theme.info}15` }]}
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={18}
+              color={theme.info}
+              style={styles.bannerIcon}
+            />
+            <Text style={[styles.bannerText, { color: theme.text }]}>
+              Date of sleep: {formatDate(currentDate)}
+            </Text>
+          </View>
+
+          {showingYesterdayData && (
+            <View
+              style={[
+                styles.yesterdayBanner,
+                { backgroundColor: `${theme.warning}20` },
+              ]}
+            >
+              <Ionicons
+                name="information-circle"
+                size={18}
+                color={theme.warning}
+                style={styles.bannerIcon}
+              />
+              <Text style={[styles.bannerText, { color: theme.text }]}>
+                Viewing yesterday's sleep data. New data will be available after
+                12:00 PM today.
+              </Text>
+            </View>
+          )}
+
+          {isDefaultData && (
+            <View
+              style={[
+                styles.defaultDataBanner,
+                { backgroundColor: `${theme.info}20` },
+              ]}
+            >
+              <Ionicons
+                name="information-circle"
+                size={18}
+                color={theme.info}
+                style={styles.bannerIcon}
+              />
+              <Text style={[styles.bannerText, { color: theme.text }]}>
+                These are recommended sleep values based on your child's age.
+                Please adjust if needed and save to record actual sleep data.
+              </Text>
+            </View>
+          )}
 
           {/* Combined Sleep Chart */}
           <View
@@ -689,94 +794,177 @@ const SleepDetailsScreen = () => {
               { backgroundColor: theme.cardBackground },
             ]}
           >
-            <Text style={[styles.inputTitle, { color: theme.text }]}>
-              Confirm Sleep Hours
-            </Text>
-            <Text
-              style={[styles.inputSubtitle, { color: theme.textSecondary }]}
-            >
-              Enter the actual hours your child slept today
-            </Text>
-
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroup}>
-                <View style={styles.inputLabelContainer}>
-                  <Ionicons
-                    name="sunny"
-                    size={16}
-                    color={sunnyColor}
-                    style={styles.inputIcon}
-                  />
-                  <Text
-                    style={[styles.inputLabel, { color: theme.textSecondary }]}
-                  >
-                    Nap Time
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
+            {isEditMode ? (
+              <>
+                <Text style={[styles.inputTitle, { color: theme.text }]}>
+                  Enter Sleep Hours
+                </Text>
+                <Text
+                  style={[styles.inputSubtitle, { color: theme.textSecondary }]}
                 >
-                  <TextInput
-                    style={[styles.input, { color: theme.text }]}
-                    value={napHours}
-                    onChangeText={handleNapHoursChange}
-                    keyboardType="numeric"
-                    placeholder="0.0"
-                    placeholderTextColor={theme.textTertiary}
-                  />
-                  <Text
-                    style={[styles.inputUnit, { color: theme.textSecondary }]}
-                  >
-                    hrs
-                  </Text>
-                </View>
-              </View>
+                  Record how many hours your child slept today
+                </Text>
 
-              <View style={styles.inputGroup}>
-                <View style={styles.inputLabelContainer}>
-                  <Ionicons
-                    name="moon"
-                    size={16}
-                    color={theme.info}
-                    style={styles.inputIcon}
-                  />
-                  <Text
-                    style={[styles.inputLabel, { color: theme.textSecondary }]}
-                  >
-                    Night Sleep
-                  </Text>
+                <View style={styles.inputRow}>
+                  <View style={styles.inputGroup}>
+                    <View style={styles.inputLabelContainer}>
+                      <Ionicons
+                        name="sunny"
+                        size={16}
+                        color={sunnyColor}
+                        style={styles.inputIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        Nap Time
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.inputWrapper,
+                        {
+                          borderColor: theme.borderLight,
+                          backgroundColor: theme.backgroundSecondary,
+                        },
+                      ]}
+                    >
+                      <TextInput
+                        style={[styles.input, { color: theme.text }]}
+                        value={napHours}
+                        onChangeText={handleNapHoursChange}
+                        keyboardType="numeric"
+                        placeholder="0.0"
+                        placeholderTextColor={theme.textTertiary}
+                        editable={isEditMode}
+                      />
+                      <Text
+                        style={[
+                          styles.inputUnit,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        hrs
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.inputLabelContainer}>
+                      <Ionicons
+                        name="moon"
+                        size={16}
+                        color={theme.info}
+                        style={styles.inputIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        Night Sleep
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.inputWrapper,
+                        {
+                          borderColor: theme.borderLight,
+                          backgroundColor: theme.backgroundSecondary,
+                        },
+                      ]}
+                    >
+                      <TextInput
+                        style={[styles.input, { color: theme.text }]}
+                        value={nightHours}
+                        onChangeText={handleNightHoursChange}
+                        keyboardType="numeric"
+                        placeholder="0.0"
+                        placeholderTextColor={theme.textTertiary}
+                        editable={isEditMode}
+                      />
+                      <Text
+                        style={[
+                          styles.inputUnit,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        hrs
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
+              </>
+            ) : (
+              <>
+                <Text style={[styles.inputTitle, { color: theme.text }]}>
+                  Sleep Hours Summary
+                </Text>
+                <Text
+                  style={[styles.inputSubtitle, { color: theme.textSecondary }]}
                 >
-                  <TextInput
-                    style={[styles.input, { color: theme.text }]}
-                    value={nightHours}
-                    onChangeText={handleNightHoursChange}
-                    keyboardType="numeric"
-                    placeholder="0.0"
-                    placeholderTextColor={theme.textTertiary}
-                  />
-                  <Text
-                    style={[styles.inputUnit, { color: theme.textSecondary }]}
-                  >
-                    hrs
-                  </Text>
+                  Recorded sleep data for {formatDate(currentDate)}
+                </Text>
+
+                <View style={styles.summaryRow}>
+                  <View style={styles.summaryItem}>
+                    <View
+                      style={[
+                        styles.summaryIconContainer,
+                        { backgroundColor: `${sunnyColor}20` },
+                      ]}
+                    >
+                      <Ionicons name="sunny" size={20} color={sunnyColor} />
+                    </View>
+                    <View style={styles.summaryContent}>
+                      <Text
+                        style={[
+                          styles.summaryLabel,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        Nap Time
+                      </Text>
+                      <Text
+                        style={[styles.summaryValue, { color: theme.text }]}
+                      >
+                        {napHours} hours
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.summaryItem}>
+                    <View
+                      style={[
+                        styles.summaryIconContainer,
+                        { backgroundColor: `${theme.info}20` },
+                      ]}
+                    >
+                      <Ionicons name="moon" size={20} color={theme.info} />
+                    </View>
+                    <View style={styles.summaryContent}>
+                      <Text
+                        style={[
+                          styles.summaryLabel,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        Night Sleep
+                      </Text>
+                      <Text
+                        style={[styles.summaryValue, { color: theme.text }]}
+                      >
+                        {nightHours} hours
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-              </View>
-            </View>
+              </>
+            )}
 
             <TouchableOpacity
               style={[styles.saveButton, { backgroundColor: theme.primary }]}
@@ -784,13 +972,17 @@ const SleepDetailsScreen = () => {
               disabled={saving}
             >
               <Ionicons
-                name="save"
+                name={isEditMode ? "save" : "create-outline"}
                 size={16}
                 color="#FFFFFF"
                 style={styles.saveButtonIcon}
               />
               <Text style={styles.saveButtonText}>
-                {saving ? "Saving..." : "Save Sleep Data"}
+                {saving
+                  ? "Saving..."
+                  : isEditMode
+                  ? "Save Sleep Data"
+                  : "Edit Sleep Data"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1438,26 +1630,90 @@ const styles = StyleSheet.create({
   // New Age Group styles
   ageGroupContainer: {
     marginBottom: 16,
+  },
+  ageGroupRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 8,
   },
   ageGroupLabel: {
     fontSize: 15,
     fontWeight: "500",
     marginRight: 8,
   },
+  childAge: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
   ageGroupInfo: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   ageGroupIcon: {
-    marginRight: 6,
+    marginRight: 8,
+    alignSelf: "flex-start",
+    marginTop: 2,
+  },
+  ageGroupTextContainer: {
+    flex: 1,
   },
   ageGroupText: {
     fontSize: 15,
+    fontWeight: "600",
+  },
+  ageGroupSubtext: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  // New info banners
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  dateBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  // Summary view styles
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  summaryItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "48%",
+    backgroundColor: "rgba(0, 0, 0, 0.03)",
+    borderRadius: 8,
+    padding: 12,
+  },
+  summaryIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  summaryContent: {
+    flex: 1,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 16,
     fontWeight: "600",
   },
   // Removed old ageBanner styles
@@ -1921,6 +2177,48 @@ const styles = StyleSheet.create({
   },
   noChildButton: {
     width: 200,
+  },
+  yesterdayBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  defaultDataBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  bannerIcon: {
+    marginRight: 8,
+  },
+  bannerText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  ageGroupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  childAge: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  ageGroupTextContainer: {
+    flex: 1,
+  },
+  ageGroupText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  ageGroupSubtext: {
+    fontSize: 12,
+    marginTop: 4,
   },
 });
 

@@ -57,6 +57,11 @@ const Sleep = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    autoFilled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
   },
   {
     timestamps: true, // This will add createdAt and updatedAt fields

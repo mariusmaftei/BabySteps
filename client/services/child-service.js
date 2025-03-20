@@ -1,17 +1,13 @@
-import api from "./api";
+import api, { ensureToken } from "./api";
 
 // Get all children for the authenticated user
 export const getUserChildren = async (token) => {
   try {
-    console.log(
-      "Getting children with token:",
-      token ? "Token exists" : "No token"
-    );
-    const response = await api.get("/children", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    // Ensure API has auth token before making request
+    await ensureToken();
+
+    console.log("Getting children with token");
+    const response = await api.get("/children");
     console.log("Children data from API:", response.data);
     return response.data;
   } catch (error) {
@@ -28,11 +24,11 @@ export const getUserChildren = async (token) => {
 // Get a specific child by ID
 export const getChildById = async (childId, token) => {
   try {
-    const response = await api.get(`/children/${childId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    // Ensure API has auth token before making request
+    await ensureToken();
+
+    console.log(`Fetching child with ID: ${childId}`);
+    const response = await api.get(`/children/${childId}`);
     return response.data;
   } catch (error) {
     console.error("Get child error:", error);
@@ -48,6 +44,9 @@ export const getChildById = async (childId, token) => {
 // Create a new child
 export const createChild = async (childData, token) => {
   try {
+    // Ensure API has auth token before making request
+    await ensureToken();
+
     // Make a copy of the data to avoid modifying the original
     const normalizedData = { ...childData };
 
@@ -61,11 +60,7 @@ export const createChild = async (childData, token) => {
 
     console.log("Creating child with normalized data:", normalizedData);
 
-    const response = await api.post("/children", normalizedData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await api.post("/children", normalizedData);
 
     console.log("Child created successfully:", response.data);
 
@@ -86,12 +81,11 @@ export const createChild = async (childData, token) => {
 // Update a child
 export const updateChild = async (childId, childData, token) => {
   try {
+    // Ensure API has auth token before making request
+    await ensureToken();
+
     console.log("Updating child with ID:", childId, "and data:", childData);
-    const response = await api.put(`/children/${childId}`, childData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await api.put(`/children/${childId}`, childData);
     console.log("Child updated successfully:", response.data);
     return response.data;
   } catch (error) {
@@ -108,12 +102,11 @@ export const updateChild = async (childId, childData, token) => {
 // Delete a child
 export const deleteChild = async (childId, token) => {
   try {
+    // Ensure API has auth token before making request
+    await ensureToken();
+
     console.log("Deleting child with ID:", childId);
-    const response = await api.delete(`/children/${childId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await api.delete(`/children/${childId}`);
     console.log("Child deleted successfully");
     return response.data;
   } catch (error) {
@@ -209,34 +202,4 @@ const ensureChildDataStructure = (childData) => {
   });
 
   return processedData;
-};
-
-// Update the getUserChildren function to ensure each child has the proper structure
-const _getUserChildren = async (token) => {
-  try {
-    console.log(
-      "Getting children with token:",
-      token ? "Token exists" : "No token"
-    );
-    const response = await api.get("/children", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    // Ensure each child has the proper data structure
-    if (response.data && Array.isArray(response.data)) {
-      return response.data.map((child) => ensureChildDataStructure(child));
-    }
-
-    return response.data;
-  } catch (error) {
-    console.error("Error fetching children:", error);
-    throw (
-      error.response?.data || {
-        error: "Failed to get children",
-        message: error.message,
-      }
-    );
-  }
 };
