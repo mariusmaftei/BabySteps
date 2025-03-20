@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,19 +7,33 @@ import {
   StyleSheet,
   Dimensions,
   Platform,
+  Modal,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { BarChart, PieChart } from "react-native-chart-kit";
 import { useTheme } from "../../../context/theme-context";
 import { useChildActivity } from "../../../context/child-activity-context";
+import {
+  getDiaperChanges,
+  createDiaperChange,
+  deleteDiaperChange,
+} from "../../../services/diaper-service";
+import { useAuth } from "../../../context/auth-context";
 
 const screenWidth = Dimensions.get("window").width;
 
 export default function DiaperDetailsScreen({ navigation }) {
   const { theme } = useTheme();
   const { currentChild } = useChildActivity();
+  // Fix: Correctly destructure token from useAuth instead of authState
+  const { token } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   // Get child's age as a number for recommendations
   const childAgeText = currentChild.age;
@@ -37,71 +51,65 @@ export default function DiaperDetailsScreen({ navigation }) {
   const [selectedType, setSelectedType] = useState(null); // 'wet', 'dirty', 'both'
   const [selectedColor, setSelectedColor] = useState(null); // 'yellow', 'green', 'brown', 'black'
   const [selectedConsistency, setSelectedConsistency] = useState(null); // 'soft', 'firm', 'watery'
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  // Mock data for demonstration
-  const mockDiaperData = [
-    {
-      id: 1,
-      date: new Date(Date.now() - 1000 * 60 * 60 * 2),
-      type: "wet",
-      color: null,
-      consistency: null,
-    },
-    {
-      id: 2,
-      date: new Date(Date.now() - 1000 * 60 * 60 * 5),
-      type: "dirty",
-      color: "yellow",
-      consistency: "soft",
-    },
-    {
-      id: 3,
-      date: new Date(Date.now() - 1000 * 60 * 60 * 8),
-      type: "both",
-      color: "brown",
-      consistency: "firm",
-    },
-    {
-      id: 4,
-      date: new Date(Date.now() - 1000 * 60 * 60 * 12),
-      type: "wet",
-      color: null,
-      consistency: null,
-    },
-    {
-      id: 5,
-      date: new Date(Date.now() - 1000 * 60 * 60 * 16),
-      type: "dirty",
-      color: "green",
-      consistency: "watery",
-    },
-    {
-      id: 6,
-      date: new Date(Date.now() - 1000 * 60 * 60 * 24),
-      type: "both",
-      color: "brown",
-      consistency: "soft",
-    },
-    {
-      id: 7,
-      date: new Date(Date.now() - 1000 * 60 * 60 * 30),
-      type: "wet",
-      color: null,
-      consistency: null,
-    },
-  ];
+  // Fetch diaper changes from the API
+  const fetchDiaperChanges = useCallback(async () => {
+    if (!currentChild || !currentChild.id) {
+      console.log("No current child selected");
+      setLoading(false);
+      return;
+    }
 
-  // Load mock data on component mount
+    if (!token) {
+      console.log("No authentication token available");
+      setError("Authentication required. Please log in again.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      // No need to pass token here, it's handled by the API interceptors
+      const data = await getDiaperChanges(currentChild.id);
+
+      // Convert date strings to Date objects
+      const processedData = data.map((change) => ({
+        ...change,
+        date: new Date(change.date),
+      }));
+
+      setDiaperChanges(processedData);
+    } catch (err) {
+      console.error("Failed to fetch diaper changes:", err);
+      setError("Failed to load diaper changes. Please try again.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [currentChild, token]);
+
+  // Load diaper changes on component mount and when currentChild changes
   useEffect(() => {
-    setDiaperChanges(mockDiaperData);
-  }, []);
+    fetchDiaperChanges();
+  }, [fetchDiaperChanges]);
+
+  // Refresh data
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchDiaperChanges();
+  }, [fetchDiaperChanges]);
 
   // Diaper change recommendations based on age
   const getDiaperRecommendations = (ageInMonths) => {
     if (ageInMonths < 1) {
       // 0-1 month
       return {
-        ageGroup: "Newborn (0-1 month)",
+        ageGroup: `Newborn (${
+          childAgeInMonths < 1 ? childAgeInMonths.toFixed(1) : childAgeInMonths
+        } ${childAgeInMonths === 1 ? "month" : "months"})`,
         changesPerDay: "8-12 changes",
         minChanges: 8,
         maxChanges: 12,
@@ -122,7 +130,9 @@ export default function DiaperDetailsScreen({ navigation }) {
     } else if (ageInMonths >= 1 && ageInMonths < 6) {
       // 1-6 months
       return {
-        ageGroup: "Infant (1-6 months)",
+        ageGroup: `Infant (${childAgeInMonths} ${
+          childAgeInMonths === 1 ? "month" : "months"
+        })`,
         changesPerDay: "6-8 changes",
         minChanges: 6,
         maxChanges: 8,
@@ -143,7 +153,9 @@ export default function DiaperDetailsScreen({ navigation }) {
     } else if (ageInMonths >= 6 && ageInMonths < 12) {
       // 6-12 months
       return {
-        ageGroup: "Older Infant (6-12 months)",
+        ageGroup: `Older Infant (${childAgeInMonths} ${
+          childAgeInMonths === 1 ? "month" : "months"
+        })`,
         changesPerDay: "4-6 changes",
         minChanges: 4,
         maxChanges: 6,
@@ -163,7 +175,12 @@ export default function DiaperDetailsScreen({ navigation }) {
     } else {
       // 12+ months
       return {
-        ageGroup: "Toddler (12+ months)",
+        ageGroup:
+          childAgeInMonths >= 24
+            ? `Toddler (${childAgeInMonths / 12} ${
+                childAgeInMonths === 12 ? "year" : "years"
+              })`
+            : `Toddler (${childAgeInMonths} months)`,
         changesPerDay: "4-5 changes",
         minChanges: 4,
         maxChanges: 5,
@@ -193,9 +210,14 @@ export default function DiaperDetailsScreen({ navigation }) {
   };
 
   // Add new diaper change
-  const addDiaperChange = () => {
+  const addDiaperChange = async () => {
+    if (!token) {
+      Alert.alert("Error", "Authentication required. Please log in again.");
+      return;
+    }
+
     if (!selectedType) {
-      // Show error - type is required
+      Alert.alert("Error", "Please select a diaper type");
       return;
     }
 
@@ -203,25 +225,87 @@ export default function DiaperDetailsScreen({ navigation }) {
       selectedType === "dirty" || selectedType === "both";
 
     if (needsColorAndConsistency && (!selectedColor || !selectedConsistency)) {
-      // Show error - color and consistency required for dirty diapers
+      Alert.alert(
+        "Error",
+        "Please select both color and consistency for dirty diapers"
+      );
       return;
     }
 
-    const newChange = {
-      id: Date.now(),
-      date: changeDate,
-      type: selectedType,
-      color: needsColorAndConsistency ? selectedColor : null,
-      consistency: needsColorAndConsistency ? selectedConsistency : null,
-    };
+    try {
+      setSubmitting(true);
 
-    setDiaperChanges([newChange, ...diaperChanges]);
+      const diaperData = {
+        date: changeDate,
+        type: selectedType,
+        color: needsColorAndConsistency ? selectedColor : null,
+        consistency: needsColorAndConsistency ? selectedConsistency : null,
+        notes: notes || null,
+      };
 
-    // Reset form
-    setSelectedType(null);
-    setSelectedColor(null);
-    setSelectedConsistency(null);
-    setChangeDate(new Date());
+      // No need to pass token here, it's handled by the API interceptors
+      const newChange = await createDiaperChange(currentChild.id, diaperData);
+
+      // Add the new change to the state with a proper Date object
+      setDiaperChanges([
+        {
+          ...newChange,
+          date: new Date(newChange.date),
+        },
+        ...diaperChanges,
+      ]);
+
+      // Reset form
+      setSelectedType(null);
+      setSelectedColor(null);
+      setSelectedConsistency(null);
+      setChangeDate(new Date());
+      setNotes("");
+
+      Alert.alert("Success", "Diaper change recorded successfully");
+    } catch (error) {
+      console.error("Error adding diaper change:", error);
+      Alert.alert("Error", "Failed to record diaper change. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle delete diaper change
+  const handleDeleteDiaperChange = async (diaperChangeId) => {
+    if (!token) {
+      Alert.alert("Error", "Authentication required. Please log in again.");
+      return;
+    }
+
+    Alert.alert(
+      "Confirm Delete",
+      "Are you sure you want to delete this diaper change?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // No need to pass token here, it's handled by the API interceptors
+              await deleteDiaperChange(currentChild.id, diaperChangeId);
+              // Remove the deleted change from state
+              setDiaperChanges(
+                diaperChanges.filter((change) => change.id !== diaperChangeId)
+              );
+              Alert.alert("Success", "Diaper change deleted successfully");
+            } catch (error) {
+              console.error("Error deleting diaper change:", error);
+              Alert.alert(
+                "Error",
+                "Failed to delete diaper change. Please try again."
+              );
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Calculate today's diaper changes
@@ -382,11 +466,53 @@ export default function DiaperDetailsScreen({ navigation }) {
     });
   }, [navigation, notificationsEnabled, theme, currentChild]);
 
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={[styles.loadingText, { color: theme.text }]}>
+            Loading diaper changes...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <View style={styles.errorContainer}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={48}
+            color={theme.danger}
+          />
+          <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: theme.primary }]}
+            onPress={handleRefresh}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+      >
         {/* Age Group Info */}
         <View style={styles.ageGroupContainer}>
           <Text style={[styles.ageGroupLabel, { color: theme.textSecondary }]}>
@@ -1076,22 +1202,29 @@ export default function DiaperDetailsScreen({ navigation }) {
             style={[
               styles.saveButton,
               {
-                backgroundColor: selectedType
-                  ? theme.primary
-                  : theme.backgroundSecondary,
-                opacity: selectedType ? 1 : 0.5,
+                backgroundColor:
+                  selectedType && !submitting
+                    ? theme.primary
+                    : theme.backgroundSecondary,
+                opacity: selectedType && !submitting ? 1 : 0.5,
               },
             ]}
             onPress={addDiaperChange}
-            disabled={!selectedType}
+            disabled={!selectedType || submitting}
           >
-            <Ionicons
-              name="save"
-              size={16}
-              color="#FFFFFF"
-              style={styles.saveButtonIcon}
-            />
-            <Text style={styles.saveButtonText}>Save Diaper Change</Text>
+            {submitting ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons
+                  name="save"
+                  size={16}
+                  color="#FFFFFF"
+                  style={styles.saveButtonIcon}
+                />
+                <Text style={styles.saveButtonText}>Save Diaper Change</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -1271,7 +1404,10 @@ export default function DiaperDetailsScreen({ navigation }) {
                         )}
                       </View>
 
-                      <TouchableOpacity style={styles.changeDeleteButton}>
+                      <TouchableOpacity
+                        style={styles.changeDeleteButton}
+                        onPress={() => handleDeleteDiaperChange(change.id)}
+                      >
                         <Ionicons
                           name="trash-outline"
                           size={18}
@@ -1695,6 +1831,36 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 10,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 10,
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  retryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
   ageGroupContainer: {
     marginBottom: 16,

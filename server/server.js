@@ -9,6 +9,7 @@ import dotenv from "dotenv";
 import mediaRouter from "./routes/media.js";
 import { db } from "./config/firebase.js";
 import vaccinationRoute from "./routes/vaccination.js";
+import diaperRoute from "./routes/diaper.js";
 
 // Load environment variables
 dotenv.config();
@@ -41,6 +42,7 @@ app.get("/", (req, res) => {
 app.use("/auth", authRoute);
 app.use("/children", childRoute);
 app.use("/sleep", sleepRoute);
+app.use("/diaper", diaperRoute);
 app.use("/media", mediaRouter);
 app.use("/vaccinations", vaccinationRoute);
 

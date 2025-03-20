@@ -18,6 +18,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import defaultChildImage from "../../assets/images/default-child.png";
+import happyChildImage from "../../assets/images/happy-child.png";
+import sadChildImage from "../../assets/images/sad-child.png";
+// contexts
 // contexts
 
 import { useTheme } from "../../context/theme-context";
@@ -151,6 +154,11 @@ function Activity({ navigation }) {
     ).length;
     return positiveCount > negativeCount;
   }, [activityCards]);
+
+  // Get mood image source based on mood - now using local images
+  const getMoodImage = useMemo(() => {
+    return isHappyMood ? happyChildImage : happyChildImage;
+  }, [isHappyMood]);
 
   // Handle card press
   const handleCardPress = useCallback(
@@ -555,18 +563,37 @@ function Activity({ navigation }) {
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerContainer}>
-            {/* Child Selector - REMOVE THIS */}
-
-            {/* Mood Image */}
-            <Image
-              source={{
-                uri: isHappyMood
-                  ? "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/happy-child-gw57JJN4O9GsOs6YZlRzr3ith1Kk3V.png"
-                  : "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/sad-child-3IDiaJp9IDBflOIP71HIcipKKIty0S.png",
-              }}
-              style={styles.moodImage}
-              resizeMode="contain"
-            />
+            {/* Profile image with mood image in bottom right */}
+            <View style={styles.profileImageContainer}>
+              <Image
+                source={getChildImageSource(currentChild)}
+                style={[
+                  styles.childProfileImage,
+                  { borderColor: theme.background },
+                ]}
+                defaultSource={defaultChildImage}
+                onError={(e) => {
+                  console.log(
+                    "Error loading child profile image:",
+                    e.nativeEvent.error
+                  );
+                }}
+              />
+              {/* Mood image in bottom right of profile image */}
+              <View style={styles.smallImageContainer}>
+                <Image
+                  source={getMoodImage}
+                  style={styles.smallChildImage}
+                  resizeMode="contain"
+                  onError={(e) => {
+                    console.log(
+                      "Error loading mood image:",
+                      e.nativeEvent.error
+                    );
+                  }}
+                />
+              </View>
+            </View>
 
             <Text style={[styles.headerText, { color: theme.text }]}>
               {currentChild.name.split(" ")[0]}'s Activity
@@ -602,6 +629,43 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingTop: 10,
     width: "100%",
+  },
+  profileImageContainer: {
+    position: "relative",
+    width: 100,
+    height: 100,
+    marginBottom: 12,
+  },
+  childProfileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  smallImageContainer: {
+    position: "absolute",
+    bottom: -10,
+    right: -10,
+    zIndex: 10,
+    width: 56,
+    height: 56,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  smallChildImage: {
+    width: 56,
+    height: 56,
   },
   childSelector: {
     flexDirection: "row",
