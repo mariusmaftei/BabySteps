@@ -121,7 +121,8 @@ export const ensureToken = async () => {
       "Authorization header already set:",
       api.defaults.headers.common["Authorization"].substring(0, 15) + "..."
     );
-    return true;
+    // Don't return anything, the header is already set
+    return;
   }
 
   // If not, try to get it from storage - use "token" key to match auth-context.jsx
@@ -132,11 +133,12 @@ export const ensureToken = async () => {
       "Auth token retrieved from storage and set in API headers:",
       token.substring(0, 10) + "..."
     );
-    return true;
+    // Don't return anything, we've set the header
+    return;
   }
 
   console.log("No auth token found in storage");
-  return false;
+  throw new Error("No authentication token found");
 };
 
 export default api;

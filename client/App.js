@@ -15,9 +15,7 @@ import SettingsScreen from "./screens/settings/settings";
 import SleepDetailsScreen from "./screens/activity-details-screen/sleep-screen/sleep-details-screen";
 import FeedingDetailsScreen from "./screens/activity-details-screen/feeding-screen/feeding-screen";
 import GrowthDetailsScreen from "./screens/activity-details-screen/growth-details-screen/growth-details-screen";
-import PlaytimeDetailsScreen from "./screens/activity-details-screen/playtime-details-screen/playtime-details-screen";
 import HealthDetailsScreen from "./screens/activity-details-screen/health-detals-screen/health-details-screen";
-import SocialDetailsScreen from "./screens/activity-details-screen/social-details-screen/social-details-screen";
 import DiaperDetailsScreen from "./screens/activity-details-screen/diaper-details-screen/diaper-details-screen";
 import RelaxingMusicScreen from "./screens/activity-details-screen/relaxing-music-screen/relaxing-music-screen";
 
@@ -87,19 +85,9 @@ function ActivityStack() {
         options={{ title: "Growth Details" }}
       />
       <Stack.Screen
-        name="PlaytimeDetails"
-        component={PlaytimeDetailsScreen}
-        options={{ title: "Playtime Details" }}
-      />
-      <Stack.Screen
         name="HealthDetails"
         component={HealthDetailsScreen}
         options={{ title: "Health Details" }}
-      />
-      <Stack.Screen
-        name="SocialDetails"
-        component={SocialDetailsScreen}
-        options={{ title: "Social Details" }}
       />
       {/* Then in the ActivityStack component, add the route for the DiaperDetailsScreen: */}
       <Stack.Screen
@@ -189,10 +177,12 @@ function MainApp() {
     isAuthenticated,
     logout,
     getCurrentUser,
+    token,
   } = useAuth();
   const { currentChild } = useChildActivity();
   const [isSplashVisible, setIsSplashVisible] = useState(true);
   const userChecked = useRef(false);
+  const apiInitialized = useRef(false);
 
   useEffect(() => {
     // Show splash screen for a minimum time
@@ -210,7 +200,9 @@ function MainApp() {
       if (isAuthenticated && !userChecked.current) {
         userChecked.current = true;
         try {
+          console.log("Checking user profile...");
           await getCurrentUser();
+          console.log("User profile fetched successfully");
         } catch (error) {
           console.error("Failed to fetch user profile:", error);
           // If user not found (401), log out
@@ -229,7 +221,7 @@ function MainApp() {
     };
 
     checkUser();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, getCurrentUser, logout]);
 
   // Keep only this effect for theme updates based on child gender
   useEffect(() => {

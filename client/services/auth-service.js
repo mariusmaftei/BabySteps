@@ -1,9 +1,9 @@
-import { api, setAuthToken } from "./api";
+import { api, setAuthToken, initializeApi } from "./api";
 
 // Register a new user
 export const register = async (userData) => {
   try {
-    console.log("Registering user with data:", userData);
+    console.log("Registering user with data:", JSON.stringify(userData));
 
     // Validate that email exists before making the request
     if (!userData.email) {
@@ -11,20 +11,32 @@ export const register = async (userData) => {
     }
 
     const response = await api.post("/auth/register", userData);
+    console.log("API Response Status:", response.status);
 
     // Set the token in headers and storage
     const { token, user } = response.data;
     await setAuthToken(token);
+    console.log(
+      "Auth token set and saved to storage:",
+      token.substring(0, 10) + "..."
+    );
+
+    // Initialize API with the token
+    await initializeApi();
+    console.log("API initialized after registration");
 
     return response.data;
   } catch (error) {
     console.error("Registration error:", error);
 
     if (error.response) {
+      console.error("Error response status:", error.response.status);
       console.error("Error response data:", error.response.data);
       throw new Error(error.response.data.message || "Registration failed");
     } else {
-      throw new Error("Network error. Please check your connection.");
+      throw new Error(
+        error.message || "Network error. Please check your connection."
+      );
     }
   }
 };
@@ -38,6 +50,10 @@ export const login = async (credentials) => {
     // Set the token in headers and storage
     const { token, user } = response.data;
     await setAuthToken(token);
+
+    // Initialize API with the token
+    await initializeApi();
+    console.log("API initialized after login");
 
     return response.data;
   } catch (error) {
@@ -102,5 +118,30 @@ export const updateUserProfile = async (userData, token) => {
     } else {
       throw new Error("Network error. Please check your connection.");
     }
+  }
+};
+
+// Logout a user
+export const logout = async () => {
+  try {
+    // Clear the auth token
+    await setAuthToken(null);
+    console.log("Auth token cleared");
+    return true;
+  } catch (error) {
+    console.error("Logout error:", error);
+    throw new Error("Failed to logout");
+  }
+};
+
+// Initialize the API
+export const initializeApiService = async () => {
+  try {
+    await initializeApi();
+    console.log("API initialized from service");
+    return true;
+  } catch (error) {
+    console.error("Error initializing API from service:", error);
+    return false;
   }
 };

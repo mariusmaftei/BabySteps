@@ -44,18 +44,67 @@ export const getChildById = async (req, res) => {
 // Create a new child
 export const createChild = async (req, res) => {
   try {
-    const { name, age, gender, imageSrc, weight, height, headCircumference } =
-      req.body;
+    const {
+      name,
+      age,
+      birthDate,
+      gender,
+      imageSrc,
+      weight,
+      height,
+      headCircumference,
+    } = req.body;
     const userId = req.user.id;
 
     // Validate required fields
-    if (!name || !age) {
-      return res.status(400).json({ message: "Name and age are required" });
+    if (!name) {
+      return res.status(400).json({ message: "Name is required" });
+    }
+
+    // Parse birth date if provided
+    let parsedBirthDate = null;
+    if (birthDate) {
+      // Check if birthDate is in DD/MM/YYYY format
+      const dateRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+      const match = birthDate.match(dateRegex);
+
+      if (match) {
+        // Convert from DD/MM/YYYY to YYYY-MM-DD for proper Date parsing
+        const [, day, month, year] = match;
+        parsedBirthDate = new Date(`${year}-${month}-${day}`);
+      } else {
+        // Try to parse as a regular date string
+        parsedBirthDate = new Date(birthDate);
+      }
+
+      // Validate the parsed date
+      if (isNaN(parsedBirthDate.getTime())) {
+        return res.status(400).json({ message: "Invalid birth date format" });
+      }
+    }
+
+    // Calculate age string if birth date is provided
+    let ageString = age || "Not specified";
+    if (parsedBirthDate) {
+      const now = new Date();
+      const diffMonths =
+        (now.getFullYear() - parsedBirthDate.getFullYear()) * 12 +
+        (now.getMonth() - parsedBirthDate.getMonth());
+
+      if (diffMonths < 1) {
+        ageString = "Less than 1 month";
+      } else if (diffMonths < 12) {
+        ageString = `${diffMonths} month${diffMonths > 1 ? "s" : ""}`;
+      } else {
+        const years = Math.floor(diffMonths / 12);
+        ageString = `${years} year${years > 1 ? "s" : ""}`;
+      }
     }
 
     const newChild = await Child.create({
       name,
-      age,
+      age: ageString,
+      birthDate: parsedBirthDate,
       gender: gender || "other",
       imageSrc,
       weight: weight || null,
@@ -75,8 +124,16 @@ export const createChild = async (req, res) => {
 export const updateChild = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, age, gender, imageSrc, weight, height, headCircumference } =
-      req.body;
+    const {
+      name,
+      age,
+      birthDate,
+      gender,
+      imageSrc,
+      weight,
+      height,
+      headCircumference,
+    } = req.body;
     const userId = req.user.id;
 
     const child = await Child.findOne({
@@ -90,9 +147,50 @@ export const updateChild = async (req, res) => {
       return res.status(404).json({ message: "Child not found" });
     }
 
+    // Parse birth date if provided
+    let parsedBirthDate = null;
+    if (birthDate) {
+      // Check if birthDate is in DD/MM/YYYY format
+      const dateRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+      const match = birthDate.match(dateRegex);
+
+      if (match) {
+        // Convert from DD/MM/YYYY to YYYY-MM-DD for proper Date parsing
+        const [, day, month, year] = match;
+        parsedBirthDate = new Date(`${year}-${month}-${day}`);
+      } else {
+        // Try to parse as a regular date string
+        parsedBirthDate = new Date(birthDate);
+      }
+
+      // Validate the parsed date
+      if (isNaN(parsedBirthDate.getTime())) {
+        return res.status(400).json({ message: "Invalid birth date format" });
+      }
+    }
+
+    // Calculate age string if birth date is provided
+    let ageString = age;
+    if (parsedBirthDate) {
+      const now = new Date();
+      const diffMonths =
+        (now.getFullYear() - parsedBirthDate.getFullYear()) * 12 +
+        (now.getMonth() - parsedBirthDate.getMonth());
+
+      if (diffMonths < 1) {
+        ageString = "Less than 1 month";
+      } else if (diffMonths < 12) {
+        ageString = `${diffMonths} month${diffMonths > 1 ? "s" : ""}`;
+      } else {
+        const years = Math.floor(diffMonths / 12);
+        ageString = `${years} year${years > 1 ? "s" : ""}`;
+      }
+    }
+
     // Update fields
     if (name) child.name = name;
-    if (age) child.age = age;
+    if (ageString) child.age = ageString;
+    if (parsedBirthDate) child.birthDate = parsedBirthDate;
     if (gender) child.gender = gender;
     if (imageSrc !== undefined) child.imageSrc = imageSrc;
     if (weight !== undefined) child.weight = weight;

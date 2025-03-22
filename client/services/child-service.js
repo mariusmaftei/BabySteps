@@ -42,39 +42,26 @@ export const getChildById = async (childId, token) => {
 };
 
 // Create a new child
-export const createChild = async (childData, token) => {
+export const createChild = async (childData) => {
   try {
-    // Ensure API has auth token before making request
-    await ensureToken();
+    const token = await ensureToken();
 
-    // Make a copy of the data to avoid modifying the original
-    const normalizedData = { ...childData };
-
-    // Ensure we're using the correct property name for the image
-    if (normalizedData.imageSrc) {
-      // Keep imageSrc as is
-    } else if (normalizedData.image) {
-      normalizedData.imageSrc = normalizedData.image;
-      delete normalizedData.image; // Remove duplicate to avoid confusion
+    // Format birth date if it exists
+    if (childData.birthDate) {
+      // Make sure birthDate is sent in the format the server expects
+      console.log("Birth date being sent:", childData.birthDate);
     }
 
-    console.log("Creating child with normalized data:", normalizedData);
+    // Fix: Changed from "/child" to "/children" to match the route definition
+    const response = await api.post("/children", childData);
 
-    const response = await api.post("/children", normalizedData);
+    // No initial growth record creation - user will create the first record manually
+    console.log("Child created successfully, no initial growth record created");
 
-    console.log("Child created successfully:", response.data);
-
-    // Ensure the returned data has the expected structure
-    const processedData = ensureChildDataStructure(response.data);
-    return processedData;
+    return response.data;
   } catch (error) {
-    console.error("Create child error:", error);
-    throw (
-      error.response?.data || {
-        error: "Failed to create child",
-        message: error.message,
-      }
-    );
+    console.error("Error creating child:", error);
+    throw error;
   }
 };
 
@@ -83,6 +70,12 @@ export const updateChild = async (childId, childData, token) => {
   try {
     // Ensure API has auth token before making request
     await ensureToken();
+
+    // Format birth date if it exists
+    if (childData.birthDate) {
+      // Make sure birthDate is sent in the format the server expects
+      console.log("Birth date being updated:", childData.birthDate);
+    }
 
     console.log("Updating child with ID:", childId, "and data:", childData);
     const response = await api.put(`/children/${childId}`, childData);
@@ -167,8 +160,12 @@ const ensureChildDataStructure = (childData) => {
           break;
         case "growth":
           processedData.activities[type] = {
-            height: "0 cm",
-            weight: "0 kg",
+            height: processedData.height
+              ? `${processedData.height} cm`
+              : "0 cm",
+            weight: processedData.weight
+              ? `${processedData.weight} kg`
+              : "0 kg",
             bmi: "0",
             trend: "0%",
             percentile: "0th",

@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -157,7 +151,7 @@ function Activity({ navigation }) {
 
   // Get mood image source based on mood - now using local images
   const getMoodImage = useMemo(() => {
-    return isHappyMood ? happyChildImage : happyChildImage;
+    return isHappyMood ? happyChildImage : sadChildImage;
   }, [isHappyMood]);
 
   // Handle card press

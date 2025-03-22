@@ -10,6 +10,7 @@ import mediaRouter from "./routes/media.js";
 import { db } from "./config/firebase.js";
 import vaccinationRoute from "./routes/vaccination.js";
 import diaperRoute from "./routes/diaper.js";
+import growthRoute from "./routes/growth.js";
 
 // Load environment variables
 dotenv.config();
@@ -45,6 +46,7 @@ app.use("/sleep", sleepRoute);
 app.use("/diaper", diaperRoute);
 app.use("/media", mediaRouter);
 app.use("/vaccinations", vaccinationRoute);
+app.use("/growth", growthRoute);
 
 // Check Firebase Firestore connection
 db.listCollections()

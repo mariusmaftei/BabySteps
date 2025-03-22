@@ -1,26 +1,256 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
+  StyleSheet,
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  StyleSheet,
-  Dimensions,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
+
 import { Ionicons } from "@expo/vector-icons";
-import { BarChart, LineChart } from "react-native-chart-kit";
 
 import { useTheme } from "../../../context/theme-context";
 import { useChildActivity } from "../../../context/child-activity-context";
+import * as growthService from "../../../services/growth-service";
 
-const screenWidth = Dimensions.get("window").width;
+// Import components
+import GrowthCharts from "../../../components/growth/growth-charts";
+import GrowthMeasurementsInput from "../../../components/growth/growth-measurements-input";
+
+import GrowthTips from "../../../components/growth/growth-tips";
+import BirthDataCard from "../../../components/growth/birth-data-card";
+// WHO Growth Standards for Infants (0-12 months)
+// WHO Growth Standards for Infants (0-12 months)
+const WHO_STANDARDS = {
+  boys: [
+    { age: 0, weight: 3.3, height: 49.9, headCirc: 34.5 }, // Newborn
+    { age: 1, weight: 4.5, height: 54.7, headCirc: 37.1 }, // 1 month
+    { age: 2, weight: 5.6, height: 58.4, headCirc: 39.1 }, // 2 months
+    { age: 3, weight: 6.4, height: 61.4, headCirc: 40.5 }, // 3 months
+    { age: 4, weight: 7.0, height: 63.9, headCirc: 41.7 }, // 4 months
+    { age: 5, weight: 7.5, height: 65.9, headCirc: 42.5 }, // 5 months
+    { age: 6, weight: 7.9, height: 67.6, headCirc: 43.2 }, // 6 months
+    { age: 7, weight: 8.3, height: 69.2, headCirc: 43.8 }, // 7 months
+    { age: 8, weight: 8.6, height: 70.6, headCirc: 44.3 }, // 8 months
+    { age: 9, weight: 8.9, height: 72.0, headCirc: 44.7 }, // 9 months
+    { age: 10, weight: 9.2, height: 73.3, headCirc: 45.2 }, // 10 months
+    { age: 11, weight: 9.4, height: 74.5, headCirc: 45.6 }, // 11 months
+    { age: 12, weight: 9.6, height: 75.7, headCirc: 46.0 }, // 12 months
+  ],
+  girls: [
+    { age: 0, weight: 3.2, height: 49.1, headCirc: 33.9 }, // Newborn
+    { age: 1, weight: 4.2, height: 53.7, headCirc: 36.0 }, // 1 month
+    { age: 2, weight: 5.1, height: 57.1, headCirc: 37.9 }, // 2 months
+    { age: 3, weight: 5.8, height: 59.8, headCirc: 39.3 }, // 3 months
+    { age: 4, weight: 6.4, height: 62.1, headCirc: 40.5 }, // 4 months
+    { age: 5, weight: 6.9, height: 64.0, headCirc: 41.3 }, // 5 months
+    { age: 6, weight: 7.3, height: 65.7, headCirc: 42.0 }, // 6 months
+    { age: 7, weight: 7.6, height: 67.3, headCirc: 42.6 }, // 7 months
+    { age: 8, weight: 7.9, height: 68.7, headCirc: 43.1 }, // 8 months
+    { age: 9, weight: 8.2, height: 70.1, headCirc: 43.6 }, // 9 months
+    { age: 10, weight: 8.5, height: 71.5, headCirc: 44.0 }, // 10 months
+    { age: 11, weight: 8.7, height: 72.8, headCirc: 44.4 }, // 11 months
+    { age: 12, weight: 8.9, height: 74.0, headCirc: 44.8 }, // 12 months
+  ],
+};
+
+// Helper function to get simplified age group label (only 0-3 and 4-12)
+const getAgeGroupLabel = (ageInMonths) => {
+  if (ageInMonths <= 3) return "0-3 months";
+  if (ageInMonths <= 12) return "4-12 months";
+  return "Over 12 months";
+};
 
 export default function GrowthDetailsScreen({ navigation }) {
   const { theme } = useTheme();
   const { currentChild } = useChildActivity();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [growthRecords, setGrowthRecords] = useState([]);
+  const [latestRecord, setLatestRecord] = useState(null);
+  const [previousRecord, setPreviousRecord] = useState(null);
+  const [statistics, setStatistics] = useState(null);
+  const [birthWeight, setBirthWeight] = useState(null);
+  const [birthHeight, setBirthHeight] = useState(null);
+  const [birthHeadCirc, setBirthHeadCirc] = useState(null);
+  const [hasExistingMeasurements, setHasExistingMeasurements] = useState(false);
+  const [activeChartTab, setActiveChartTab] = useState("weight"); // Options: "weight", "height", "headCirc"
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  const [targetWeight, setTargetWeight] = useState(0);
+  const [targetHeight, setTargetHeight] = useState(0);
+  const [targetHeadCirc, setTargetHeadCirc] = useState(0);
+
+  // Growth inputs state - always start with "0" for new measurements
+  const [currentWeight, setCurrentWeight] = useState("0");
+  const [previousWeight, setPreviousWeight] = useState("0");
+  const [currentHeight, setCurrentHeight] = useState("0");
+  const [previousHeight, setPreviousHeight] = useState("0");
+  const [currentHeadCirc, setCurrentHeadCirc] = useState("0");
+  const [previousHeadCirc, setPreviousHeadCirc] = useState("0");
+  const [notes, setNotes] = useState("");
+
+  // Calculate weight gain in grams
+  const [weightGain, setWeightGain] = useState(0);
+  const [heightGain, setHeightGain] = useState(0);
+  const [headCircGain, setHeadCircGain] = useState(0);
+
+  // Prepare data for bar chart comparison
+  const getBarChartData = () => {
+    // Get birth weight from child data (Child table)
+    let birthWeightValue = birthWeight ? Number.parseFloat(birthWeight) : 0;
+    if (isNaN(birthWeightValue)) {
+      console.log("Birth weight is NaN, using 0 instead");
+      birthWeightValue = 0;
+    }
+    console.log("Chart using birth weight:", birthWeightValue);
+
+    const hasPreviousRecord = previousRecord !== null || previousWeight !== "";
+    const currentWeightValue = Number.parseFloat(currentWeight) || 0;
+
+    // If we don't have a previous record yet, only show Birth and New Measurement
+    if (!hasPreviousRecord) {
+      return {
+        labels: ["Birth", "New Measurement"],
+        datasets: [
+          {
+            data: [birthWeightValue, currentWeightValue],
+            colors: [
+              (opacity = 1) => `rgba(255, 149, 0, ${opacity})`, // Orange for birth
+              (opacity = 1) => `rgba(90, 135, 255, ${opacity})`, // Blue for new measurement
+            ],
+          },
+        ],
+      };
+    }
+
+    // Otherwise show all three values
+    return {
+      labels: ["Birth", "Previous", "New Measurement"],
+      datasets: [
+        {
+          data: [
+            birthWeightValue,
+            Number.parseFloat(previousWeight) || 0,
+            currentWeightValue,
+          ],
+          colors: [
+            (opacity = 1) => `rgba(255, 149, 0, ${opacity})`, // Orange for birth
+            (opacity = 1) => `rgba(134, 65, 244, ${opacity})`, // Purple for previous
+            (opacity = 1) => `rgba(90, 135, 255, ${opacity})`, // Blue for new measurement
+          ],
+        },
+      ],
+    };
+  };
+
+  // Prepare data for height comparison chart
+  const getHeightChartData = () => {
+    // Get birth height or use 0 if not available
+    let birthHeightValue = birthHeight ? Number.parseFloat(birthHeight) : 0;
+    if (isNaN(birthHeightValue)) {
+      console.log("Birth height is NaN, using 0 instead");
+      birthHeightValue = 0;
+    }
+    const hasPreviousRecord = previousRecord !== null || previousHeight !== "";
+    const currentHeightValue = Number.parseFloat(currentHeight) || 0;
+
+    // If we don't have a previous record yet, only show Birth and New Measurement
+    if (!hasPreviousRecord) {
+      return {
+        labels: ["Birth", "New Measurement"],
+        datasets: [
+          {
+            data: [birthHeightValue, currentHeightValue],
+            colors: [
+              (opacity = 1) => `rgba(255, 149, 0, ${opacity})`, // Orange for birth
+              (opacity = 1) => `rgba(90, 135, 255, ${opacity})`, // Blue for new measurement
+            ],
+          },
+        ],
+      };
+    }
+
+    // Otherwise show all three values
+    return {
+      labels: ["Birth", "Previous", "New Measurement"],
+      datasets: [
+        {
+          data: [
+            birthHeightValue,
+            Number.parseFloat(previousHeight) || 0,
+            currentHeightValue,
+          ],
+          colors: [
+            (opacity = 1) => `rgba(255, 149, 0, ${opacity})`, // Orange for birth
+            (opacity = 1) => `rgba(134, 65, 44, ${opacity})`, // Purple for previous
+            (opacity = 1) => `rgba(90, 135, 255, ${opacity})`, // Blue for new measurement
+          ],
+        },
+      ],
+    };
+  };
+
+  // Prepare data for head circumference comparison chart
+  const getHeadCircChartData = () => {
+    // Get birth head circumference or use 0 if not available
+    let birthHeadCircValue = birthHeadCirc
+      ? Number.parseFloat(birthHeadCirc)
+      : 0;
+    if (isNaN(birthHeadCircValue)) {
+      console.log("Birth head circumference is NaN, using 0 instead");
+      birthHeadCircValue = 0;
+    }
+    const hasPreviousRecord =
+      previousRecord !== null || previousHeadCirc !== "";
+    const currentHeadCircValue = Number.parseFloat(currentHeadCirc) || 0;
+
+    // If we don't have a previous record yet, only show Birth and New Measurement
+    if (!hasPreviousRecord) {
+      return {
+        labels: ["Birth", "New Measurement"],
+        datasets: [
+          {
+            data: [birthHeadCircValue, currentHeadCircValue],
+            colors: [
+              (opacity = 1) => `rgba(255, 45, 85, ${opacity})`, // Pink for birth
+              (opacity = 1) => `rgba(90, 135, 255, ${opacity})`, // Blue for new measurement
+            ],
+          },
+        ],
+      };
+    }
+
+    // Otherwise show all three values
+    return {
+      labels: ["Birth", "Previous", "New Measurement"],
+      datasets: [
+        {
+          data: [
+            birthHeadCircValue,
+            Number.parseFloat(previousHeadCirc) || 0,
+            currentHeadCircValue,
+          ],
+          colors: [
+            (opacity = 1) => `rgba(255, 45, 85, ${opacity})`, // Pink for birth
+            (opacity = 1) => `rgba(134, 65, 244, ${opacity})`, // Purple for previous
+            (opacity = 1) => `rgba(90, 135, 255, ${opacity})`, // Blue for new measurement
+          ],
+        },
+      ],
+    };
+  };
+
+  // Debug child data to see what fields are available
+  useEffect(() => {
+    console.log("Current child data:", JSON.stringify(currentChild, null, 2));
+  }, [currentChild]);
 
   // Get child's age as a number for recommendations
   const childAgeText = currentChild.age;
@@ -31,32 +261,239 @@ export default function GrowthDetailsScreen({ navigation }) {
   const childAgeInMonths =
     childAgeUnit === "months" ? childAgeNum : childAgeNum * 12;
 
-  // Growth inputs state
-  const [currentWeight, setCurrentWeight] = useState("0");
-  const [previousWeight, setPreviousWeight] = useState("0");
-  const [currentHeight, setCurrentHeight] = useState("0");
-  const [previousHeight, setPreviousHeight] = useState("0");
-  const [currentHeadCirc, setCurrentHeadCirc] = useState("0");
-  const [previousHeadCirc, setPreviousHeadCirc] = useState("0");
+  // Get child's gender for WHO standards
+  const childGender = currentChild.gender
+    ? currentChild.gender.toLowerCase()
+    : "boys"; // Default to boys if gender not specified
 
-  // Calculate weight gain in grams
-  const [weightGain, setWeightGain] = useState(0);
-  const [heightGain, setHeightGain] = useState(0);
-  const [headCircGain, setHeadCircGain] = useState(0);
+  // Update current date and time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Calculate dynamic target values based on WHO standards and child's age
+  useEffect(() => {
+    // Get WHO standards for current age
+    const currentStandards = getWHOStandards(childAgeInMonths, childGender);
+
+    // Get WHO standards for next month
+    const nextMonthStandards = getWHOStandards(
+      childAgeInMonths + 1,
+      childGender
+    );
+
+    // Calculate target values (difference between current and next month standards)
+    const birthWeightValue = Number.parseFloat(birthWeight) || 0;
+    const birthHeightValue = Number.parseFloat(birthHeight) || 0;
+    const birthHeadCircValue = Number.parseFloat(birthHeadCirc) || 0;
+
+    // Calculate target weight in grams
+    const whoWeightTarget = Math.round(
+      (nextMonthStandards.weight - currentStandards.weight) * 1000
+    );
+    setTargetWeight(whoWeightTarget > 0 ? whoWeightTarget : 500); // Minimum 500g per month if WHO target is too small
+
+    // Calculate target height in mm
+    const whoHeightTarget = Math.round(
+      (nextMonthStandards.height - currentStandards.height) * 10
+    );
+    setTargetHeight(whoHeightTarget > 0 ? whoHeightTarget : 10); // Minimum 10mm per month if WHO target is too small
+
+    // Calculate target head circumference in mm
+    const whoHeadCircTarget = Math.round(
+      (nextMonthStandards.headCirc - currentStandards.headCirc) * 10
+    );
+    setTargetHeadCirc(whoHeadCircTarget > 0 ? whoHeadCircTarget : 5); // Minimum 5mm per month if WHO target is too small
+
+    console.log("Dynamic targets calculated:", {
+      weight: whoWeightTarget,
+      height: whoHeightTarget,
+      headCirc: whoHeadCircTarget,
+    });
+  }, [childAgeInMonths, childGender, birthWeight, birthHeight, birthHeadCirc]);
+
+  // Load growth data
+  const loadGrowthData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log("Loading growth data for child ID:", currentChild.id);
+
+      // Set birth measurements from child data
+      if (currentChild.birthWeight) {
+        setBirthWeight(currentChild.birthWeight.toString());
+      }
+      if (currentChild.birthHeight) {
+        setBirthHeight(currentChild.birthHeight.toString());
+      }
+      if (currentChild.birthHeadCircumference) {
+        setBirthHeadCirc(currentChild.birthHeadCircumference.toString());
+      }
+
+      // Set birth measurements from child data - these come from the Child table
+      console.log("Child data:", currentChild);
+      if (currentChild.weight) {
+        // Use weight in grams directly
+        setBirthWeight(currentChild.weight.toString());
+        console.log("Setting birth weight to:", currentChild.weight, "g");
+      }
+      if (currentChild.height) {
+        // Use height in mm directly
+        setBirthHeight(currentChild.height.toString());
+        console.log("Setting birth height to:", currentChild.height, "mm");
+      }
+      if (currentChild.headCircumference) {
+        // Use head circumference in mm directly
+        setBirthHeadCirc(currentChild.headCircumference.toString());
+        console.log(
+          "Setting birth head circumference to:",
+          currentChild.headCircumference,
+          "mm"
+        );
+      }
+
+      // Get all growth records
+      try {
+        const records = await growthService.getGrowthRecords(currentChild.id);
+        setGrowthRecords(records);
+
+        // If we have records, we have existing measurements
+        if (records && records.length > 0) {
+          setHasExistingMeasurements(true);
+        }
+      } catch (error) {
+        console.log(
+          "No growth records found, will create initial record if needed"
+        );
+        setGrowthRecords([]);
+        setHasExistingMeasurements(false);
+        // Ensure inputs are set to 0 for new users
+        setCurrentWeight("0");
+        setCurrentHeight("0");
+        setCurrentHeadCirc("0");
+      }
+
+      // Get latest record
+      try {
+        const latest = await growthService.getLatestGrowthRecord(
+          currentChild.id
+        );
+        setLatestRecord(latest);
+        // Display values in their original units (g and mm)
+        setCurrentWeight(latest.weight.toString());
+        setCurrentHeight(latest.height.toString());
+        setCurrentHeadCirc(latest.headCircumference.toString());
+        setHasExistingMeasurements(true);
+      } catch (error) {
+        console.log(
+          "No latest growth record found - this is normal for new users"
+        );
+        setLatestRecord(null);
+        // Always set current values to 0 for new input
+        setCurrentWeight("0");
+        setCurrentHeight("0");
+        setCurrentHeadCirc("0");
+        setHasExistingMeasurements(false);
+      }
+
+      // Get previous record
+      try {
+        const previous = await growthService.getPreviousGrowthRecord(
+          currentChild.id
+        );
+        setPreviousRecord(previous);
+        // Display values in their original units (g and mm)
+        setPreviousWeight(previous.weight.toString());
+        setPreviousHeight(previous.height.toString());
+        setPreviousHeadCirc(previous.headCircumference.toString());
+      } catch (error) {
+        console.log(
+          "No previous growth record found - this is expected for new users"
+        );
+        // If no previous record, don't set previous values
+        // This will hide the previous values until a second record is added
+        setPreviousRecord(null);
+        setPreviousWeight("");
+        setPreviousHeight("");
+        setPreviousHeadCirc("");
+      }
+
+      // Get statistics
+      try {
+        const stats = await growthService.getGrowthStatistics(currentChild.id);
+        setStatistics(stats);
+      } catch (error) {
+        console.log(
+          "No growth statistics found - this is normal for new users"
+        );
+        // Set default empty statistics
+        setStatistics({
+          weightData: [],
+          heightData: [],
+          headCircumferenceData: [],
+          totalRecords: 0,
+          firstRecord: null,
+          latestRecord: null,
+          weightGain: 0,
+          heightGain: 0,
+          headCircumferenceGain: 0,
+        });
+      }
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error loading growth data:", error);
+      setError("Failed to load growth data");
+      setLoading(false);
+    }
+  }, [currentChild.id, currentChild]);
+
+  // Load data when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadGrowthData();
+    }, [loadGrowthData])
+  );
 
   // Update gains when inputs change
   useEffect(() => {
     const currWeight = Number.parseFloat(currentWeight) || 0;
-    const prevWeight = Number.parseFloat(previousWeight) || 0;
-    setWeightGain(Math.round((currWeight - prevWeight) * 1000)); // Convert kg to grams
+
+    // If there's no previous record or previous weight is empty, compare with birth weight
+    if ((!previousRecord || previousWeight === "") && birthWeight) {
+      const birthWeightVal = Number.parseFloat(birthWeight) || 0;
+      setWeightGain(Math.round(currWeight - birthWeightVal)); // Calculate gain in grams
+    } else {
+      const prevWeight = Number.parseFloat(previousWeight) || 0;
+      setWeightGain(Math.round(currWeight - prevWeight)); // Calculate gain in grams
+    }
 
     const currHeight = Number.parseFloat(currentHeight) || 0;
-    const prevHeight = Number.parseFloat(previousHeight) || 0;
-    setHeightGain(Math.round((currHeight - prevHeight) * 10)); // Convert cm to mm
+
+    // If there's no previous record or previous height is empty, compare with birth height
+    if ((!previousRecord || previousHeight === "") && birthHeight) {
+      const birthHeightVal = Number.parseFloat(birthHeight) || 0;
+      setHeightGain(Math.round(currHeight - birthHeightVal)); // Calculate gain in mm
+    } else {
+      const prevHeight = Number.parseFloat(previousHeight) || 0;
+      setHeightGain(Math.round(currHeight - prevHeight)); // Calculate gain in mm
+    }
 
     const currHeadCirc = Number.parseFloat(currentHeadCirc) || 0;
-    const prevHeadCirc = Number.parseFloat(previousHeadCirc) || 0;
-    setHeadCircGain(Math.round((currHeadCirc - prevHeadCirc) * 10)); // Convert cm to mm
+
+    // If there's no previous record or previous head circ is empty, compare with birth head circumference
+    if ((!previousRecord || previousHeadCirc === "") && birthHeadCirc) {
+      const birthHeadCircVal = Number.parseFloat(birthHeadCirc) || 0;
+      setHeadCircGain(Math.round(currHeadCirc - birthHeadCircVal)); // Calculate gain in mm
+    } else {
+      const prevHeadCirc = Number.parseFloat(previousHeadCirc) || 0;
+      setHeadCircGain(Math.round(currHeadCirc - prevHeadCirc)); // Calculate gain in mm
+    }
   }, [
     currentWeight,
     previousWeight,
@@ -64,218 +501,333 @@ export default function GrowthDetailsScreen({ navigation }) {
     previousHeight,
     currentHeadCirc,
     previousHeadCirc,
+    birthWeight,
+    birthHeight,
+    birthHeadCirc,
+    previousRecord,
   ]);
 
-  // Growth recommendations based on age
-  const getGrowthRecommendations = (ageInMonths) => {
-    if (ageInMonths < 3) {
-      // 0-3 months
+  // Get WHO standards for the child's age
+  const getWHOStandards = (ageInMonths, gender) => {
+    // Cap age at 12 months for now since we only have data up to 12 months
+    const cappedAge = Math.min(ageInMonths, 12);
+
+    // Get the standards for the child's gender
+    const genderStandards =
+      WHO_STANDARDS[gender === "female" ? "girls" : "boys"];
+
+    // Find the closest age in the standards
+    // For exact matches
+    const exactMatch = genderStandards.find(
+      (standard) => standard.age === cappedAge
+    );
+    if (exactMatch) return exactMatch;
+
+    // For ages between standard measurements, interpolate
+    const lowerStandard = genderStandards
+      .filter((standard) => standard.age < cappedAge)
+      .sort((a, b) => b.age - a.age)[0];
+    const upperStandard = genderStandards
+      .filter((standard) => standard.age > cappedAge)
+      .sort((a, b) => a.age - b.age)[0];
+
+    if (lowerStandard && upperStandard) {
+      const ageDiff = upperStandard.age - lowerStandard.age;
+      const ageRatio = (cappedAge - lowerStandard.age) / ageDiff;
+
       return {
-        ageGroup: "Newborn (0-3 months)",
-        weightGainPerWeek: "150-200 grams",
-        heightGainPerMonth: "2.5-3.0 cm",
-        headCircGainPerMonth: "1.5-2.0 cm",
-        minWeightGain: 150,
-        maxWeightGain: 200,
-        minHeightGain: 6, // mm per week
-        maxHeightGain: 7.5, // mm per week
-        minHeadCircGain: 3.5, // mm per week
-        maxHeadCircGain: 5, // mm per week
-        expectedWeight: {
-          min: 3.0, // kg
-          max: 6.0, // kg
-        },
-        expectedHeight: {
-          min: 49, // cm
-          max: 60, // cm
-        },
-        expectedHeadCirc: {
-          min: 35, // cm
-          max: 40, // cm
-        },
-      };
-    } else if (ageInMonths >= 3 && ageInMonths < 6) {
-      // 3-6 months
-      return {
-        ageGroup: "Infant (3-6 months)",
-        weightGainPerWeek: "100-150 grams",
-        heightGainPerMonth: "1.5-2.0 cm",
-        headCircGainPerMonth: "1.0-1.5 cm",
-        minWeightGain: 100,
-        maxWeightGain: 150,
-        minHeightGain: 3.5, // mm per week
-        maxHeightGain: 5, // mm per week
-        minHeadCircGain: 2.5, // mm per week
-        maxHeadCircGain: 3.5, // mm per week
-        expectedWeight: {
-          min: 5.5, // kg
-          max: 8.0, // kg
-        },
-        expectedHeight: {
-          min: 59, // cm
-          max: 68, // cm
-        },
-        expectedHeadCirc: {
-          min: 39, // cm
-          max: 44, // cm
-        },
-      };
-    } else if (ageInMonths >= 6 && ageInMonths < 12) {
-      // 6-12 months
-      return {
-        ageGroup: "Infant (6-12 months)",
-        weightGainPerWeek: "50-100 grams",
-        heightGainPerMonth: "1.0-1.5 cm",
-        headCircGainPerMonth: "0.5-1.0 cm",
-        minWeightGain: 50,
-        maxWeightGain: 100,
-        minHeightGain: 2.5, // mm per week
-        maxHeightGain: 3.5, // mm per week
-        minHeadCircGain: 1, // mm per week
-        maxHeadCircGain: 2.5, // mm per week
-        expectedWeight: {
-          min: 7.0, // kg
-          max: 10.5, // kg
-        },
-        expectedHeight: {
-          min: 65, // cm
-          max: 76, // cm
-        },
-        expectedHeadCirc: {
-          min: 43, // cm
-          max: 47, // cm
-        },
-      };
-    } else if (ageInMonths >= 12 && ageInMonths < 24) {
-      // 12-24 months
-      return {
-        ageGroup: "Toddler (1-2 years)",
-        weightGainPerWeek: "30-60 grams",
-        heightGainPerMonth: "0.7-1.0 cm",
-        headCircGainPerMonth: "0.3-0.5 cm",
-        minWeightGain: 30,
-        maxWeightGain: 60,
-        minHeightGain: 1.5, // mm per week
-        maxHeightGain: 2.5, // mm per week
-        minHeadCircGain: 0.7, // mm per week
-        maxHeadCircGain: 1.2, // mm per week
-        expectedWeight: {
-          min: 9.0, // kg
-          max: 13.0, // kg
-        },
-        expectedHeight: {
-          min: 74, // cm
-          max: 88, // cm
-        },
-        expectedHeadCirc: {
-          min: 46, // cm
-          max: 49, // cm
-        },
-      };
-    } else if (ageInMonths >= 24 && ageInMonths < 60) {
-      // 2-5 years
-      return {
-        ageGroup: "Preschooler (2-5 years)",
-        weightGainPerWeek: "20-40 grams",
-        heightGainPerMonth: "0.5-0.7 cm",
-        headCircGainPerMonth: "0.1-0.2 cm",
-        minWeightGain: 20,
-        maxWeightGain: 40,
-        minHeightGain: 1, // mm per week
-        maxHeightGain: 1.7, // mm per week
-        minHeadCircGain: 0.2, // mm per week
-        maxHeadCircGain: 0.5, // mm per week
-        expectedWeight: {
-          min: 12.0, // kg
-          max: 19.0, // kg
-        },
-        expectedHeight: {
-          min: 86, // cm
-          max: 110, // cm
-        },
-        expectedHeadCirc: {
-          min: 48, // cm
-          max: 51, // cm
-        },
-      };
-    } else {
-      // 6+ years
-      return {
-        ageGroup: "School-age (6+ years)",
-        weightGainPerWeek: "10-30 grams",
-        heightGainPerMonth: "0.3-0.5 cm",
-        headCircGainPerMonth: "Minimal",
-        minWeightGain: 10,
-        maxWeightGain: 30,
-        minHeightGain: 0.7, // mm per week
-        maxHeightGain: 1.2, // mm per week
-        minHeadCircGain: 0, // mm per week
-        maxHeadCircGain: 0.2, // mm per week
-        expectedWeight: {
-          min: 18.0, // kg
-          max: 30.0, // kg
-        },
-        expectedHeight: {
-          min: 108, // cm
-          max: 130, // cm
-        },
-        expectedHeadCirc: {
-          min: 50, // cm
-          max: 52, // cm
-        },
+        age: cappedAge,
+        weight:
+          lowerStandard.weight +
+          (upperStandard.weight - lowerStandard.weight) * ageRatio,
+        height:
+          lowerStandard.height +
+          (upperStandard.height - lowerStandard.height) * ageRatio,
+        headCirc:
+          lowerStandard.headCirc +
+          (upperStandard.headCirc - lowerStandard.headCirc) * ageRatio,
       };
     }
+
+    // If we can't interpolate, return the closest standard
+    return lowerStandard || upperStandard || genderStandards[0];
   };
 
-  const recommendations = getGrowthRecommendations(childAgeInMonths);
+  // Calculate expected monthly growth based on WHO standards
+  const calculateExpectedMonthlyGrowth = (ageInMonths, gender) => {
+    const currentStandard = getWHOStandards(ageInMonths, gender);
+    const previousStandard = getWHOStandards(
+      Math.max(0, ageInMonths - 1),
+      gender
+    );
 
-  // Handle input change with validation for weight (kg)
+    return {
+      weight: Math.round(
+        (currentStandard.weight - previousStandard.weight) * 1000
+      ), // grams per month
+      height: Math.round(
+        (currentStandard.height - previousStandard.height) * 10
+      ), // mm per month
+      headCirc: Math.round(
+        (currentStandard.headCirc - previousStandard.headCirc) * 10
+      ), // mm per month
+    };
+  };
+
+  // Get growth recommendations based on WHO standards
+  const getGrowthRecommendations = (ageInMonths, gender) => {
+    // Get WHO standards for current age
+    const whoStandard = getWHOStandards(ageInMonths, gender);
+
+    // Calculate expected monthly growth
+    const expectedMonthlyGrowth = calculateExpectedMonthlyGrowth(
+      ageInMonths,
+      gender
+    );
+
+    // Convert monthly growth to weekly (divide by ~4.3 weeks per month)
+    const weeklyGrowthFactor = 1 / 4.3;
+    const expectedWeeklyGrowth = {
+      weight: Math.round(expectedMonthlyGrowth.weight * weeklyGrowthFactor), // grams per week
+      height: Math.round(expectedMonthlyGrowth.height * weeklyGrowthFactor), // mm per week
+      headCirc: Math.round(expectedMonthlyGrowth.headCirc * weeklyGrowthFactor), // mm per week
+    };
+
+    // Allow for a range of +/- 15% around the expected growth
+    const minGrowth = {
+      weight: Math.round(expectedWeeklyGrowth.weight * 0.85),
+      height: Math.round(expectedMonthlyGrowth.height * 0.85),
+      headCirc: Math.round(expectedMonthlyGrowth.headCirc * 0.85),
+    };
+
+    const maxGrowth = {
+      weight: Math.round(expectedWeeklyGrowth.weight * 1.15),
+      height: Math.round(expectedMonthlyGrowth.height * 1.15),
+      headCirc: Math.round(expectedMonthlyGrowth.headCirc * 1.15),
+    };
+
+    // Allow for a range of +/- 10% around the expected measurements
+    const expectedRange = {
+      weight: {
+        min: Math.round(whoStandard.weight * 0.9 * 10) / 10, // kg with 1 decimal
+        max: Math.round(whoStandard.weight * 1.1 * 10) / 10, // kg with 1 decimal
+      },
+      height: {
+        min: Math.round(whoStandard.height * 0.95),
+        max: Math.round(whoStandard.height * 1.05),
+      },
+      headCirc: {
+        min: Math.round(whoStandard.headCirc * 0.95),
+        max: Math.round(whoStandard.headCirc * 1.05),
+      },
+    };
+
+    return {
+      ageGroup: getAgeGroupLabel(ageInMonths),
+      exactAge: ageInMonths,
+      whoStandard: whoStandard,
+      weightGainPerWeek: `${minGrowth.weight}-${maxGrowth.weight} grams`,
+      heightGainPerMonth: `${expectedMonthlyGrowth.height / 10}-${
+        Math.round(expectedMonthlyGrowth.height * 1.15) / 10
+      } cm`,
+      headCircGainPerMonth: `${expectedMonthlyGrowth.headCirc / 10}-${
+        Math.round(expectedMonthlyGrowth.headCirc * 1.15) / 10
+      } cm`,
+      minWeightGain: minGrowth.weight,
+      maxWeightGain: maxGrowth.weight,
+      minHeightGain: minGrowth.height,
+      maxHeightGain: maxGrowth.height,
+      minHeadCircGain: minGrowth.headCirc,
+      maxHeadCircGain: maxGrowth.headCirc,
+      expectedWeight: expectedRange.weight,
+      expectedHeight: expectedRange.height,
+      expectedHeadCirc: expectedRange.headCirc,
+      // Add dynamic monthly targets
+      targetWeightPerMonth: targetWeight,
+      targetHeightPerMonth: targetHeight,
+      targetHeadCircPerMonth: targetHeadCirc,
+    };
+  };
+
+  const recommendations = getGrowthRecommendations(
+    childAgeInMonths,
+    childGender
+  );
+
+  // Handle input change with validation for weight (grams)
   const handleWeightChange = (type, value) => {
-    // Validate input to only allow numbers with max 4 digits total
-    const validatedValue = value.replace(/[^0-9.]/g, "");
+    // Validate input to only allow whole numbers with max 5 digits total (for grams)
+    const validatedValue = value.replace(/[^0-9]/g, "");
 
-    // Limit to max 4 digits total (including decimal part)
-    if (validatedValue.includes(".")) {
-      const [whole, decimal] = validatedValue.split(".");
-      if (whole.length > 4 || whole.length + decimal.length > 4) {
-        return;
-      }
-      if (type === "current") {
-        setCurrentWeight(whole + "." + decimal);
-      } else {
-        setPreviousWeight(whole + "." + decimal);
-      }
-    } else if (validatedValue.length > 4) {
+    // Limit to max 5 digits for grams
+    if (validatedValue.length > 5) {
       return;
+    }
+
+    if (type === "current") {
+      setCurrentWeight(validatedValue);
     } else {
-      if (type === "current") {
-        setCurrentWeight(validatedValue);
-      } else {
-        setPreviousWeight(validatedValue);
-      }
+      setPreviousWeight(validatedValue);
     }
   };
 
-  // Handle input change with validation for height and head circumference (cm)
+  // Handle input change with validation for height and head circumference (mm)
   const handleMeasurementChange = (type, value, setter) => {
-    // Validate input to only allow numbers with max 3 digits total
-    const validatedValue = value.replace(/[^0-9.]/g, "");
+    // Validate input to only allow whole numbers with max 4 digits total (for mm)
+    const validatedValue = value.replace(/[^0-9]/g, "");
 
-    // Limit to max 3 digits total (including decimal part)
-    if (validatedValue.includes(".")) {
-      const [whole, decimal] = validatedValue.split(".");
-      if (whole.length > 3 || whole.length + decimal.length > 3) {
+    // Limit to max 4 digits for mm
+    if (validatedValue.length > 4) {
+      return;
+    }
+
+    setter(validatedValue);
+  };
+
+  // Format date and time
+  const formatDateTime = (date) => {
+    if (!date) return "";
+    const d = new Date(date);
+
+    // Format date as DD/MM/YYYY
+    const day = d.getDate().toString().padStart(2, "0");
+    const month = (d.getMonth() + 1).toString().padStart(2, "0");
+    const year = d.getFullYear();
+
+    // Format time as HH:MM
+    const hours = d.getHours().toString().padStart(2, "0");
+    const minutes = d.getMinutes().toString().padStart(2, "0");
+
+    return `${day}/${month}/${year} at ${hours}:${minutes}`;
+  };
+
+  // Save growth data
+  const saveGrowthData = async () => {
+    try {
+      setLoading(true);
+
+      // Use values directly in grams and mm (no conversion needed)
+      const weightInGrams = Math.round(Number.parseFloat(currentWeight || "0"));
+      const heightInMm = Math.round(Number.parseFloat(currentHeight || "0"));
+      const headCircInMm = Math.round(
+        Number.parseFloat(currentHeadCirc || "0")
+      );
+
+      // Validate that we have valid numbers
+      if (isNaN(weightInGrams) || isNaN(heightInMm) || isNaN(headCircInMm)) {
+        Alert.alert(
+          "Invalid Input",
+          "Please enter valid numbers for weight, height, and head circumference"
+        );
+        setLoading(false);
         return;
       }
-      setter(whole + "." + decimal);
-    } else if (validatedValue.length > 3) {
-      return;
-    } else {
-      setter(validatedValue);
+
+      // Add current date and time to notes
+      const dateTimeString = formatDateTime(currentDateTime);
+      const updatedNotes = notes
+        ? `${notes}\n\nMeasured on: ${dateTimeString}`
+        : `Measured on: ${dateTimeString}`;
+
+      const growthData = {
+        childId: currentChild.id,
+        weight: weightInGrams, // Store in grams
+        height: heightInMm, // Store in mm
+        headCircumference: headCircInMm, // Store in mm
+        notes: updatedNotes,
+      };
+
+      console.log("Saving growth data:", growthData);
+
+      let result;
+
+      if (isEditMode && latestRecord) {
+        // Update existing record
+        result = await growthService.updateGrowthRecord(
+          latestRecord.id,
+          growthData
+        );
+        Alert.alert("Success", "Growth record updated successfully");
+      } else {
+        // Create new record
+        result = await growthService.createGrowthRecord(growthData);
+        Alert.alert("Success", "Growth record saved successfully");
+      }
+
+      // Reload data
+      await loadGrowthData();
+      setIsEditMode(false);
+    } catch (error) {
+      console.error("Error saving growth data:", error);
+
+      let errorMessage = "Failed to save growth data";
+
+      if (
+        error.response &&
+        error.response.data &&
+        error.response.data.message
+      ) {
+        errorMessage = error.response.data.message;
+      }
+
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Check if growth meets recommendations
+  // Format date - simplified to just show the date
+  const formatDateSimple = (date) => {
+    if (!date) return "Not recorded";
+
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "Not recorded";
+      return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return "Not recorded";
+    }
+  };
+
+  // Format date - simplified to just show the date in DD/MM/YYYY format
+  // Format date - simplified to just show the date
+  const formatDate = (date) => {
+    if (!date) return "Not recorded";
+
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "Not recorded";
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}/${d.getFullYear()}`;
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return "Not recorded";
+    }
+  };
+
+  // Get birth date from various possible fields in the child object - simplified
+  const getChildBirthDate = () => {
+    // Check various possible field names for birth date
+    if (currentChild.birthDate) return formatDate(currentChild.birthDate);
+    if (currentChild.dateOfBirth) return formatDate(currentChild.dateOfBirth);
+    if (currentChild.dob) return formatDate(currentChild.dob);
+    if (currentChild.birth_date) return formatDate(currentChild.birth_date);
+
+    // If we have the child's age in months, we can estimate the birth date
+    if (childAgeInMonths) {
+      const estimatedBirthDate = new Date();
+      estimatedBirthDate.setMonth(
+        estimatedBirthDate.getMonth() - childAgeInMonths
+      );
+      return formatDate(estimatedBirthDate);
+    }
+
+    return "Not recorded";
+  };
+
+  // Check if growth meets WHO recommendations
   const isWeightGainSufficient = weightGain >= recommendations.minWeightGain;
   const isHeightGainSufficient = heightGain >= recommendations.minHeightGain;
   const isHeadCircGainSufficient =
@@ -301,77 +853,8 @@ export default function GrowthDetailsScreen({ navigation }) {
     recommendations.minHeadCircGain
   );
 
-  // Calculate the percentage difference from recommended growth
-  const calculateGrowthDifferencePercentage = (actual, min) => {
-    if (min === 0) return 0; // If minimum is 0, no difference
-    const diff = actual - min;
-    const percentage = Math.round((diff / min) * 100);
-    return percentage;
-  };
-
-  const weightDiffPercentage = calculateGrowthDifferencePercentage(
-    weightGain,
-    recommendations.minWeightGain
-  );
-  const heightDiffPercentage = calculateGrowthDifferencePercentage(
-    heightGain,
-    recommendations.minHeightGain
-  );
-  const headCircDiffPercentage = calculateGrowthDifferencePercentage(
-    headCircGain,
-    recommendations.minHeadCircGain
-  );
-
-  // Format percentage text with + or - sign
-  const formatPercentageText = (percentage) => {
-    return percentage >= 0 ? `+${percentage}%` : `${percentage}%`;
-  };
-
-  // Prepare data for bar chart comparison
-  const getBarChartData = () => {
-    return {
-      labels: ["Previous", "Current"],
-      datasets: [
-        {
-          data: [
-            Number.parseFloat(previousWeight) || 0,
-            Number.parseFloat(currentWeight) || 0,
-          ],
-          colors: [
-            (opacity = 1) => `rgba(134, 65, 244, ${opacity})`,
-            (opacity = 1) => `rgba(90, 135, 255, ${opacity})`,
-          ],
-        },
-      ],
-    };
-  };
-
-  // Prepare data for growth trend line chart
-  const getGrowthTrendData = () => {
-    // Sample data - in a real app, this would come from a database of historical measurements
-    return {
-      labels: ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5", "Week 6"],
-      datasets: [
-        {
-          data: [
-            Number.parseFloat(previousWeight) - 0.5 || 0,
-            Number.parseFloat(previousWeight) - 0.3 || 0,
-            Number.parseFloat(previousWeight) - 0.1 || 0,
-            Number.parseFloat(previousWeight) || 0,
-            Number.parseFloat(currentWeight) || 0,
-            // Projected next week based on current growth rate
-            Number.parseFloat(currentWeight) + weightGain / 1000 || 0,
-          ],
-          color: (opacity = 1) => `rgba(90, 135, 255, ${opacity})`,
-          strokeWidth: 2,
-        },
-      ],
-      legend: ["Weight (kg)"],
-    };
-  };
-
   // Set up the notification button in the header
-  React.useLayoutEffect(() => {
+  useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
         <TouchableOpacity
@@ -389,1150 +872,136 @@ export default function GrowthDetailsScreen({ navigation }) {
     });
   }, [navigation, notificationsEnabled, theme, currentChild]);
 
+  // Render loading state
+  if (loading && !latestRecord && !previousRecord) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={[styles.loadingText, { color: theme.text }]}>
+            Loading growth data...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Render error state
+  if (error && !latestRecord && !previousRecord) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color={theme.danger} />
+          <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: theme.primary }]}
+            onPress={loadGrowthData}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Age Group Info */}
-        <View style={styles.ageGroupContainer}>
-          <Text style={[styles.ageGroupLabel, { color: theme.textSecondary }]}>
-            Age Group:
+        {/* Current Date/Time Banner */}
+        <View
+          style={[
+            styles.dateTimeBanner,
+            { backgroundColor: `${theme.primary}20` },
+          ]}
+        >
+          <Ionicons
+            name="calendar"
+            size={20}
+            color={theme.primary}
+            style={styles.dateTimeBannerIcon}
+          />
+          <Text style={[styles.dateTimeBannerText, { color: theme.text }]}>
+            Current date and time: {formatDateTime(currentDateTime)}
           </Text>
-          <View
-            style={[
-              styles.ageGroupInfo,
-              { backgroundColor: `${theme.primary}20` },
-            ]}
-          >
-            <Ionicons
-              name="information-circle"
-              size={18}
-              color={theme.primary}
-              style={styles.ageGroupIcon}
-            />
-            <Text style={[styles.ageGroupText, { color: theme.text }]}>
-              {recommendations.ageGroup}
-            </Text>
-          </View>
         </View>
 
-        {/* Weight Comparison Chart */}
-        <View
-          style={[
-            styles.chartContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <View style={styles.chartHeader}>
-            <Ionicons
-              name="bar-chart"
-              size={24}
-              color={theme.text}
-              style={styles.sectionIcon}
-            />
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Weight Comparison
-            </Text>
-          </View>
+        {/* Birth Data Card - New Component */}
+        <BirthDataCard
+          theme={theme}
+          childAgeInMonths={childAgeInMonths}
+          birthWeight={birthWeight}
+          birthHeight={birthHeight}
+          birthHeadCirc={birthHeadCirc}
+          childGender={childGender}
+          recommendations={recommendations}
+          childName={currentChild.name.split(" ")[0]} // Get first name
+          birthDate={getChildBirthDate()}
+        />
 
-          <View style={styles.chartWrapper}>
-            <BarChart
-              data={getBarChartData()}
-              width={screenWidth - 64}
-              height={220}
-              yAxisSuffix=" kg"
-              chartConfig={{
-                backgroundGradientFrom: theme.cardBackground,
-                backgroundGradientTo: theme.cardBackground,
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(90, 135, 255, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                style: {
-                  borderRadius: 16,
-                },
-                barPercentage: 0.7,
-              }}
-              style={styles.chart}
-              showValuesOnTopOfBars
-            />
-          </View>
-
-          <View
-            style={[
-              styles.weightGainContainer,
-              { borderTopColor: theme.borderLight },
-            ]}
-          >
-            <Text
-              style={[styles.weightGainLabel, { color: theme.textSecondary }]}
-            >
-              Weekly Weight Gain
-            </Text>
-            <Text
-              style={[
-                styles.weightGainValue,
-                {
-                  color: isWeightGainSufficient ? theme.success : theme.danger,
-                },
-              ]}
-            >
-              {weightGain} g
-            </Text>
-            <Text
-              style={[styles.recommendedGain, { color: theme.textSecondary }]}
-            >
-              Recommended: {recommendations.weightGainPerWeek}
-            </Text>
-          </View>
-        </View>
-
-        {/* Growth Trend Chart */}
-        <View
-          style={[
-            styles.chartContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <View style={styles.chartHeader}>
-            <Ionicons
-              name="trending-up"
-              size={24}
-              color={theme.text}
-              style={styles.sectionIcon}
-            />
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Growth Trend
-            </Text>
-          </View>
-
-          <View style={styles.chartWrapper}>
-            <LineChart
-              data={getGrowthTrendData()}
-              width={screenWidth - 64}
-              height={220}
-              yAxisSuffix=" kg"
-              chartConfig={{
-                backgroundGradientFrom: theme.cardBackground,
-                backgroundGradientTo: theme.cardBackground,
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(90, 135, 255, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                style: {
-                  borderRadius: 16,
-                },
-                propsForDots: {
-                  r: "6",
-                  strokeWidth: "2",
-                  stroke: theme.cardBackground,
-                },
-              }}
-              style={styles.chart}
-              bezier
-            />
-          </View>
-
-          <View
-            style={[
-              styles.trendInfoContainer,
-              { borderTopColor: theme.borderLight },
-            ]}
-          >
-            <Text
-              style={[styles.trendInfoText, { color: theme.textSecondary }]}
-            >
-              {weightGain > 0
-                ? `Growing at ${weightGain} grams per week`
-                : weightGain === 0
-                ? "No weight change detected"
-                : `Weight decreased by ${Math.abs(weightGain)} grams`}
-            </Text>
-          </View>
-        </View>
+        {/* Charts with Tabs */}
+        <GrowthCharts
+          theme={theme}
+          activeChartTab={activeChartTab}
+          setActiveChartTab={setActiveChartTab}
+          getBarChartData={getBarChartData}
+          getHeightChartData={getHeightChartData}
+          getHeadCircChartData={getHeadCircChartData}
+          weightGain={weightGain}
+          heightGain={heightGain}
+          headCircGain={headCircGain}
+          isWeightGainSufficient={isWeightGainSufficient}
+          isHeightGainSufficient={isHeightGainSufficient}
+          isHeadCircGainSufficient={isHeadCircGainSufficient}
+          recommendations={recommendations}
+          targetWeight={targetWeight}
+          targetHeight={targetHeight}
+          targetHeadCirc={targetHeadCirc}
+          currentWeight={currentWeight}
+          currentHeight={currentHeight}
+          currentHeadCirc={currentHeadCirc}
+          birthWeight={birthWeight}
+          birthHeight={birthHeight}
+          birthHeadCirc={birthHeadCirc}
+        />
 
         {/* Growth Measurements Input */}
-        <View
-          style={[
-            styles.inputContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <Text style={[styles.inputTitle, { color: theme.text }]}>
-            Record Growth Measurements
-          </Text>
-          <Text style={[styles.inputSubtitle, { color: theme.textSecondary }]}>
-            Enter current and previous week's measurements
-          </Text>
-
-          {/* Weight Inputs */}
-          <View
-            style={[
-              styles.measurementSection,
-              { borderBottomColor: theme.borderLight },
-            ]}
-          >
-            <View style={styles.measurementHeader}>
-              <Ionicons
-                name="fitness"
-                size={20}
-                color="#5A87FF"
-                style={styles.measurementIcon}
-              />
-              <Text style={[styles.measurementTitle, { color: theme.text }]}>
-                Weight
-              </Text>
-            </View>
-
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Previous Week
-                </Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                >
-                  <TextInput
-                    style={[styles.input, { color: theme.text }]}
-                    value={previousWeight}
-                    onChangeText={(value) =>
-                      handleWeightChange("previous", value)
-                    }
-                    keyboardType="numeric"
-                    placeholder="0.0"
-                    placeholderTextColor={theme.textTertiary}
-                  />
-                  <Text
-                    style={[styles.inputUnit, { color: theme.textSecondary }]}
-                  >
-                    kg
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Current Week
-                </Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                >
-                  <TextInput
-                    style={[styles.input, { color: theme.text }]}
-                    value={currentWeight}
-                    onChangeText={(value) =>
-                      handleWeightChange("current", value)
-                    }
-                    keyboardType="numeric"
-                    placeholder="0.0"
-                    placeholderTextColor={theme.textTertiary}
-                  />
-                  <Text
-                    style={[styles.inputUnit, { color: theme.textSecondary }]}
-                  >
-                    kg
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Height Inputs */}
-          <View
-            style={[
-              styles.measurementSection,
-              { borderBottomColor: theme.borderLight },
-            ]}
-          >
-            <View style={styles.measurementHeader}>
-              <Ionicons
-                name="resize"
-                size={20}
-                color="#FF9500"
-                style={styles.measurementIcon}
-              />
-              <Text style={[styles.measurementTitle, { color: theme.text }]}>
-                Height
-              </Text>
-            </View>
-
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Previous Week
-                </Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                >
-                  <TextInput
-                    style={[styles.input, { color: theme.text }]}
-                    value={previousHeight}
-                    onChangeText={(value) =>
-                      handleMeasurementChange(
-                        "previous",
-                        value,
-                        setPreviousHeight
-                      )
-                    }
-                    keyboardType="numeric"
-                    placeholder="0.0"
-                    placeholderTextColor={theme.textTertiary}
-                  />
-                  <Text
-                    style={[styles.inputUnit, { color: theme.textSecondary }]}
-                  >
-                    cm
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Current Week
-                </Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                >
-                  <TextInput
-                    style={[styles.input, { color: theme.text }]}
-                    value={currentHeight}
-                    onChangeText={(value) =>
-                      handleMeasurementChange(
-                        "current",
-                        value,
-                        setCurrentHeight
-                      )
-                    }
-                    keyboardType="numeric"
-                    placeholder="0.0"
-                    placeholderTextColor={theme.textTertiary}
-                  />
-                  <Text
-                    style={[styles.inputUnit, { color: theme.textSecondary }]}
-                  >
-                    cm
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Head Circumference Inputs */}
-          <View style={styles.measurementSection}>
-            <View style={styles.measurementHeader}>
-              <Ionicons
-                name="ellipse-outline"
-                size={20}
-                color="#FF2D55"
-                style={styles.measurementIcon}
-              />
-              <Text style={[styles.measurementTitle, { color: theme.text }]}>
-                Head Circumference
-              </Text>
-            </View>
-
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Previous Week
-                </Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                >
-                  <TextInput
-                    style={[styles.input, { color: theme.text }]}
-                    value={previousHeadCirc}
-                    onChangeText={(value) =>
-                      handleMeasurementChange(
-                        "previous",
-                        value,
-                        setPreviousHeadCirc
-                      )
-                    }
-                    keyboardType="numeric"
-                    placeholder="0.0"
-                    placeholderTextColor={theme.textTertiary}
-                  />
-                  <Text
-                    style={[styles.inputUnit, { color: theme.textSecondary }]}
-                  >
-                    cm
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[styles.inputLabel, { color: theme.textSecondary }]}
-                >
-                  Current Week
-                </Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    {
-                      borderColor: theme.borderLight,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
-                >
-                  <TextInput
-                    style={[styles.input, { color: theme.text }]}
-                    value={currentHeadCirc}
-                    onChangeText={(value) =>
-                      handleMeasurementChange(
-                        "current",
-                        value,
-                        setCurrentHeadCirc
-                      )
-                    }
-                    keyboardType="numeric"
-                    placeholder="0.0"
-                    placeholderTextColor={theme.textTertiary}
-                  />
-                  <Text
-                    style={[styles.inputUnit, { color: theme.textSecondary }]}
-                  >
-                    cm
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: theme.primary }]}
-            onPress={() =>
-              console.log("Saved growth data:", {
-                weight: {
-                  previous: previousWeight,
-                  current: currentWeight,
-                  gain: weightGain,
-                },
-                height: {
-                  previous: previousHeight,
-                  current: currentHeight,
-                  gain: heightGain,
-                },
-                headCirc: {
-                  previous: previousHeadCirc,
-                  current: currentHeadCirc,
-                  gain: headCircGain,
-                },
-              })
-            }
-          >
-            <Ionicons
-              name="save"
-              size={16}
-              color="#FFFFFF"
-              style={styles.saveButtonIcon}
-            />
-            <Text style={styles.saveButtonText}>Save Growth Data</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Growth Summary */}
-        <View
-          style={[
-            styles.summaryContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Growth Summary
-          </Text>
-
-          {/* Weight Gain Summary */}
-          <View
-            style={[
-              styles.growthSummaryCard,
-              {
-                borderColor: isWeightGainSufficient
-                  ? theme.success
-                  : theme.danger,
-              },
-            ]}
-          >
-            <View style={styles.growthSummaryHeader}>
-              <Ionicons
-                name="fitness"
-                size={20}
-                color="#5A87FF"
-                style={styles.growthSummaryIcon}
-              />
-              <Text style={[styles.growthSummaryTitle, { color: theme.text }]}>
-                Weight Gain
-              </Text>
-              <Text
-                style={[
-                  styles.growthSummaryValue,
-                  {
-                    color: isWeightGainSufficient
-                      ? theme.success
-                      : theme.danger,
-                  },
-                ]}
-              >
-                {weightGain} g/week
-              </Text>
-            </View>
-
-            <Text
-              style={[
-                styles.growthSummaryRecommended,
-                { color: theme.textSecondary },
-              ]}
-            >
-              Recommended: {recommendations.weightGainPerWeek}
-            </Text>
-
-            {/* Progress bar */}
-            <View style={styles.progressContainer}>
-              <View style={styles.progressLabelRow}>
-                <Text
-                  style={[styles.progressLabel, { color: theme.textSecondary }]}
-                >
-                  Progress toward minimum goal:
-                </Text>
-                <Text
-                  style={[
-                    styles.progressPercentage,
-                    {
-                      color: isWeightGainSufficient
-                        ? theme.success
-                        : theme.danger,
-                    },
-                  ]}
-                >
-                  {weightGainPercentage}%
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.progressBarContainer,
-                  { backgroundColor: `${theme.danger}30` },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.progressBar,
-                    {
-                      width: `${weightGainPercentage}%`,
-                      backgroundColor: isWeightGainSufficient
-                        ? theme.success
-                        : theme.danger,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-
-            {/* Difference from recommended */}
-            <View style={styles.diffContainer}>
-              <Text style={[styles.diffLabel, { color: theme.textSecondary }]}>
-                Compared to minimum goal ({recommendations.minWeightGain} g):
-              </Text>
-              <Text
-                style={[
-                  styles.diffValue,
-                  {
-                    color:
-                      weightDiffPercentage >= 0 ? theme.success : theme.danger,
-                  },
-                ]}
-              >
-                {formatPercentageText(weightDiffPercentage)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Height Gain Summary */}
-          <View
-            style={[
-              styles.growthSummaryCard,
-              {
-                borderColor: isHeightGainSufficient
-                  ? theme.success
-                  : theme.danger,
-              },
-            ]}
-          >
-            <View style={styles.growthSummaryHeader}>
-              <Ionicons
-                name="resize"
-                size={20}
-                color="#FF9500"
-                style={styles.growthSummaryIcon}
-              />
-              <Text style={[styles.growthSummaryTitle, { color: theme.text }]}>
-                Height Gain
-              </Text>
-              <Text
-                style={[
-                  styles.growthSummaryValue,
-                  {
-                    color: isHeightGainSufficient
-                      ? theme.success
-                      : theme.danger,
-                  },
-                ]}
-              >
-                {heightGain} mm/week
-              </Text>
-            </View>
-
-            <Text
-              style={[
-                styles.growthSummaryRecommended,
-                { color: theme.textSecondary },
-              ]}
-            >
-              Recommended: {recommendations.minHeightGain}-
-              {recommendations.maxHeightGain} mm/week
-            </Text>
-
-            {/* Progress bar */}
-            <View style={styles.progressContainer}>
-              <View style={styles.progressLabelRow}>
-                <Text
-                  style={[styles.progressLabel, { color: theme.textSecondary }]}
-                >
-                  Progress toward minimum goal:
-                </Text>
-                <Text
-                  style={[
-                    styles.progressPercentage,
-                    {
-                      color: isHeightGainSufficient
-                        ? theme.success
-                        : theme.danger,
-                    },
-                  ]}
-                >
-                  {heightGainPercentage}%
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.progressBarContainer,
-                  { backgroundColor: `${theme.danger}30` },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.progressBar,
-                    {
-                      width: `${heightGainPercentage}%`,
-                      backgroundColor: isHeightGainSufficient
-                        ? theme.success
-                        : theme.danger,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-
-            {/* Difference from recommended */}
-            <View style={styles.diffContainer}>
-              <Text style={[styles.diffLabel, { color: theme.textSecondary }]}>
-                Compared to minimum goal ({recommendations.minHeightGain} mm):
-              </Text>
-              <Text
-                style={[
-                  styles.diffValue,
-                  {
-                    color:
-                      heightDiffPercentage >= 0 ? theme.success : theme.danger,
-                  },
-                ]}
-              >
-                {formatPercentageText(heightDiffPercentage)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Head Circumference Gain Summary */}
-          <View
-            style={[
-              styles.growthSummaryCard,
-              {
-                borderColor: isHeadCircGainSufficient
-                  ? theme.success
-                  : theme.danger,
-              },
-            ]}
-          >
-            <View style={styles.growthSummaryHeader}>
-              <Ionicons
-                name="ellipse-outline"
-                size={20}
-                color="#FF2D55"
-                style={styles.growthSummaryIcon}
-              />
-              <Text style={[styles.growthSummaryTitle, { color: theme.text }]}>
-                Head Circumference Gain
-              </Text>
-              <Text
-                style={[
-                  styles.growthSummaryValue,
-                  {
-                    color: isHeadCircGainSufficient
-                      ? theme.success
-                      : theme.danger,
-                  },
-                ]}
-              >
-                {headCircGain} mm/week
-              </Text>
-            </View>
-
-            <Text
-              style={[
-                styles.growthSummaryRecommended,
-                { color: theme.textSecondary },
-              ]}
-            >
-              Recommended: {recommendations.minHeadCircGain}-
-              {recommendations.maxHeadCircGain} mm/week
-            </Text>
-
-            {/* Progress bar */}
-            <View style={styles.progressContainer}>
-              <View style={styles.progressLabelRow}>
-                <Text
-                  style={[styles.progressLabel, { color: theme.textSecondary }]}
-                >
-                  Progress toward minimum goal:
-                </Text>
-                <Text
-                  style={[
-                    styles.progressPercentage,
-                    {
-                      color: isHeadCircGainSufficient
-                        ? theme.success
-                        : theme.danger,
-                    },
-                  ]}
-                >
-                  {headCircGainPercentage}%
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.progressBarContainer,
-                  { backgroundColor: `${theme.danger}30` },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.progressBar,
-                    {
-                      width: `${headCircGainPercentage}%`,
-                      backgroundColor: isHeadCircGainSufficient
-                        ? theme.success
-                        : theme.danger,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-
-            {/* Difference from recommended */}
-            <View style={styles.diffContainer}>
-              <Text style={[styles.diffLabel, { color: theme.textSecondary }]}>
-                Compared to minimum goal ({recommendations.minHeadCircGain} mm):
-              </Text>
-              <Text
-                style={[
-                  styles.diffValue,
-                  {
-                    color:
-                      headCircDiffPercentage >= 0
-                        ? theme.success
-                        : theme.danger,
-                  },
-                ]}
-              >
-                {formatPercentageText(headCircDiffPercentage)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Expected Measurements */}
-        <View
-          style={[
-            styles.expectedContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Expected Measurements
-          </Text>
-          <Text
-            style={[styles.expectedSubtitle, { color: theme.textSecondary }]}
-          >
-            Typical ranges for {recommendations.ageGroup}
-          </Text>
-
-          <View style={styles.expectedTable}>
-            <View
-              style={[
-                styles.expectedTableHeader,
-                { borderBottomColor: theme.borderLight },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.expectedTableHeaderCell,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                Measurement
-              </Text>
-              <Text
-                style={[
-                  styles.expectedTableHeaderCell,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                Expected Range
-              </Text>
-              <Text
-                style={[
-                  styles.expectedTableHeaderCell,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                Current
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.expectedTableRow,
-                { borderBottomColor: theme.borderLight },
-              ]}
-            >
-              <Text style={[styles.expectedTableCell, { color: theme.text }]}>
-                Weight
-              </Text>
-              <Text
-                style={[
-                  styles.expectedTableCell,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {recommendations.expectedWeight.min}-
-                {recommendations.expectedWeight.max} kg
-              </Text>
-              <Text
-                style={[styles.expectedTableCell, { color: theme.primary }]}
-              >
-                {currentWeight || "0"} kg
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.expectedTableRow,
-                { borderBottomColor: theme.borderLight },
-              ]}
-            >
-              <Text style={[styles.expectedTableCell, { color: theme.text }]}>
-                Height
-              </Text>
-              <Text
-                style={[
-                  styles.expectedTableCell,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {recommendations.expectedHeight.min}-
-                {recommendations.expectedHeight.max} cm
-              </Text>
-              <Text
-                style={[styles.expectedTableCell, { color: theme.primary }]}
-              >
-                {currentHeight || "0"} cm
-              </Text>
-            </View>
-
-            <View style={styles.expectedTableRow}>
-              <Text style={[styles.expectedTableCell, { color: theme.text }]}>
-                Head Circ.
-              </Text>
-              <Text
-                style={[
-                  styles.expectedTableCell,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {recommendations.expectedHeadCirc.min}-
-                {recommendations.expectedHeadCirc.max} cm
-              </Text>
-              <Text
-                style={[styles.expectedTableCell, { color: theme.primary }]}
-              >
-                {currentHeadCirc || "0"} cm
-              </Text>
-            </View>
-          </View>
-        </View>
+        <GrowthMeasurementsInput
+          theme={theme}
+          isEditMode={isEditMode}
+          hasExistingMeasurements={hasExistingMeasurements}
+          latestRecord={latestRecord}
+          setIsEditMode={setIsEditMode}
+          formatDate={formatDate}
+          previousRecord={previousRecord}
+          previousWeight={previousWeight}
+          handleWeightChange={handleWeightChange}
+          currentWeight={currentWeight}
+          previousHeight={previousHeight}
+          handleMeasurementChange={handleMeasurementChange}
+          setPreviousHeight={setPreviousHeight}
+          currentHeight={currentHeight}
+          setCurrentHeight={setCurrentHeight}
+          previousHeadCirc={previousHeadCirc}
+          setPreviousHeadCirc={setPreviousHeadCirc}
+          currentHeadCirc={currentHeadCirc}
+          setCurrentHeadCirc={setCurrentHeadCirc}
+          notes={notes}
+          setNotes={setNotes}
+          weightGain={weightGain}
+          heightGain={heightGain}
+          headCircGain={headCircGain}
+          loading={loading}
+          saveGrowthData={saveGrowthData}
+        />
 
         {/* Growth Tips */}
-        <View
-          style={[
-            styles.tipsContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Growth & Development Tips
-          </Text>
-          <View style={styles.tipsList}>
-            {childAgeInMonths < 6 ? (
-              // 0-6 months tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Ensure adequate feeding - breastfeed on demand or follow
-                    formula feeding guidelines
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Position baby on their tummy during awake time to strengthen
-                    neck and shoulder muscles
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Track wet diapers to ensure baby is getting enough milk (6+
-                    per day)
-                  </Text>
-                </View>
-              </>
-            ) : childAgeInMonths >= 6 && childAgeInMonths < 12 ? (
-              // 6-12 months tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Introduce iron-rich solid foods around 6 months to support
-                    growth and brain development
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Encourage movement and crawling to develop gross motor
-                    skills
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Continue breast milk or formula as the primary source of
-                    nutrition
-                  </Text>
-                </View>
-              </>
-            ) : childAgeInMonths >= 12 && childAgeInMonths < 24 ? (
-              // 12-24 months tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Offer a variety of nutrient-dense foods from all food groups
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Encourage walking, climbing, and other physical activities
-                    to build strength
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Provide opportunities for fine motor skill development with
-                    finger foods and simple toys
-                  </Text>
-                </View>
-              </>
-            ) : childAgeInMonths >= 24 && childAgeInMonths < 60 ? (
-              // 2-5 years tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Establish regular meal and snack times with balanced
-                    nutrition
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Ensure adequate sleep (10-13 hours) for optimal growth
-                    hormone release
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Encourage daily physical activity (at least 3 hours) through
-                    active play
-                  </Text>
-                </View>
-              </>
-            ) : (
-              // 6+ years tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Provide a balanced diet with adequate protein, calcium, and
-                    other nutrients for bone growth
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Encourage at least 60 minutes of moderate to vigorous
-                    physical activity daily
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Limit screen time and ensure adequate sleep (9-12 hours) for
-                    optimal growth
-                  </Text>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
+        <GrowthTips theme={theme} childAgeInMonths={childAgeInMonths} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -1549,314 +1018,48 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 10,
   },
-  ageGroupContainer: {
-    marginBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  ageGroupLabel: {
-    fontSize: 15,
-    fontWeight: "500",
-    marginRight: 8,
-  },
-  ageGroupInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  ageGroupIcon: {
-    marginRight: 6,
-  },
-  ageGroupText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  chartContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  chartHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionIcon: {
-    marginRight: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  chartWrapper: {
-    alignItems: "center",
+  loadingContainer: {
+    flex: 1,
     justifyContent: "center",
-  },
-  chart: {
-    marginVertical: 8,
-    borderRadius: 16,
-  },
-  weightGainContainer: {
     alignItems: "center",
+  },
+  loadingText: {
     marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
+    fontSize: 16,
   },
-  weightGainLabel: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  weightGainValue: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  recommendedGain: {
-    fontSize: 14,
-  },
-  trendInfoContainer: {
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
+    padding: 20,
   },
-  trendInfoText: {
-    fontSize: 14,
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
     textAlign: "center",
+    marginBottom: 20,
   },
-  inputContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  inputTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  inputSubtitle: {
-    fontSize: 14,
-    marginBottom: 16,
-  },
-  measurementSection: {
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  measurementHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  measurementIcon: {
-    marginRight: 8,
-  },
-  measurementTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  inputRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  inputGroup: {
-    width: "48%",
-  },
-  inputLabel: {
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 44,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    height: "100%",
-    textAlign: "right",
-  },
-  inputUnit: {
-    fontSize: 14,
-    marginLeft: 4,
-  },
-  saveButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    paddingVertical: 12,
-    marginTop: 8,
-  },
-  saveButtonIcon: {
-    marginRight: 8,
-  },
-  saveButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  summaryContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  growthSummaryCard: {
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-  },
-  growthSummaryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  growthSummaryIcon: {
-    marginRight: 8,
-  },
-  growthSummaryTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    flex: 1,
-  },
-  growthSummaryValue: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  growthSummaryRecommended: {
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  progressContainer: {
-    marginBottom: 12,
-  },
-  progressLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  progressLabel: {
-    fontSize: 14,
-  },
-  progressPercentage: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  progressBarContainer: {
-    height: 8,
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressBar: {
-    height: "100%",
-  },
-  diffContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  diffLabel: {
-    fontSize: 14,
-    flex: 1,
-    marginRight: 8,
-  },
-  diffValue: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  expectedContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  expectedSubtitle: {
-    fontSize: 14,
-    marginBottom: 16,
-  },
-  expectedTable: {
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  expectedTableHeader: {
-    flexDirection: "row",
+  retryButton: {
+    paddingHorizontal: 20,
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
+    borderRadius: 8,
   },
-  expectedTableHeaderCell: {
-    flex: 1,
-    fontSize: 14,
+  retryButtonText: {
+    color: "#FFFFFF",
     fontWeight: "600",
   },
-  expectedTableRow: {
+  dateTimeBanner: {
     flexDirection: "row",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-  },
-  expectedTableCell: {
-    flex: 1,
-    fontSize: 14,
-  },
-  tipsContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  tipsList: {
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
-    borderRadius: 12,
+    alignItems: "center",
     padding: 12,
-    marginTop: 16,
+    borderRadius: 8,
+    marginBottom: 16,
   },
-  tipItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  tipIcon: {
+  dateTimeBannerIcon: {
     marginRight: 8,
-    marginTop: 2,
   },
-  tipText: {
+  dateTimeBannerText: {
     flex: 1,
     fontSize: 14,
-    lineHeight: 20,
   },
 });

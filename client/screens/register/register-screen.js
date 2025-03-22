@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -18,11 +18,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../context/theme-context";
 import { useAuth } from "../../context/auth-context";
 import * as authService from "../../services/auth-service";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function RegisterScreen({ navigation }) {
   const { theme } = useTheme();
-  const { register } = useAuth();
+  const { register, isAuthenticated } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,6 +39,17 @@ export default function RegisterScreen({ navigation }) {
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+
+  // Navigate to Activity screen when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log("User is authenticated, navigating to Activity");
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Activity" }],
+      });
+    }
+  }, [isAuthenticated, navigation]);
 
   // Start animations when component mounts
   React.useEffect(() => {
@@ -142,15 +152,15 @@ export default function RegisterScreen({ navigation }) {
         imageSrc: null, // Default to null, can be updated later
       };
 
-      // Call the API service to register the user
-      const response = await authService.register(userData);
+      console.log("Sending registration data:", userData);
 
-      // If successful, use the auth context to log in the user
-      if (response && response.token) {
-        await register(name, email, password);
-        // The navigation will be handled by the auth state change
-      }
+      // Call the register function from auth context
+      await register(userData);
+
+      // Navigation will be handled by the useEffect that watches isAuthenticated
+      console.log("Registration successful, auth state updated");
     } catch (error) {
+      console.error("Registration error in component:", error);
       const errorMessage =
         error.message ||
         "Registration failed. Please check your information and try again.";

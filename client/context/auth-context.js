@@ -1,8 +1,7 @@
 import { createContext, useState, useContext, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as authService from "../services/auth-service";
-// Create the auth context
-// Create the auth context
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -27,6 +26,14 @@ export const AuthProvider = ({ children }) => {
           }
 
           setIsAuthenticated(true);
+
+          // Initialize API with the token
+          try {
+            await authService.initializeApiService();
+            console.log("API initialized during startup");
+          } catch (error) {
+            console.error("Error initializing API during startup:", error);
+          }
         }
       } catch (err) {
         console.error("Error loading token:", err);
@@ -42,6 +49,8 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     setError(null);
     try {
+      console.log("Auth context register with data:", userData);
+
       // Call the auth service to register the user
       const result = await authService.register(userData);
 
@@ -49,17 +58,22 @@ export const AuthProvider = ({ children }) => {
       if (result && result.token) {
         const { token, user } = result;
 
+        console.log("Registration successful, setting token and user");
+
         // Update state
         setToken(token);
         setUser(user);
-        setIsAuthenticated(true);
 
         // Store user data in AsyncStorage
         await AsyncStorage.setItem("user", JSON.stringify(user));
+
+        // Set authenticated state AFTER everything else is done
+        setIsAuthenticated(true);
       }
 
       return result;
     } catch (err) {
+      console.error("Registration error in auth context:", err);
       setError(err.message || "Registration failed");
       throw err;
     }
@@ -79,10 +93,12 @@ export const AuthProvider = ({ children }) => {
       // Update state
       setToken(newToken);
       setUser(userData);
-      setIsAuthenticated(true);
 
       // Store user data in AsyncStorage
       await AsyncStorage.setItem("user", JSON.stringify(userData));
+
+      // Set authenticated state AFTER everything else is done
+      setIsAuthenticated(true);
 
       return true;
     } catch (err) {
@@ -152,13 +168,16 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       console.log("Logging out user");
+
+      // Call the auth service to logout
+      await authService.logout();
+
       // Clear user data
       setUser(null);
       setToken(null);
 
       // Clear storage
       await AsyncStorage.removeItem("user");
-      await AsyncStorage.removeItem("token");
 
       // Set isAuthenticated to false AFTER storage is cleared
       setIsAuthenticated(false);
