@@ -56,11 +56,26 @@ export const initializeApi = async () => {
   }
 };
 
+// List of expected 404 endpoints for new users
+const EXPECTED_404_ENDPOINTS = [
+  "/growth/child/",
+  "/previous",
+  "/latest",
+  "/statistics",
+];
+
+// Function to check if a 404 error is expected
+const isExpected404Error = (url, status) => {
+  if (status !== 404) return false;
+
+  // Check if the URL contains any of the expected 404 endpoints
+  return EXPECTED_404_ENDPOINTS.some((endpoint) => url.includes(endpoint));
+};
+
 // Add request interceptor for logging
 api.interceptors.request.use(
   (config) => {
     console.log("API Request:", config.method.toUpperCase(), config.url);
-    console.log("Request headers:", JSON.stringify(config.headers));
     return config;
   },
   (error) => {
@@ -76,14 +91,26 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error("API Response Error:", error);
-    if (error.response) {
-      console.error("Error Status:", error.response.status);
-      console.error("Error Data:", error.response.data);
-    } else if (error.request) {
-      console.error("No response received:", error.request);
+    // Only log as error if it's not an expected 404
+    if (
+      error.response &&
+      isExpected404Error(error.config.url, error.response.status)
+    ) {
+      console.log(
+        `API Response: ${error.response.status} - ${
+          error.response.data.message || "Not found"
+        } (expected for new users)`
+      );
     } else {
-      console.error("Error Message:", error.message);
+      console.error("API Response Error:", error);
+      if (error.response) {
+        console.error("Error Status:", error.response.status);
+        console.error("Error Data:", error.response.data);
+      } else if (error.request) {
+        console.error("No response received:", error.request);
+      } else {
+        console.error("Error Message:", error.message);
+      }
     }
     return Promise.reject(error);
   }

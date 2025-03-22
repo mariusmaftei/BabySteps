@@ -1,5 +1,16 @@
 import api, { ensureToken } from "./api.js";
 
+// Helper function to handle expected 404 errors
+const handle404Error = (error, message, defaultValue) => {
+  if (error.response && error.response.status === 404) {
+    console.log(message);
+    return defaultValue;
+  }
+  // For other errors, log and rethrow
+  console.error(message, error);
+  throw error;
+};
+
 // Get all growth records for a specific child
 export const getGrowthRecords = async (childId) => {
   try {
@@ -7,13 +18,11 @@ export const getGrowthRecords = async (childId) => {
     const response = await api.get(`/growth/child/${childId}`);
     return response.data;
   } catch (error) {
-    console.error("Error fetching growth records:", error);
-    if (error.response && error.response.status === 404) {
-      console.log(
-        "No growth records found for this child - this is normal for new users"
-      );
-    }
-    throw error;
+    return handle404Error(
+      error,
+      "No growth records found for this child - this is normal for new users",
+      []
+    );
   }
 };
 
@@ -24,13 +33,11 @@ export const getLatestGrowthRecord = async (childId) => {
     const response = await api.get(`/growth/child/${childId}/latest`);
     return response.data;
   } catch (error) {
-    console.error("Error fetching latest growth record:", error);
-    if (error.response && error.response.status === 404) {
-      console.log(
-        "No latest growth record found - this is expected for new users"
-      );
-    }
-    throw error;
+    return handle404Error(
+      error,
+      "No latest growth record found - this is normal for new users",
+      null
+    );
   }
 };
 
@@ -41,13 +48,11 @@ export const getPreviousGrowthRecord = async (childId) => {
     const response = await api.get(`/growth/child/${childId}/previous`);
     return response.data;
   } catch (error) {
-    console.error("Error fetching previous growth record:", error);
-    if (error.response && error.response.status === 404) {
-      console.log(
-        "No previous growth record found - this is expected for new users"
-      );
-    }
-    throw error;
+    return handle404Error(
+      error,
+      "No previous growth record found - this is expected for new users",
+      null
+    );
   }
 };
 
@@ -58,13 +63,21 @@ export const getGrowthStatistics = async (childId) => {
     const response = await api.get(`/growth/child/${childId}/statistics`);
     return response.data;
   } catch (error) {
-    console.error("Error fetching growth statistics:", error);
-    if (error.response && error.response.status === 404) {
-      console.log(
-        "No growth statistics available - this is normal for new users"
-      );
-    }
-    throw error;
+    return handle404Error(
+      error,
+      "No growth statistics available - this is normal for new users",
+      {
+        weightData: [],
+        heightData: [],
+        headCircumferenceData: [],
+        totalRecords: 0,
+        firstRecord: null,
+        latestRecord: null,
+        weightGain: 0,
+        heightGain: 0,
+        headCircumferenceGain: 0,
+      }
+    );
   }
 };
 
