@@ -7,10 +7,12 @@ import {
   TextInput,
   StyleSheet,
   Dimensions,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { PieChart } from "react-native-chart-kit";
+import { LineChart, PieChart } from "react-native-chart-kit";
+import CustomButton from "../../../components/Button/Button";
 
 import { useTheme } from "../../../context/theme-context";
 import { useChildActivity } from "../../../context/child-activity-context";
@@ -21,9 +23,10 @@ export default function FeedingDetailsScreen({ navigation }) {
   const { theme } = useTheme();
   const { currentChild } = useChildActivity();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [activeTab, setActiveTab] = useState("today");
 
   // Get child's age as a number for recommendations
-  const childAgeText = currentChild.age;
+  const childAgeText = currentChild?.age || "0 months";
   const childAgeNum = Number.parseInt(childAgeText.split(" ")[0]) || 0;
   const childAgeUnit = childAgeText.includes("month") ? "months" : "years";
 
@@ -31,194 +34,349 @@ export default function FeedingDetailsScreen({ navigation }) {
   const childAgeInMonths =
     childAgeUnit === "months" ? childAgeNum : childAgeNum * 12;
 
-  // Meal inputs state
-  const [mealInputs, setMealInputs] = useState({
-    breakfast: "0",
-    morningSnack: "0",
-    lunch: "0",
-    afternoonSnack: "0",
-    dinner: "0",
+  // State for feeding inputs
+  const [breastFeedings, setBreastFeedings] = useState([]);
+  const [bottleFeedings, setBottleFeedings] = useState([]);
+  const [solidFoodFeedings, setSolidFoodFeedings] = useState([]);
+
+  // Current feeding input state
+  const [currentFeeding, setCurrentFeeding] = useState({
+    type: "breast", // 'breast', 'bottle', 'solid'
+    startTime: null,
+    endTime: null,
+    duration: 0, // in minutes for breast feeding
+    amount: "", // in ml for bottle, grams for solid
+    note: "",
   });
 
-  // Total food amount
-  const [totalFood, setTotalFood] = useState(0);
+  // Mock data for the past week (in a real app, this would come from an API)
+  const [weeklyData, setWeeklyData] = useState({
+    breast: [
+      { day: "Mon", count: 8, totalMinutes: 120 },
+      { day: "Tue", count: 7, totalMinutes: 105 },
+      { day: "Wed", count: 9, totalMinutes: 135 },
+      { day: "Thu", count: 8, totalMinutes: 120 },
+      { day: "Fri", count: 7, totalMinutes: 105 },
+      { day: "Sat", count: 8, totalMinutes: 120 },
+      { day: "Sun", count: 6, totalMinutes: 90 },
+    ],
+    bottle: [
+      { day: "Mon", count: 2, totalMl: 180 },
+      { day: "Tue", count: 3, totalMl: 270 },
+      { day: "Wed", count: 2, totalMl: 180 },
+      { day: "Thu", count: 3, totalMl: 270 },
+      { day: "Fri", count: 2, totalMl: 180 },
+      { day: "Sat", count: 3, totalMl: 270 },
+      { day: "Sun", count: 2, totalMl: 180 },
+    ],
+    solid:
+      childAgeInMonths >= 6
+        ? [
+            { day: "Mon", count: 1, totalGrams: 30 },
+            { day: "Tue", count: 1, totalGrams: 35 },
+            { day: "Wed", count: 2, totalGrams: 45 },
+            { day: "Thu", count: 2, totalGrams: 50 },
+            { day: "Fri", count: 2, totalGrams: 55 },
+            { day: "Sat", count: 3, totalGrams: 60 },
+            { day: "Sun", count: 3, totalGrams: 65 },
+          ]
+        : [],
+  });
 
-  // Update total food amount when inputs change
+  // Timer for breastfeeding
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [activeBreast, setActiveBreast] = useState(null); // 'left', 'right', or null
+
+  // Start/stop timer for breastfeeding
+  const toggleTimer = (breast) => {
+    if (!isTimerRunning) {
+      // Start timer
+      setIsTimerRunning(true);
+      setActiveBreast(breast);
+      setCurrentFeeding({
+        ...currentFeeding,
+        type: "breast",
+        startTime: new Date(),
+        side: breast,
+      });
+    } else {
+      // Stop timer
+      setIsTimerRunning(false);
+      const endTime = new Date();
+      const durationInMinutes = Math.round(timerSeconds / 60);
+
+      // Add to breastFeedings array
+      const newFeeding = {
+        ...currentFeeding,
+        endTime,
+        duration: durationInMinutes,
+        side: activeBreast,
+        timestamp: endTime.toISOString(),
+      };
+
+      setBreastFeedings([...breastFeedings, newFeeding]);
+
+      // Reset timer and active breast
+      setTimerSeconds(0);
+      setActiveBreast(null);
+
+      // Show confirmation
+      Alert.alert(
+        "Feeding Recorded",
+        `${
+          activeBreast.charAt(0).toUpperCase() + activeBreast.slice(1)
+        } breast feeding recorded for ${durationInMinutes} minutes.`,
+        [{ text: "OK" }]
+      );
+    }
+  };
+
+  // Timer effect
   useEffect(() => {
-    const total = Object.values(mealInputs).reduce(
-      (sum, value) => sum + (Number.parseInt(value) || 0),
-      0
-    );
-    setTotalFood(total);
-  }, [mealInputs]);
+    let interval = null;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setTimerSeconds((seconds) => seconds + 1);
+      }, 1000);
+    } else if (interval) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning]);
 
-  // Feeding recommendations based on age
+  // Format timer display
+  const formatTime = (totalSeconds) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, "0")}:${seconds
+      .toString()
+      .padStart(2, "0")}`;
+  };
+
+  // Add bottle feeding
+  const addBottleFeeding = () => {
+    if (
+      !currentFeeding.amount ||
+      isNaN(Number.parseInt(currentFeeding.amount)) ||
+      Number.parseInt(currentFeeding.amount) <= 0
+    ) {
+      Alert.alert(
+        "Invalid Amount",
+        "Please enter a valid amount in milliliters."
+      );
+      return;
+    }
+
+    const newFeeding = {
+      ...currentFeeding,
+      type: "bottle",
+      amount: Number.parseInt(currentFeeding.amount),
+      timestamp: new Date().toISOString(),
+    };
+
+    setBottleFeedings([...bottleFeedings, newFeeding]);
+
+    // Reset input
+    setCurrentFeeding({
+      ...currentFeeding,
+      amount: "",
+      note: "",
+    });
+
+    // Show confirmation
+    Alert.alert(
+      "Feeding Recorded",
+      `Bottle feeding recorded: ${newFeeding.amount} ml.`,
+      [{ text: "OK" }]
+    );
+  };
+
+  // Add solid food feeding
+  const addSolidFeeding = () => {
+    if (
+      !currentFeeding.amount ||
+      isNaN(Number.parseInt(currentFeeding.amount)) ||
+      Number.parseInt(currentFeeding.amount) <= 0
+    ) {
+      Alert.alert("Invalid Amount", "Please enter a valid amount in grams.");
+      return;
+    }
+
+    const newFeeding = {
+      ...currentFeeding,
+      type: "solid",
+      amount: Number.parseInt(currentFeeding.amount),
+      timestamp: new Date().toISOString(),
+    };
+
+    setSolidFoodFeedings([...solidFoodFeedings, newFeeding]);
+
+    // Reset input
+    setCurrentFeeding({
+      ...currentFeeding,
+      amount: "",
+      note: "",
+    });
+
+    // Show confirmation
+    Alert.alert(
+      "Feeding Recorded",
+      `Solid food feeding recorded: ${newFeeding.amount} grams.`,
+      [{ text: "OK" }]
+    );
+  };
+
+  // Calculate daily totals
+  const dailyTotals = {
+    breastCount: breastFeedings.length,
+    breastMinutes: breastFeedings.reduce(
+      (total, feeding) => total + (feeding.duration || 0),
+      0
+    ),
+    bottleCount: bottleFeedings.length,
+    bottleMl: bottleFeedings.reduce(
+      (total, feeding) => total + (feeding.amount || 0),
+      0
+    ),
+    solidCount: solidFoodFeedings.length,
+    solidGrams: solidFoodFeedings.reduce(
+      (total, feeding) => total + (feeding.amount || 0),
+      0
+    ),
+  };
+
+  // Get feeding recommendations based on age
   const getFeedingRecommendations = (ageInMonths) => {
     if (ageInMonths < 6) {
       // 0-6 months
       return {
         ageGroup: "Infant (0-6 months)",
         feedingType: "Breast milk or formula only",
-        totalAmount: "550-900 ml/day",
-        mealFrequency: "On demand, 8-12 feedings/day",
-        mealSizes: "60-120 ml per feeding",
-        minGrams: 550,
-        maxGrams: 900,
-        mealDistribution: {
-          earlyMorning: "1-2 feedings",
-          morning: "2-3 feedings",
-          afternoon: "2-3 feedings",
-          evening: "2-3 feedings",
-          night: "1-2 feedings (as needed)",
-        },
+        milkAmount: "550-900 ml/day",
+        feedingFrequency: "8-12 feedings/day",
+        feedingDuration: "15-20 minutes per breast",
+        feedingInterval: "Every 2-3 hours",
+        solidFoods: "Not recommended before 6 months",
+        tips: [
+          "Feed on demand, watching for hunger cues",
+          "Exclusively breastfeed or formula feed",
+          "Burp baby during and after feedings",
+        ],
       };
     } else if (ageInMonths >= 6 && ageInMonths < 12) {
       // 6-12 months
       return {
         ageGroup: "Infant (6-12 months)",
         feedingType: "Breast milk/formula + complementary foods",
-        totalAmount: "750-900 ml milk + 150-200g solid food/day",
-        mealFrequency: "3 meals + 2 milk feedings/day",
-        mealSizes: "2-3 tablespoons per meal, gradually increasing",
-        minGrams: 900,
-        maxGrams: 1100,
-        mealDistribution: {
-          breakfast: "Milk (150-180 ml) + cereal (30-50g)",
-          morningSnack: "Fruit puree (30-50g)",
-          lunch: "Vegetable/protein puree (50-70g) + milk (150-180 ml)",
-          afternoonSnack: "Yogurt or fruit (30-50g)",
-          dinner: "Grain/vegetable mix (50-70g) + milk (150-180 ml)",
-        },
-      };
-    } else if (ageInMonths >= 12 && ageInMonths < 24) {
-      // 12-24 months
-      return {
-        ageGroup: "Toddler (1-2 years)",
-        feedingType: "Family foods + milk",
-        totalAmount: "900-1000g food/day including milk",
-        mealFrequency: "3 meals + 2 snacks/day",
-        mealSizes: "¼ to ½ cup (60-120g) per meal",
-        minGrams: 900,
-        maxGrams: 1000,
-        mealDistribution: {
-          breakfast: "Grain + fruit + milk (150-200g total)",
-          morningSnack: "Fruit or vegetable (50-75g)",
-          lunch: "Protein + vegetable + grain (200-250g total)",
-          afternoonSnack: "Dairy or protein + grain (50-75g)",
-          dinner: "Protein + vegetable + grain (200-250g total)",
-        },
-      };
-    } else if (ageInMonths >= 24 && ageInMonths < 60) {
-      // 2-5 years
-      return {
-        ageGroup: "Preschooler (2-5 years)",
-        feedingType: "Family foods",
-        totalAmount: "1200-1400g food/day",
-        mealFrequency: "3 meals + 2 snacks/day",
-        mealSizes: "½ to ¾ cup (120-180g) per meal",
-        minGrams: 1200,
-        maxGrams: 1400,
-        mealDistribution: {
-          breakfast: "Grain + protein + fruit (250-300g total)",
-          morningSnack: "Fruit or vegetable + protein (75-100g)",
-          lunch: "Protein + vegetable + grain + fruit (300-350g total)",
-          afternoonSnack: "Grain + protein or dairy (75-100g)",
-          dinner: "Protein + vegetable + grain (300-350g total)",
-        },
+        milkAmount: "750-900 ml/day",
+        feedingFrequency: "4-6 milk feedings/day",
+        feedingDuration: "10-15 minutes per breast",
+        feedingInterval: "Every 3-4 hours",
+        solidFoods:
+          "Start with single-ingredient purees, gradually increase variety and texture",
+        solidAmount:
+          "2-3 tablespoons per meal, gradually increasing to 4-6 tablespoons",
+        solidFrequency:
+          "1-2 meals/day at 6 months, increasing to 3 meals/day by 9 months",
+        tips: [
+          "Introduce one new food at a time, waiting 3-5 days between new foods",
+          "Continue breast milk or formula as the primary nutrition source",
+          "Progress from purees to mashed and soft finger foods",
+        ],
       };
     } else {
-      // 6+ years
+      // 12+ months
       return {
-        ageGroup: "School-age (6+ years)",
-        feedingType: "Family foods",
-        totalAmount: "1400-1600g food/day",
-        mealFrequency: "3 meals + 1-2 snacks/day",
-        mealSizes: "¾ to 1 cup (180-240g) per meal",
-        minGrams: 1400,
-        maxGrams: 1600,
-        mealDistribution: {
-          breakfast: "Grain + protein + fruit (300-350g total)",
-          morningSnack: "Fruit or vegetable + protein (100g)",
-          lunch: "Protein + vegetable + grain + fruit (350-400g total)",
-          afternoonSnack: "Grain + protein or dairy (100g)",
-          dinner: "Protein + vegetable + grain (350-400g total)",
-        },
+        ageGroup: "Toddler (12+ months)",
+        feedingType: "Family foods + milk",
+        milkAmount: "350-500 ml/day",
+        feedingFrequency: "3-4 milk feedings/day",
+        solidFoods: "Chopped table foods with varied textures",
+        solidAmount: "¼ to ½ cup (60-120g) per meal",
+        solidFrequency: "3 meals + 2 snacks/day",
+        tips: [
+          "Transition to whole milk (if appropriate)",
+          "Offer a variety of foods from all food groups",
+          "Expect food jags and pickiness; continue to offer rejected foods",
+        ],
       };
     }
   };
 
   const recommendations = getFeedingRecommendations(childAgeInMonths);
 
-  // Handle input change with validation
-  const handleInputChange = (meal, value) => {
-    // Validate input to only allow numbers with max 3 digits
-    const validatedValue = value.replace(/[^0-9]/g, "");
+  // Prepare chart data
+  const getChartData = () => {
+    if (activeTab === "today") {
+      // Pie chart data for today's feeding distribution
+      const breastMinutes = dailyTotals.breastMinutes;
+      const bottleMl = dailyTotals.bottleMl;
+      const solidGrams = childAgeInMonths >= 6 ? dailyTotals.solidGrams : 0;
 
-    // Limit to max 3 digits
-    if (validatedValue.length > 3) {
-      return;
-    }
-
-    setMealInputs({
-      ...mealInputs,
-      [meal]: validatedValue,
-    });
-  };
-
-  // Check if food amount meets recommendations
-  const isFoodSufficient = totalFood >= recommendations.minGrams;
-
-  // Calculate the percentage of recommended food
-  const calculateFoodPercentage = () => {
-    const percentage = Math.round((totalFood / recommendations.minGrams) * 100);
-    return Math.min(percentage, 100);
-  };
-
-  const foodPercentage = calculateFoodPercentage();
-
-  // Calculate the percentage difference from recommended food
-  const calculateFoodDifferencePercentage = () => {
-    const diff = totalFood - recommendations.minGrams;
-    const percentage = Math.round((diff / recommendations.minGrams) * 100);
-    return percentage;
-  };
-
-  const foodDiffPercentage = calculateFoodDifferencePercentage();
-  const foodDiffPercentageText =
-    foodDiffPercentage >= 0
-      ? `+${foodDiffPercentage}%`
-      : `${foodDiffPercentage}%`;
-
-  // Prepare data for pie chart
-  const getPieChartData = () => {
-    const colors = ["#FF9500", "#FF2D55", "#5A87FF", "#4CD964", "#5856D6"];
-    const meals = [
-      "breakfast",
-      "morningSnack",
-      "lunch",
-      "afternoonSnack",
-      "dinner",
-    ];
-    const mealNames = [
-      "Breakfast",
-      "Morning Snack",
-      "Lunch",
-      "Afternoon Snack",
-      "Dinner",
-    ];
-
-    return meals
-      .map((meal, index) => {
-        const value = Number.parseInt(mealInputs[meal]) || 0;
-        return {
-          name: mealNames[index],
-          population: value,
-          color: colors[index],
+      const data = [
+        {
+          name: "Breast",
+          value: breastMinutes,
+          color: "#FF9500",
           legendFontColor: theme.textSecondary,
           legendFontSize: 12,
-        };
-      })
-      .filter((item) => item.population > 0);
+        },
+      ];
+
+      if (bottleMl > 0) {
+        data.push({
+          name: "Bottle",
+          value: bottleMl,
+          color: "#5A87FF",
+          legendFontColor: theme.textSecondary,
+          legendFontSize: 12,
+        });
+      }
+
+      if (childAgeInMonths >= 6 && solidGrams > 0) {
+        data.push({
+          name: "Solid",
+          value: solidGrams,
+          color: "#4CD964",
+          legendFontColor: theme.textSecondary,
+          legendFontSize: 12,
+        });
+      }
+
+      return data;
+    } else {
+      // Line chart data for weekly trends
+      return {
+        labels: weeklyData.breast.map((item) => item.day),
+        datasets: [
+          {
+            data: weeklyData.breast.map((item) => item.count),
+            color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
+            strokeWidth: 2,
+          },
+          {
+            data: weeklyData.bottle.map((item) => item.count),
+            color: (opacity = 1) => `rgba(90, 135, 255, ${opacity})`,
+            strokeWidth: 2,
+          },
+          ...(childAgeInMonths >= 6
+            ? [
+                {
+                  data: weeklyData.solid.map((item) => item.count),
+                  color: (opacity = 1) => `rgba(76, 217, 100, ${opacity})`,
+                  strokeWidth: 2,
+                },
+              ]
+            : []),
+        ],
+        legend: [
+          "Breast",
+          "Bottle",
+          ...(childAgeInMonths >= 6 ? ["Solid"] : []),
+        ],
+      };
+    }
   };
 
   // Set up the notification button in the header
@@ -236,7 +394,7 @@ export default function FeedingDetailsScreen({ navigation }) {
           />
         </TouchableOpacity>
       ),
-      title: `${currentChild.name.split(" ")[0]}'s Feeding Details`,
+      title: `${currentChild?.name?.split(" ")[0] || "Baby"}'s Feeding`,
     });
   }, [navigation, notificationsEnabled, theme, currentChild]);
 
@@ -245,47 +403,232 @@ export default function FeedingDetailsScreen({ navigation }) {
       style={[styles.container, { backgroundColor: theme.background }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Age Group Info */}
-        <View style={styles.ageGroupContainer}>
-          <Text style={[styles.ageGroupLabel, { color: theme.textSecondary }]}>
-            Age Group:
-          </Text>
-          <View
-            style={[
-              styles.ageGroupInfo,
-              { backgroundColor: `${theme.primary}20` },
-            ]}
-          >
-            <Ionicons
-              name="information-circle"
-              size={18}
-              color={theme.primary}
-              style={styles.ageGroupIcon}
-            />
-            <Text style={[styles.ageGroupText, { color: theme.text }]}>
-              {recommendations.ageGroup}
-            </Text>
-          </View>
-        </View>
-
-        {/* Feeding Type Banner */}
+        {/* Age-Appropriate Recommendations Banner */}
         <View
           style={[
-            styles.feedingTypeBanner,
+            styles.recommendationBanner,
             { backgroundColor: theme.cardBackground },
           ]}
         >
-          <Text
-            style={[styles.feedingTypeLabel, { color: theme.textSecondary }]}
-          >
-            Recommended Feeding Type:
-          </Text>
-          <Text style={[styles.feedingTypeText, { color: theme.primary }]}>
-            {recommendations.feedingType}
-          </Text>
+          <View style={styles.ageGroupContainer}>
+            <Text
+              style={[styles.ageGroupLabel, { color: theme.textSecondary }]}
+            >
+              Age Group:
+            </Text>
+            <View
+              style={[
+                styles.ageGroupInfo,
+                { backgroundColor: `${theme.primary}20` },
+              ]}
+            >
+              <Ionicons
+                name="information-circle"
+                size={18}
+                color={theme.primary}
+                style={styles.ageGroupIcon}
+              />
+              <Text style={[styles.ageGroupText, { color: theme.text }]}>
+                {recommendations.ageGroup}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.recommendationContent}>
+            <Text
+              style={[styles.recommendationTitle, { color: theme.primary }]}
+            >
+              {recommendations.feedingType}
+            </Text>
+
+            <View style={styles.recommendationItem}>
+              <Ionicons name="water-outline" size={16} color={theme.primary} />
+              <Text style={[styles.recommendationText, { color: theme.text }]}>
+                <Text style={{ fontWeight: "600" }}>Milk: </Text>
+                {recommendations.milkAmount}
+              </Text>
+            </View>
+
+            <View style={styles.recommendationItem}>
+              <Ionicons name="time-outline" size={16} color={theme.primary} />
+              <Text style={[styles.recommendationText, { color: theme.text }]}>
+                <Text style={{ fontWeight: "600" }}>Frequency: </Text>
+                {recommendations.feedingFrequency}
+              </Text>
+            </View>
+
+            {recommendations.feedingDuration && (
+              <View style={styles.recommendationItem}>
+                <Ionicons
+                  name="hourglass-outline"
+                  size={16}
+                  color={theme.primary}
+                />
+                <Text
+                  style={[styles.recommendationText, { color: theme.text }]}
+                >
+                  <Text style={{ fontWeight: "600" }}>Duration: </Text>
+                  {recommendations.feedingDuration}
+                </Text>
+              </View>
+            )}
+
+            {childAgeInMonths >= 6 && (
+              <>
+                <View
+                  style={[
+                    styles.divider,
+                    { backgroundColor: theme.borderLight },
+                  ]}
+                />
+
+                <View style={styles.recommendationItem}>
+                  <Ionicons
+                    name="restaurant-outline"
+                    size={16}
+                    color={theme.primary}
+                  />
+                  <Text
+                    style={[styles.recommendationText, { color: theme.text }]}
+                  >
+                    <Text style={{ fontWeight: "600" }}>Solid Foods: </Text>
+                    {recommendations.solidFoods}
+                  </Text>
+                </View>
+
+                {recommendations.solidAmount && (
+                  <View style={styles.recommendationItem}>
+                    <Ionicons
+                      name="resize-outline"
+                      size={16}
+                      color={theme.primary}
+                    />
+                    <Text
+                      style={[styles.recommendationText, { color: theme.text }]}
+                    >
+                      <Text style={{ fontWeight: "600" }}>Amount: </Text>
+                      {recommendations.solidAmount}
+                    </Text>
+                  </View>
+                )}
+
+                {recommendations.solidFrequency && (
+                  <View style={styles.recommendationItem}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={16}
+                      color={theme.primary}
+                    />
+                    <Text
+                      style={[styles.recommendationText, { color: theme.text }]}
+                    >
+                      <Text style={{ fontWeight: "600" }}>Meals: </Text>
+                      {recommendations.solidFrequency}
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
+
+            {childAgeInMonths < 6 && (
+              <View
+                style={[
+                  styles.warningContainer,
+                  { backgroundColor: `${theme.warning}20` },
+                ]}
+              >
+                <Ionicons
+                  name="warning-outline"
+                  size={18}
+                  color={theme.warning}
+                />
+                <Text style={[styles.warningText, { color: theme.text }]}>
+                  Solid foods are not recommended before 6 months
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
-        {/* Meal Distribution Chart */}
+        {/* Daily Summary */}
+        <View
+          style={[
+            styles.summaryContainer,
+            { backgroundColor: theme.cardBackground },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Today's Feeding Summary
+          </Text>
+
+          <View style={styles.summaryGrid}>
+            <View
+              style={[
+                styles.summaryCard,
+                { backgroundColor: `${theme.backgroundSecondary}` },
+              ]}
+            >
+              <Ionicons name="woman-outline" size={24} color="#FF9500" />
+              <Text style={[styles.summaryValue, { color: theme.text }]}>
+                {dailyTotals.breastCount}
+              </Text>
+              <Text
+                style={[styles.summaryLabel, { color: theme.textSecondary }]}
+              >
+                Breastfeedings
+              </Text>
+              <Text style={[styles.summarySubvalue, { color: theme.primary }]}>
+                {dailyTotals.breastMinutes} min
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.summaryCard,
+                { backgroundColor: `${theme.backgroundSecondary}` },
+              ]}
+            >
+              <Ionicons name="flask-outline" size={24} color="#5A87FF" />
+              <Text style={[styles.summaryValue, { color: theme.text }]}>
+                {dailyTotals.bottleCount}
+              </Text>
+              <Text
+                style={[styles.summaryLabel, { color: theme.textSecondary }]}
+              >
+                Bottle Feeds
+              </Text>
+              <Text style={[styles.summarySubvalue, { color: theme.primary }]}>
+                {dailyTotals.bottleMl} ml
+              </Text>
+            </View>
+
+            {childAgeInMonths >= 6 && (
+              <View
+                style={[
+                  styles.summaryCard,
+                  { backgroundColor: `${theme.backgroundSecondary}` },
+                ]}
+              >
+                <Ionicons name="restaurant-outline" size={24} color="#4CD964" />
+                <Text style={[styles.summaryValue, { color: theme.text }]}>
+                  {dailyTotals.solidCount}
+                </Text>
+                <Text
+                  style={[styles.summaryLabel, { color: theme.textSecondary }]}
+                >
+                  Solid Feeds
+                </Text>
+                <Text
+                  style={[styles.summarySubvalue, { color: theme.primary }]}
+                >
+                  {dailyTotals.solidGrams} g
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Feeding Chart */}
         <View
           style={[
             styles.chartContainer,
@@ -293,577 +636,426 @@ export default function FeedingDetailsScreen({ navigation }) {
           ]}
         >
           <View style={styles.chartHeader}>
-            <Ionicons
-              name="pie-chart"
-              size={24}
-              color={theme.text}
-              style={styles.sectionIcon}
-            />
             <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Meal Distribution
+              Feeding Trends
             </Text>
+
+            <View
+              style={[
+                styles.tabContainer,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.tab,
+                  activeTab === "today" && { backgroundColor: theme.primary },
+                ]}
+                onPress={() => setActiveTab("today")}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color:
+                        activeTab === "today" ? "#fff" : theme.textSecondary,
+                    },
+                  ]}
+                >
+                  Today
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.tab,
+                  activeTab === "week" && { backgroundColor: theme.primary },
+                ]}
+                onPress={() => setActiveTab("week")}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color:
+                        activeTab === "week" ? "#fff" : theme.textSecondary,
+                    },
+                  ]}
+                >
+                  Week
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.chartWrapper}>
-            {getPieChartData().length > 0 ? (
-              <PieChart
-                data={getPieChartData()}
+            {activeTab === "today" ? (
+              dailyTotals.breastCount === 0 &&
+              dailyTotals.bottleCount === 0 &&
+              dailyTotals.solidCount === 0 ? (
+                <View style={styles.emptyChartContainer}>
+                  <Ionicons
+                    name="bar-chart-outline"
+                    size={48}
+                    color={theme.textTertiary}
+                  />
+                  <Text
+                    style={[
+                      styles.emptyChartText,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    No feedings recorded today
+                  </Text>
+                </View>
+              ) : (
+                <PieChart
+                  data={getChartData()}
+                  width={screenWidth - 64}
+                  height={200}
+                  chartConfig={{
+                    backgroundGradientFrom: theme.cardBackground,
+                    backgroundGradientTo: theme.cardBackground,
+                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  }}
+                  accessor="value"
+                  backgroundColor="transparent"
+                  paddingLeft="15"
+                  absolute={false}
+                />
+              )
+            ) : (
+              <LineChart
+                data={getChartData()}
                 width={screenWidth - 64}
                 height={200}
                 chartConfig={{
+                  backgroundColor: theme.cardBackground,
                   backgroundGradientFrom: theme.cardBackground,
                   backgroundGradientTo: theme.cardBackground,
+                  decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  labelColor: (opacity = 1) => theme.textSecondary,
+                  style: {
+                    borderRadius: 16,
+                  },
+                  propsForDots: {
+                    r: "6",
+                    strokeWidth: "2",
+                  },
                 }}
-                accessor="population"
-                backgroundColor="transparent"
-                paddingLeft="15"
-                absolute
+                bezier
+                style={{
+                  marginVertical: 8,
+                  borderRadius: 16,
+                }}
+                legend={getChartData().legend}
               />
-            ) : (
-              <View style={styles.emptyChartContainer}>
-                <Ionicons
-                  name="restaurant-outline"
-                  size={48}
-                  color={theme.textTertiary}
-                />
-                <Text
-                  style={[
-                    styles.emptyChartText,
-                    { color: theme.textSecondary },
-                  ]}
-                >
-                  Enter meal amounts to see distribution
-                </Text>
-              </View>
             )}
           </View>
-
-          <View
-            style={[
-              styles.totalFoodContainer,
-              { borderTopColor: theme.borderLight },
-            ]}
-          >
-            <Text
-              style={[styles.totalFoodLabel, { color: theme.textSecondary }]}
-            >
-              Total Food Amount
-            </Text>
-            <Text
-              style={[
-                styles.totalFoodValue,
-                {
-                  color: isFoodSufficient ? theme.success : theme.danger,
-                },
-              ]}
-            >
-              {totalFood} g
-            </Text>
-            <Text
-              style={[styles.recommendedAmount, { color: theme.textSecondary }]}
-            >
-              Recommended: {recommendations.totalAmount}
-            </Text>
-          </View>
         </View>
 
-        {/* Meal Inputs */}
+        {/* Record Feeding Section */}
         <View
           style={[
-            styles.inputContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <Text style={[styles.inputTitle, { color: theme.text }]}>
-            Record Today's Meals
-          </Text>
-          <Text style={[styles.inputSubtitle, { color: theme.textSecondary }]}>
-            Enter the amount of food consumed at each meal (in grams)
-          </Text>
-
-          <View style={styles.mealInputsContainer}>
-            {/* Breakfast */}
-            <View
-              style={[
-                styles.mealInputRow,
-                { borderBottomColor: theme.borderLight },
-              ]}
-            >
-              <View style={styles.mealLabelContainer}>
-                <View
-                  style={[styles.mealIcon, { backgroundColor: "#FF950020" }]}
-                >
-                  <Ionicons name="sunny" size={16} color="#FF9500" />
-                </View>
-                <Text style={[styles.mealLabel, { color: theme.text }]}>
-                  Breakfast
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  {
-                    borderColor: theme.borderLight,
-                    backgroundColor: theme.backgroundSecondary,
-                  },
-                ]}
-              >
-                <TextInput
-                  style={[styles.input, { color: theme.text }]}
-                  value={mealInputs.breakfast}
-                  onChangeText={(value) =>
-                    handleInputChange("breakfast", value)
-                  }
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor={theme.textTertiary}
-                />
-                <Text
-                  style={[styles.inputUnit, { color: theme.textSecondary }]}
-                >
-                  g
-                </Text>
-              </View>
-            </View>
-
-            {/* Morning Snack */}
-            <View
-              style={[
-                styles.mealInputRow,
-                { borderBottomColor: theme.borderLight },
-              ]}
-            >
-              <View style={styles.mealLabelContainer}>
-                <View
-                  style={[styles.mealIcon, { backgroundColor: "#FF2D5520" }]}
-                >
-                  <Ionicons name="cafe" size={16} color="#FF2D55" />
-                </View>
-                <Text style={[styles.mealLabel, { color: theme.text }]}>
-                  Morning Snack
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  {
-                    borderColor: theme.borderLight,
-                    backgroundColor: theme.backgroundSecondary,
-                  },
-                ]}
-              >
-                <TextInput
-                  style={[styles.input, { color: theme.text }]}
-                  value={mealInputs.morningSnack}
-                  onChangeText={(value) =>
-                    handleInputChange("morningSnack", value)
-                  }
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor={theme.textTertiary}
-                />
-                <Text
-                  style={[styles.inputUnit, { color: theme.textSecondary }]}
-                >
-                  g
-                </Text>
-              </View>
-            </View>
-
-            {/* Lunch */}
-            <View
-              style={[
-                styles.mealInputRow,
-                { borderBottomColor: theme.borderLight },
-              ]}
-            >
-              <View style={styles.mealLabelContainer}>
-                <View
-                  style={[styles.mealIcon, { backgroundColor: "#5A87FF20" }]}
-                >
-                  <Ionicons name="restaurant" size={16} color="#5A87FF" />
-                </View>
-                <Text style={[styles.mealLabel, { color: theme.text }]}>
-                  Lunch
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  {
-                    borderColor: theme.borderLight,
-                    backgroundColor: theme.backgroundSecondary,
-                  },
-                ]}
-              >
-                <TextInput
-                  style={[styles.input, { color: theme.text }]}
-                  value={mealInputs.lunch}
-                  onChangeText={(value) => handleInputChange("lunch", value)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor={theme.textTertiary}
-                />
-                <Text
-                  style={[styles.inputUnit, { color: theme.textSecondary }]}
-                >
-                  g
-                </Text>
-              </View>
-            </View>
-
-            {/* Afternoon Snack */}
-            <View
-              style={[
-                styles.mealInputRow,
-                { borderBottomColor: theme.borderLight },
-              ]}
-            >
-              <View style={styles.mealLabelContainer}>
-                <View
-                  style={[styles.mealIcon, { backgroundColor: "#4CD96420" }]}
-                >
-                  <Ionicons name="nutrition" size={16} color="#4CD964" />
-                </View>
-                <Text style={[styles.mealLabel, { color: theme.text }]}>
-                  Afternoon Snack
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  {
-                    borderColor: theme.borderLight,
-                    backgroundColor: theme.backgroundSecondary,
-                  },
-                ]}
-              >
-                <TextInput
-                  style={[styles.input, { color: theme.text }]}
-                  value={mealInputs.afternoonSnack}
-                  onChangeText={(value) =>
-                    handleInputChange("afternoonSnack", value)
-                  }
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor={theme.textTertiary}
-                />
-                <Text
-                  style={[styles.inputUnit, { color: theme.textSecondary }]}
-                >
-                  g
-                </Text>
-              </View>
-            </View>
-
-            {/* Dinner */}
-            <View style={styles.mealInputRow}>
-              <View style={styles.mealLabelContainer}>
-                <View
-                  style={[styles.mealIcon, { backgroundColor: "#5856D620" }]}
-                >
-                  <Ionicons name="moon" size={16} color="#5856D6" />
-                </View>
-                <Text style={[styles.mealLabel, { color: theme.text }]}>
-                  Dinner
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  {
-                    borderColor: theme.borderLight,
-                    backgroundColor: theme.backgroundSecondary,
-                  },
-                ]}
-              >
-                <TextInput
-                  style={[styles.input, { color: theme.text }]}
-                  value={mealInputs.dinner}
-                  onChangeText={(value) => handleInputChange("dinner", value)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor={theme.textTertiary}
-                />
-                <Text
-                  style={[styles.inputUnit, { color: theme.textSecondary }]}
-                >
-                  g
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: theme.primary }]}
-            onPress={() => console.log("Saved feeding data:", mealInputs)}
-          >
-            <Ionicons
-              name="save"
-              size={16}
-              color="#FFFFFF"
-              style={styles.saveButtonIcon}
-            />
-            <Text style={styles.saveButtonText}>Save Feeding Data</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Total Food Summary */}
-        <View
-          style={[
-            styles.totalSummaryContainer,
-            {
-              backgroundColor: theme.cardBackground,
-              borderColor: isFoodSufficient ? "transparent" : theme.danger,
-              borderWidth: isFoodSufficient ? 0 : 2,
-            },
-          ]}
-        >
-          <Text
-            style={[styles.totalSummaryLabel, { color: theme.textSecondary }]}
-          >
-            Total Daily Food
-          </Text>
-          <Text
-            style={[
-              styles.totalSummaryValue,
-              {
-                color: isFoodSufficient ? theme.success : theme.danger,
-              },
-            ]}
-          >
-            {totalFood} grams
-          </Text>
-          <Text
-            style={[
-              styles.totalSummaryRecommended,
-              { color: theme.textSecondary },
-            ]}
-          >
-            Recommended: {recommendations.minGrams}-{recommendations.maxGrams}{" "}
-            grams
-          </Text>
-
-          {/* Progress bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressLabelRow}>
-              <Text
-                style={[styles.progressLabel, { color: theme.textSecondary }]}
-              >
-                Progress toward minimum goal:
-              </Text>
-              <Text
-                style={[
-                  styles.progressPercentage,
-                  { color: isFoodSufficient ? theme.success : theme.danger },
-                ]}
-              >
-                {foodPercentage}%
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.progressBarContainer,
-                { backgroundColor: `${theme.danger}30` },
-              ]}
-            >
-              <View
-                style={[
-                  styles.progressBar,
-                  {
-                    width: `${foodPercentage}%`,
-                    backgroundColor: isFoodSufficient
-                      ? theme.success
-                      : theme.danger,
-                  },
-                ]}
-              />
-            </View>
-          </View>
-
-          {/* Total food percentage chart with positive/negative values */}
-          <View style={styles.totalPercentageContainer}>
-            <View style={styles.percentageRow}>
-              <Text
-                style={[
-                  styles.totalPercentageLabel,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                Compared to minimum goal ({recommendations.minGrams} g):
-              </Text>
-
-              {/* Display percentage with + or - sign */}
-              <Text
-                style={[
-                  styles.percentageText,
-                  {
-                    color:
-                      foodDiffPercentage >= 0 ? theme.success : theme.danger,
-                    fontSize: 16,
-                    fontWeight: "700",
-                  },
-                ]}
-              >
-                {foodDiffPercentageText}
-              </Text>
-            </View>
-
-            {/* Progress bar for positive/negative values */}
-            <View style={styles.totalProgressBarContainer}>
-              {/* Center line (0%) */}
-              <View style={styles.centerLine} />
-
-              {/* Negative bar (if applicable) */}
-              {foodDiffPercentage < 0 && (
-                <View
-                  style={[
-                    styles.negativeProgressBar,
-                    {
-                      width: `${Math.min(
-                        50,
-                        Math.abs(foodDiffPercentage) / 2
-                      )}%`,
-                      backgroundColor: theme.danger,
-                    },
-                  ]}
-                />
-              )}
-
-              {/* Positive bar (if applicable) */}
-              {foodDiffPercentage > 0 && (
-                <View
-                  style={[
-                    styles.positiveProgressBar,
-                    {
-                      width: `${Math.min(50, foodDiffPercentage / 2)}%`,
-                      backgroundColor: theme.success,
-                    },
-                  ]}
-                />
-              )}
-            </View>
-
-            {/* Scale labels */}
-            <View style={styles.scaleLabels}>
-              <Text style={[styles.scaleLabel, { color: theme.textSecondary }]}>
-                -100%
-              </Text>
-              <Text style={[styles.scaleLabel, { color: theme.textSecondary }]}>
-                0%
-              </Text>
-              <Text style={[styles.scaleLabel, { color: theme.textSecondary }]}>
-                +100%
-              </Text>
-            </View>
-          </View>
-
-          {!isFoodSufficient && (
-            <View style={styles.warningContainer}>
-              <Ionicons
-                name="warning"
-                size={18}
-                color={theme.danger}
-                style={styles.warningIcon}
-              />
-              <Text style={[styles.warningText, { color: theme.danger }]}>
-                Food intake below recommended minimum of{" "}
-                {recommendations.minGrams} grams
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Recommended Meal Distribution */}
-        <View
-          style={[
-            styles.mealDistributionContainer,
+            styles.recordContainer,
             { backgroundColor: theme.cardBackground },
           ]}
         >
           <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Recommended Meal Distribution
+            Record Feeding
           </Text>
 
-          <View style={styles.mealDistributionContent}>
-            {Object.entries(recommendations.mealDistribution).map(
-              ([meal, recommendation], index) => (
-                <View
-                  key={meal}
+          {/* Breastfeeding Timer */}
+          <View
+            style={[
+              styles.timerContainer,
+              { backgroundColor: theme.backgroundSecondary },
+            ]}
+          >
+            <Text style={[styles.timerTitle, { color: theme.text }]}>
+              Breastfeeding Timer
+            </Text>
+
+            <View style={styles.timerDisplay}>
+              <Text style={[styles.timerText, { color: theme.primary }]}>
+                {formatTime(timerSeconds)}
+              </Text>
+              {activeBreast && (
+                <Text
                   style={[
-                    styles.mealRecommendationRow,
-                    index <
-                      Object.entries(recommendations.mealDistribution).length -
-                        1 && {
-                      borderBottomColor: theme.borderLight,
-                      borderBottomWidth: 1,
+                    styles.activeBreastText,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  {activeBreast.charAt(0).toUpperCase() + activeBreast.slice(1)}{" "}
+                  breast
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.breastButtonsContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.breastButton,
+                  {
+                    backgroundColor:
+                      activeBreast === "left"
+                        ? theme.primary
+                        : `${theme.primary}30`,
+                  },
+                  {
+                    opacity:
+                      isTimerRunning && activeBreast !== "left" ? 0.5 : 1,
+                  },
+                ]}
+                onPress={() => toggleTimer("left")}
+                disabled={isTimerRunning && activeBreast !== "left"}
+              >
+                <Ionicons
+                  name={
+                    isTimerRunning && activeBreast === "left" ? "pause" : "play"
+                  }
+                  size={20}
+                  color={activeBreast === "left" ? "#fff" : theme.primary}
+                />
+                <Text
+                  style={[
+                    styles.breastButtonText,
+                    { color: activeBreast === "left" ? "#fff" : theme.primary },
+                  ]}
+                >
+                  {isTimerRunning && activeBreast === "left"
+                    ? "Pause Left"
+                    : "Left Breast"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.breastButton,
+                  {
+                    backgroundColor:
+                      activeBreast === "right"
+                        ? theme.primary
+                        : `${theme.primary}30`,
+                  },
+                  {
+                    opacity:
+                      isTimerRunning && activeBreast !== "right" ? 0.5 : 1,
+                  },
+                ]}
+                onPress={() => toggleTimer("right")}
+                disabled={isTimerRunning && activeBreast !== "right"}
+              >
+                <Ionicons
+                  name={
+                    isTimerRunning && activeBreast === "right"
+                      ? "pause"
+                      : "play"
+                  }
+                  size={20}
+                  color={activeBreast === "right" ? "#fff" : theme.primary}
+                />
+                <Text
+                  style={[
+                    styles.breastButtonText,
+                    {
+                      color: activeBreast === "right" ? "#fff" : theme.primary,
                     },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.mealRecommendationLabel,
-                      { color: theme.text },
-                    ]}
-                  >
-                    {meal.charAt(0).toUpperCase() +
-                      meal.slice(1).replace(/([A-Z])/g, " $1")}
-                    :
-                  </Text>
-                  <Text
-                    style={[
-                      styles.mealRecommendationValue,
-                      { color: theme.textSecondary },
-                    ]}
-                  >
-                    {recommendation}
-                  </Text>
-                </View>
-              )
-            )}
+                  {isTimerRunning && activeBreast === "right"
+                    ? "Pause Right"
+                    : "Right Breast"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <View style={styles.mealFrequencyContainer}>
-            <View style={styles.mealFrequencyRow}>
-              <Ionicons
-                name="time-outline"
-                size={18}
-                color={theme.primary}
-                style={styles.mealFrequencyIcon}
-              />
-              <Text
+          {/* Bottle Feeding Input */}
+          <View
+            style={[
+              styles.inputSection,
+              { backgroundColor: theme.backgroundSecondary },
+            ]}
+          >
+            <Text style={[styles.inputTitle, { color: theme.text }]}>
+              Bottle Feeding
+            </Text>
+
+            <View style={styles.inputRow}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
+                Amount (ml):
+              </Text>
+              <View
                 style={[
-                  styles.mealFrequencyLabel,
-                  { color: theme.textSecondary },
+                  styles.inputWrapper,
+                  {
+                    borderColor: theme.borderLight,
+                    backgroundColor: theme.background,
+                  },
                 ]}
               >
-                Recommended Frequency:
-              </Text>
+                <TextInput
+                  style={[styles.input, { color: theme.text }]}
+                  value={
+                    currentFeeding.type === "bottle"
+                      ? currentFeeding.amount
+                      : ""
+                  }
+                  onChangeText={(value) =>
+                    setCurrentFeeding({
+                      ...currentFeeding,
+                      type: "bottle",
+                      amount: value.replace(/[^0-9]/g, ""),
+                    })
+                  }
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={theme.textTertiary}
+                />
+                <Text
+                  style={[styles.inputUnit, { color: theme.textSecondary }]}
+                >
+                  ml
+                </Text>
+              </View>
             </View>
-            <Text style={[styles.mealFrequencyValue, { color: theme.text }]}>
-              {recommendations.mealFrequency}
-            </Text>
+
+            <View style={styles.inputRow}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
+                Note:
+              </Text>
+              <View
+                style={[
+                  styles.noteInputWrapper,
+                  {
+                    borderColor: theme.borderLight,
+                    backgroundColor: theme.background,
+                  },
+                ]}
+              >
+                <TextInput
+                  style={[styles.input, { color: theme.text }]}
+                  value={
+                    currentFeeding.type === "bottle" ? currentFeeding.note : ""
+                  }
+                  onChangeText={(value) =>
+                    setCurrentFeeding({
+                      ...currentFeeding,
+                      type: "bottle",
+                      note: value,
+                    })
+                  }
+                  placeholder="Formula, pumped milk, etc."
+                  placeholderTextColor={theme.textTertiary}
+                />
+              </View>
+            </View>
+
+            <CustomButton
+              title="Record Bottle Feeding"
+              onPress={addBottleFeeding}
+              icon="flask-outline"
+              style={{ marginTop: 12 }}
+            />
           </View>
 
-          <View style={styles.mealSizesContainer}>
-            <View style={styles.mealSizesRow}>
-              <Ionicons
-                name="resize-outline"
-                size={18}
-                color={theme.primary}
-                style={styles.mealSizesIcon}
-              />
-              <Text
-                style={[styles.mealSizesLabel, { color: theme.textSecondary }]}
-              >
-                Recommended Portion Sizes:
+          {/* Solid Food Input (only for 6+ months) */}
+          {childAgeInMonths >= 6 && (
+            <View
+              style={[
+                styles.inputSection,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
+            >
+              <Text style={[styles.inputTitle, { color: theme.text }]}>
+                Solid Food
               </Text>
+
+              <View style={styles.inputRow}>
+                <Text
+                  style={[styles.inputLabel, { color: theme.textSecondary }]}
+                >
+                  Amount (g):
+                </Text>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    {
+                      borderColor: theme.borderLight,
+                      backgroundColor: theme.background,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    style={[styles.input, { color: theme.text }]}
+                    value={
+                      currentFeeding.type === "solid"
+                        ? currentFeeding.amount
+                        : ""
+                    }
+                    onChangeText={(value) =>
+                      setCurrentFeeding({
+                        ...currentFeeding,
+                        type: "solid",
+                        amount: value.replace(/[^0-9]/g, ""),
+                      })
+                    }
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={theme.textTertiary}
+                  />
+                  <Text
+                    style={[styles.inputUnit, { color: theme.textSecondary }]}
+                  >
+                    g
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.inputRow}>
+                <Text
+                  style={[styles.inputLabel, { color: theme.textSecondary }]}
+                >
+                  Note:
+                </Text>
+                <View
+                  style={[
+                    styles.noteInputWrapper,
+                    {
+                      borderColor: theme.borderLight,
+                      backgroundColor: theme.background,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    style={[styles.input, { color: theme.text }]}
+                    value={
+                      currentFeeding.type === "solid" ? currentFeeding.note : ""
+                    }
+                    onChangeText={(value) =>
+                      setCurrentFeeding({
+                        ...currentFeeding,
+                        type: "solid",
+                        note: value,
+                      })
+                    }
+                    placeholder="Puree, cereal, fruit, etc."
+                    placeholderTextColor={theme.textTertiary}
+                  />
+                </View>
+              </View>
+
+              <CustomButton
+                title="Record Solid Feeding"
+                onPress={addSolidFeeding}
+                icon="restaurant-outline"
+                style={{ marginTop: 12 }}
+              />
             </View>
-            <Text style={[styles.mealSizesValue, { color: theme.text }]}>
-              {recommendations.mealSizes}
-            </Text>
-          </View>
+          )}
         </View>
 
         {/* Feeding Tips */}
@@ -874,211 +1066,164 @@ export default function FeedingDetailsScreen({ navigation }) {
           ]}
         >
           <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Age-Appropriate Feeding Tips
+            Feeding Tips
           </Text>
+
           <View style={styles.tipsList}>
-            {childAgeInMonths < 6 ? (
-              // 0-6 months tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Feed on demand, watching for hunger cues like rooting,
-                    sucking motions, or hand-to-mouth movements
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Exclusively breastfeed or formula feed; no solid foods are
-                    needed at this stage
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Burp baby during and after feedings to reduce gas and
-                    discomfort
-                  </Text>
-                </View>
-              </>
-            ) : childAgeInMonths >= 6 && childAgeInMonths < 12 ? (
-              // 6-12 months tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Introduce single-ingredient purees one at a time, waiting
-                    3-5 days between new foods to watch for allergies
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Continue breast milk or formula as the primary source of
-                    nutrition
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Progress from purees to mashed and soft finger foods as baby
-                    develops
-                  </Text>
-                </View>
-              </>
-            ) : childAgeInMonths >= 12 && childAgeInMonths < 24 ? (
-              // 12-24 months tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Transition to whole milk (if appropriate) and offer in a cup
-                    rather than a bottle
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Offer a variety of foods from all food groups in small,
-                    manageable portions
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Expect food jags and pickiness; continue to offer rejected
-                    foods without pressure
-                  </Text>
-                </View>
-              </>
-            ) : childAgeInMonths >= 24 && childAgeInMonths < 60 ? (
-              // 2-5 years tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Involve your child in meal preparation to increase interest
-                    in trying new foods
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Establish regular meal and snack times to develop healthy
-                    eating patterns
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Limit juice and sugary drinks; offer water between meals and
-                    milk with meals
-                  </Text>
-                </View>
-              </>
-            ) : (
-              // 6+ years tips
-              <>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Teach about balanced nutrition and involve children in meal
-                    planning
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Limit processed foods and encourage whole foods from all
-                    food groups
-                  </Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.success}
-                    style={styles.tipIcon}
-                  />
-                  <Text style={[styles.tipText, { color: theme.text }]}>
-                    Be a good role model by eating healthy foods and having
-                    family meals together
-                  </Text>
-                </View>
-              </>
-            )}
+            {recommendations.tips.map((tip, index) => (
+              <View key={index} style={styles.tipItem}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={theme.success}
+                  style={styles.tipIcon}
+                />
+                <Text style={[styles.tipText, { color: theme.text }]}>
+                  {tip}
+                </Text>
+              </View>
+            ))}
           </View>
+        </View>
+
+        {/* Recent Feedings */}
+        <View
+          style={[
+            styles.recentFeedingsContainer,
+            { backgroundColor: theme.cardBackground },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Recent Feedings
+          </Text>
+
+          {breastFeedings.length === 0 &&
+          bottleFeedings.length === 0 &&
+          solidFoodFeedings.length === 0 ? (
+            <View style={styles.emptyFeedingsContainer}>
+              <Ionicons
+                name="list-outline"
+                size={48}
+                color={theme.textTertiary}
+              />
+              <Text
+                style={[
+                  styles.emptyFeedingsText,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                No feedings recorded today
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.feedingsList}>
+              {/* Combine and sort all feedings by timestamp */}
+              {[...breastFeedings, ...bottleFeedings, ...solidFoodFeedings]
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 5) // Show only the 5 most recent
+                .map((feeding, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.feedingItem,
+                      index < 4 && {
+                        borderBottomWidth: 1,
+                        borderBottomColor: theme.borderLight,
+                      },
+                    ]}
+                  >
+                    <View style={styles.feedingItemLeft}>
+                      <View
+                        style={[
+                          styles.feedingTypeIcon,
+                          {
+                            backgroundColor:
+                              feeding.type === "breast"
+                                ? "#FF950020"
+                                : feeding.type === "bottle"
+                                ? "#5A87FF20"
+                                : "#4CD96420",
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name={
+                            feeding.type === "breast"
+                              ? "woman-outline"
+                              : feeding.type === "bottle"
+                              ? "flask-outline"
+                              : "restaurant-outline"
+                          }
+                          size={16}
+                          color={
+                            feeding.type === "breast"
+                              ? "#FF9500"
+                              : feeding.type === "bottle"
+                              ? "#5A87FF"
+                              : "#4CD964"
+                          }
+                        />
+                      </View>
+
+                      <View style={styles.feedingDetails}>
+                        <Text
+                          style={[styles.feedingTitle, { color: theme.text }]}
+                        >
+                          {feeding.type === "breast"
+                            ? `Breastfeeding (${feeding.side})`
+                            : feeding.type === "bottle"
+                            ? "Bottle Feeding"
+                            : "Solid Food"}
+                        </Text>
+
+                        <Text
+                          style={[
+                            styles.feedingTime,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          {new Date(feeding.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text
+                      style={[styles.feedingAmount, { color: theme.primary }]}
+                    >
+                      {feeding.type === "breast"
+                        ? `${feeding.duration} min`
+                        : feeding.type === "bottle"
+                        ? `${feeding.amount} ml`
+                        : `${feeding.amount} g`}
+                    </Text>
+                  </View>
+                ))}
+            </View>
+          )}
+
+          {(breastFeedings.length > 0 ||
+            bottleFeedings.length > 0 ||
+            solidFoodFeedings.length > 0) && (
+            <TouchableOpacity
+              style={[
+                styles.viewAllButton,
+                { borderTopColor: theme.borderLight },
+              ]}
+              onPress={() => console.log("View all feedings")}
+            >
+              <Text style={[styles.viewAllText, { color: theme.primary }]}>
+                View All Feedings
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={theme.primary}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -1096,10 +1241,20 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 10,
   },
-  ageGroupContainer: {
+  recommendationBanner: {
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  ageGroupContainer: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 12,
   },
   ageGroupLabel: {
     fontSize: 15,
@@ -1120,19 +1275,83 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
   },
-  feedingTypeBanner: {
+  recommendationContent: {
+    backgroundColor: "rgba(0, 0, 0, 0.03)",
     borderRadius: 12,
     padding: 12,
-    marginBottom: 16,
-    alignItems: "center",
   },
-  feedingTypeLabel: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  feedingTypeText: {
+  recommendationTitle: {
     fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  recommendationItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  recommendationText: {
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+  },
+  divider: {
+    height: 1,
+    width: "100%",
+    marginVertical: 12,
+  },
+  warningContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 8,
+  },
+  warningText: {
+    fontSize: 13,
+    marginLeft: 8,
+    flex: 1,
+  },
+  summaryContainer: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: "600",
+    marginBottom: 16,
+  },
+  summaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  summaryCard: {
+    width: "48%",
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  summaryValue: {
+    fontSize: 24,
+    fontWeight: "700",
+    marginVertical: 4,
+  },
+  summaryLabel: {
+    fontSize: 14,
+  },
+  summarySubvalue: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginTop: 4,
   },
   chartContainer: {
     borderRadius: 16,
@@ -1146,15 +1365,22 @@ const styles = StyleSheet.create({
   },
   chartHeader: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  sectionIcon: {
-    marginRight: 8,
+  tabContainer: {
+    flexDirection: "row",
+    borderRadius: 8,
+    overflow: "hidden",
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+  tab: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: "500",
   },
   chartWrapper: {
     alignItems: "center",
@@ -1171,25 +1397,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
   },
-  totalFoodContainer: {
-    alignItems: "center",
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-  },
-  totalFoodLabel: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  totalFoodValue: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  recommendedAmount: {
-    fontSize: 14,
-  },
-  inputContainer: {
+  recordContainer: {
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
@@ -1199,40 +1407,66 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  inputTitle: {
-    fontSize: 18,
+  timerContainer: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  timerTitle: {
+    fontSize: 16,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: "center",
   },
-  inputSubtitle: {
+  timerDisplay: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  timerText: {
+    fontSize: 36,
+    fontWeight: "700",
+  },
+  activeBreastText: {
     fontSize: 14,
-    marginBottom: 16,
+    marginTop: 4,
   },
-  mealInputsContainer: {
-    marginBottom: 16,
-  },
-  mealInputRow: {
+  breastButtonsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
   },
-  mealLabelContainer: {
+  breastButton: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
-  },
-  mealIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    width: "48%",
   },
-  mealLabel: {
+  breastButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  inputSection: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  inputTitle: {
     fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 14,
+    width: "30%",
   },
   inputWrapper: {
     flexDirection: "row",
@@ -1241,226 +1475,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 40,
-    width: 100,
+    width: "65%",
+  },
+  noteInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 40,
+    width: "65%",
   },
   input: {
     flex: 1,
     fontSize: 16,
     height: "100%",
-    textAlign: "right",
   },
   inputUnit: {
     fontSize: 14,
     marginLeft: 4,
-  },
-  saveButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    paddingVertical: 12,
-  },
-  saveButtonIcon: {
-    marginRight: 8,
-  },
-  saveButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  totalSummaryContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  totalSummaryLabel: {
-    fontSize: 16,
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  totalSummaryValue: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  totalSummaryRecommended: {
-    fontSize: 14,
-    marginBottom: 16,
-  },
-  progressContainer: {
-    width: "100%",
-    marginBottom: 16,
-  },
-  progressLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  progressLabel: {
-    fontSize: 14,
-  },
-  progressPercentage: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  progressBarContainer: {
-    height: 10,
-    borderRadius: 5,
-    overflow: "hidden",
-  },
-  progressBar: {
-    height: "100%",
-  },
-  totalPercentageContainer: {
-    width: "100%",
-    marginBottom: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
-    borderRadius: 12,
-    padding: 12,
-  },
-  percentageRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  totalPercentageLabel: {
-    fontSize: 14,
-    flex: 1,
-    marginRight: 8,
-  },
-  percentageText: {
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  totalProgressBarContainer: {
-    height: 12,
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
-    borderRadius: 6,
-    overflow: "hidden",
-    marginTop: 8,
-    position: "relative",
-  },
-  centerLine: {
-    position: "absolute",
-    width: 2,
-    height: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.2)",
-    left: "50%",
-    marginLeft: -1,
-  },
-  negativeProgressBar: {
-    position: "absolute",
-    height: "100%",
-    right: "50%",
-    borderTopLeftRadius: 6,
-    borderBottomLeftRadius: 6,
-  },
-  positiveProgressBar: {
-    position: "absolute",
-    height: "100%",
-    left: "50%",
-    borderTopRightRadius: 6,
-    borderBottomRightRadius: 6,
-  },
-  scaleLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  scaleLabel: {
-    fontSize: 10,
-  },
-  warningContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 12,
-    backgroundColor: "rgba(255, 59, 48, 0.1)",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    width: "100%",
-  },
-  warningIcon: {
-    marginRight: 8,
-  },
-  warningText: {
-    fontSize: 13,
-    flex: 1,
-  },
-  mealDistributionContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  mealDistributionContent: {
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  mealRecommendationRow: {
-    paddingVertical: 10,
-  },
-  mealRecommendationLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  mealRecommendationValue: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  mealFrequencyContainer: {
-    marginBottom: 12,
-  },
-  mealFrequencyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  mealFrequencyIcon: {
-    marginRight: 8,
-  },
-  mealFrequencyLabel: {
-    fontSize: 14,
-  },
-  mealFrequencyValue: {
-    fontSize: 15,
-    fontWeight: "500",
-    marginLeft: 26,
-  },
-  mealSizesContainer: {
-    marginBottom: 8,
-  },
-  mealSizesRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  mealSizesIcon: {
-    marginRight: 8,
-  },
-  mealSizesLabel: {
-    fontSize: 14,
-  },
-  mealSizesValue: {
-    fontSize: 15,
-    fontWeight: "500",
-    marginLeft: 26,
   },
   tipsContainer: {
     borderRadius: 16,
@@ -1476,7 +1509,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.03)",
     borderRadius: 12,
     padding: 12,
-    marginTop: 16,
   },
   tipItem: {
     flexDirection: "row",
@@ -1491,5 +1523,76 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 20,
+  },
+  recentFeedingsContainer: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  emptyFeedingsContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  emptyFeedingsText: {
+    marginTop: 12,
+    fontSize: 14,
+    textAlign: "center",
+  },
+  feedingsList: {
+    backgroundColor: "rgba(0, 0, 0, 0.03)",
+    borderRadius: 12,
+  },
+  feedingItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+  },
+  feedingItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  feedingTypeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  feedingDetails: {
+    flex: 1,
+  },
+  feedingTitle: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  feedingTime: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  feedingAmount: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    marginTop: 8,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginRight: 4,
   },
 });
