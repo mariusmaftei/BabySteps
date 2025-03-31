@@ -12,25 +12,33 @@ const Growth = sequelize.define(
     childId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: {
-        model: "Children",
-        key: "id",
-      },
     },
     weight: {
       type: DataTypes.FLOAT,
       allowNull: false,
-      comment: "Weight in kilograms (kg)",
     },
     height: {
       type: DataTypes.FLOAT,
       allowNull: false,
-      comment: "Height in centimeters (cm)",
     },
     headCircumference: {
       type: DataTypes.FLOAT,
       allowNull: false,
-      comment: "Head circumference in centimeters (cm)",
+    },
+    weightProgress: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    heightProgress: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    headCircumferenceProgress: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
     },
     recordDate: {
       type: DataTypes.DATE,
@@ -45,13 +53,11 @@ const Growth = sequelize.define(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
-      comment:
-        "Indicates if this is the initial record created when the child was added",
     },
   },
   {
+    tableName: "growth",
     timestamps: true,
-    tableName: "growth_records",
   }
 );
 

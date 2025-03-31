@@ -1,4 +1,8 @@
 import api, { ensureToken } from "./api.js";
+import {
+  calculateExpectedMonthlyGrowth,
+  calculateMonthlyGrowthProgress,
+} from "../utils/growth-utils.js";
 
 // Helper function to handle expected 404 errors
 const handle404Error = (error, message, defaultValue) => {
@@ -78,6 +82,93 @@ export const getGrowthStatistics = async (childId) => {
         headCircumferenceGain: 0,
       }
     );
+  }
+};
+
+// Calculate monthly growth targets based on WHO standards
+export const calculateMonthlyGrowthTargets = (ageInMonths, gender) => {
+  // Get expected monthly growth based on WHO standards
+  const expectedGrowth = calculateExpectedMonthlyGrowth(ageInMonths, gender);
+
+  return {
+    targetWeight: expectedGrowth.weight,
+    targetHeight: expectedGrowth.height,
+    targetHeadCirc: expectedGrowth.headCirc,
+  };
+};
+
+// Add this function to calculate growth progress percentages
+export const calculateGrowthProgressPercentages = async (
+  childId,
+  ageInMonths,
+  gender,
+  birthWeight,
+  birthHeight,
+  birthHeadCirc
+) => {
+  try {
+    // Get all growth records
+    const records = await getGrowthRecords(childId);
+
+    if (records.length === 0) {
+      return {
+        heightProgress: 0,
+        weightProgress: 0,
+        headCircProgress: 0,
+        latestRecord: null,
+      };
+    }
+
+    // Get birth record and latest record
+    const birthRecord = records.reduce((earliest, record) => {
+      return new Date(record.date) < new Date(earliest.date)
+        ? record
+        : earliest;
+    });
+
+    const latestRecord = records.reduce((latest, record) => {
+      return new Date(record.date) > new Date(latest.date) ? record : latest;
+    });
+
+    // Get expected monthly growth based on WHO standards
+    const expectedGrowth = calculateExpectedMonthlyGrowth(ageInMonths, gender);
+
+    // Calculate progress for each metric
+    const heightProgress = calculateMonthlyGrowthProgress(
+      birthRecord.height,
+      latestRecord.height,
+      expectedGrowth.height,
+      "height"
+    );
+
+    const weightProgress = calculateMonthlyGrowthProgress(
+      birthRecord.weight,
+      latestRecord.weight,
+      expectedGrowth.weight,
+      "weight"
+    );
+
+    const headCircProgress = calculateMonthlyGrowthProgress(
+      birthRecord.headCirc || birthRecord.headCircumference,
+      latestRecord.headCirc || latestRecord.headCircumference,
+      expectedGrowth.headCirc,
+      "headCirc"
+    );
+
+    return {
+      heightProgress,
+      weightProgress,
+      headCircProgress,
+      latestRecord,
+    };
+  } catch (error) {
+    console.error("Error calculating growth progress percentages:", error);
+    return {
+      heightProgress: 0,
+      weightProgress: 0,
+      headCircProgress: 0,
+      latestRecord: null,
+    };
   }
 };
 

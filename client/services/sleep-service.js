@@ -336,6 +336,30 @@ export const deleteSleepData = async (sleepId) => {
   }
 };
 
+// Add this function to the sleep-service.js file
+export const fetchSleepRecords = async (childId) => {
+  try {
+    // Ensure API has auth token before making request
+    await ensureToken();
+
+    console.log(`Fetching sleep records for child ID: ${childId}`);
+    const response = await api.get(`/sleep/child/${childId}`);
+    console.log("Sleep records response:", response.data);
+    return response.data.map((item) => createSleepRecord(item));
+  } catch (error) {
+    console.error("Error fetching sleep records:", error);
+    // Log more details about the error
+    if (error.response) {
+      console.error("Error response data:", error.response.data);
+      console.error("Error response status:", error.response.status);
+    } else if (error.request) {
+      console.error("Error request:", error.request);
+    }
+    // Return empty array
+    return [];
+  }
+};
+
 // Local storage functions - keeping these for reference but they won't be used
 const SLEEP_STORAGE_KEY = "kindergrow_sleep_data";
 

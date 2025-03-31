@@ -9,30 +9,35 @@ import { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, Image } from "react-native";
 
 // Screens
-import ActivityScreen from "./screens/activity/activity";
-import ChartsScreen from "./screens/charts/charts";
-import SettingsScreen from "./screens/settings/settings";
-import SleepDetailsScreen from "./screens/activity-details-screen/sleep-screen/sleep-details-screen";
-import FeedingDetailsScreen from "./screens/activity-details-screen/feeding-screen/feeding-screen";
-import GrowthDetailsScreen from "./screens/activity-details-screen/growth-details-screen/growth-details-screen";
-import HealthDetailsScreen from "./screens/activity-details-screen/health-detals-screen/health-details-screen";
-import DiaperDetailsScreen from "./screens/activity-details-screen/diaper-details-screen/diaper-details-screen";
-import RelaxingMusicScreen from "./screens/activity-details-screen/relaxing-music-screen/relaxing-music-screen";
+import RegisterScreen from "./screens/RegisterScreen/RegisterScreen";
+import LoginScreen from "./screens/LoginScreen/LoginScreen";
+import ActivityScreen from "./screens/ActivityScreen/ActivityScreen";
+import ChartsScreen from "./screens/ChartsScreen/ChartsScreen";
+import SettingsScreen from "./screens/SettingsScreen/SettingsScreen";
+
+// SubScreens
+
+import SleepScreen from "./screens/ActivitySubScreens/SleepScreen/SleepScreen";
+import FeedingScreen from "./screens/ActivitySubScreens/FeedingScreen/FeedingScreen";
+import GrowthScreen from "./screens/ActivitySubScreens/GrowthScreen/GrowthScreen";
+import HealthScreen from "./screens/ActivitySubScreens/HealthScreen/HealthScreen";
+import DiaperScreen from "./screens/ActivitySubScreens/DiaperScreen/DiaperScreen";
+import MusicScreen from "./screens/ActivitySubScreens//MusicScreen/MusicScreen";
 
 // Custom Tab Bar
-import CustomTabBar from "./components/custom-tab-bar/custom-tab-bar";
+import CustomTabBar from "./components/UI/CustomTabBar/CustomTabBar";
 
 // Theme Provider
 import { ThemeProvider, useTheme } from "./context/theme-context";
-// Auth Provider
+
 import {
   ChildActivityProvider,
   useChildActivity,
 } from "./context/child-activity-context";
 // Auth Provider
+
 import { AuthProvider, useAuth } from "./context/auth-context";
-import LoginScreen from "./screens/login/login-screen";
-import RegisterScreen from "./screens/register/register-screen";
+
 import NotificationHandler from "./components/notification-handler/notification-handler";
 import { NotificationProvider } from "./context/notification-context";
 
@@ -70,35 +75,35 @@ function ActivityStack() {
         options={{ title: "Activity" }}
       />
       <Stack.Screen
-        name="SleepDetails"
-        component={SleepDetailsScreen}
+        name="SleepScreen"
+        component={SleepScreen}
         options={{ title: "Sleep Details" }}
       />
       <Stack.Screen
-        name="FeedingDetails"
-        component={FeedingDetailsScreen}
+        name="FeedingScreen"
+        component={FeedingScreen}
         options={{ title: "Feeding Details" }}
       />
       <Stack.Screen
-        name="GrowthDetails"
-        component={GrowthDetailsScreen}
+        name="GrowthScreen"
+        component={GrowthScreen}
         options={{ title: "Growth Details" }}
       />
       <Stack.Screen
-        name="HealthDetails"
-        component={HealthDetailsScreen}
+        name="HealthScreen"
+        component={HealthScreen}
         options={{ title: "Health Details" }}
       />
       {/* Then in the ActivityStack component, add the route for the DiaperDetailsScreen: */}
       <Stack.Screen
-        name="DiaperDetails"
-        component={DiaperDetailsScreen}
+        name="DiaperScreen"
+        component={DiaperScreen}
         options={{ title: "Diaper Details" }}
       />
       {/* Add the new route for the relaxing music screen */}
       <Stack.Screen
-        name="RelaxingMusic"
-        component={RelaxingMusicScreen}
+        name="MusicScreen"
+        component={MusicScreen}
         options={{ title: "Relaxing Music" }}
       />
     </Stack.Navigator>
