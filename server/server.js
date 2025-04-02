@@ -11,6 +11,7 @@ import { db } from "./config/firebase.js";
 import vaccinationRoute from "./routes/vaccination.js";
 import diaperRoute from "./routes/diaper.js";
 import growthRoute from "./routes/growth.js";
+import feedingRoute from "./routes/feeding.js";
 
 // Load environment variables
 dotenv.config();
@@ -47,6 +48,7 @@ app.use("/diaper", diaperRoute);
 app.use("/media", mediaRouter);
 app.use("/vaccinations", vaccinationRoute);
 app.use("/growth", growthRoute);
+app.use("/feeding", feedingRoute);
 
 // Check Firebase Firestore connection
 db.listCollections()

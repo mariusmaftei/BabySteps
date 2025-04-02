@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -26,40 +28,34 @@ import { useAuth } from "../../../context/auth-context";
 import ChildInfoCard from "../../../components/UI/Cards/ChildInfoCard";
 import ChildRecommendationCard from "../../../components/UI/Cards/ChildRecommendationCard";
 import RecentActivityCard from "../../../components/UI/Cards/RecentActivityCard";
-
 import ColumnChart from "../../../components/UI/Charts/ColumnChart";
+
 const screenWidth = Dimensions.get("window").width;
 
 export default function DiaperScreen({ navigation }) {
   const { theme } = useTheme();
   const { currentChild } = useChildActivity();
-  // Fix: Correctly destructure token from useAuth instead of authState
   const { token } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  // Get child's age as a number for recommendations
   const childAgeText = currentChild.age;
   const childAgeNum = Number.parseInt(childAgeText.split(" ")[0]) || 0;
   const childAgeUnit = childAgeText.includes("month") ? "months" : "years";
-
-  // Convert age to months if in years for more precise recommendations
   const childAgeInMonths =
     childAgeUnit === "months" ? childAgeNum : childAgeNum * 12;
 
-  // Diaper change state
   const [diaperChanges, setDiaperChanges] = useState([]);
   const [changeDate, setChangeDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedType, setSelectedType] = useState(null); // 'wet', 'dirty', 'both'
-  const [selectedColor, setSelectedColor] = useState(null); // 'yellow', 'green', 'brown', 'black'
-  const [selectedConsistency, setSelectedConsistency] = useState(null); // 'soft', 'firm', 'watery'
+  const [selectedType, setSelectedType] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null);
+  const [selectedConsistency, setSelectedConsistency] = useState(null);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch diaper changes from the API
   const fetchDiaperChanges = useCallback(async () => {
     if (!currentChild || !currentChild.id) {
       console.log("No current child selected");
@@ -77,12 +73,9 @@ export default function DiaperScreen({ navigation }) {
     try {
       setLoading(true);
       setError(null);
-      // No need to pass token here, it's handled by the API interceptors
       const data = await getDiaperChanges(currentChild.id);
 
-      // Check if data is an array before mapping
       if (Array.isArray(data)) {
-        // Convert date strings to Date objects
         const processedData = data.map((change) => ({
           ...change,
           date: new Date(change.date),
@@ -102,21 +95,17 @@ export default function DiaperScreen({ navigation }) {
     }
   }, [currentChild, token]);
 
-  // Load diaper changes on component mount and when currentChild changes
   useEffect(() => {
     fetchDiaperChanges();
   }, [fetchDiaperChanges]);
 
-  // Refresh data
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     fetchDiaperChanges();
   }, [fetchDiaperChanges]);
 
-  // Diaper change recommendations based on age
   const getDiaperRecommendations = (ageInMonths) => {
     if (ageInMonths < 1) {
-      // 0-1 month
       return {
         ageGroup: `Newborn (${
           childAgeInMonths < 1 ? childAgeInMonths.toFixed(1) : childAgeInMonths
@@ -139,7 +128,6 @@ export default function DiaperScreen({ navigation }) {
         ],
       };
     } else if (ageInMonths >= 1 && ageInMonths < 6) {
-      // 1-6 months
       return {
         ageGroup: `Infant (${childAgeInMonths} ${
           childAgeInMonths === 1 ? "month" : "months"
@@ -162,7 +150,6 @@ export default function DiaperScreen({ navigation }) {
         ],
       };
     } else if (ageInMonths >= 6 && ageInMonths < 12) {
-      // 6-12 months
       return {
         ageGroup: `Older Infant (${childAgeInMonths} ${
           childAgeInMonths === 1 ? "month" : "months"
@@ -184,7 +171,6 @@ export default function DiaperScreen({ navigation }) {
         ],
       };
     } else {
-      // 12+ months
       return {
         ageGroup:
           childAgeInMonths >= 24
@@ -213,14 +199,12 @@ export default function DiaperScreen({ navigation }) {
 
   const recommendations = getDiaperRecommendations(childAgeInMonths);
 
-  // Handle date change
   const onChangeDate = (event, selectedDate) => {
     const currentDate = selectedDate || changeDate;
     setShowDatePicker(Platform.OS === "ios");
     setChangeDate(currentDate);
   };
 
-  // Add new diaper change
   const addDiaperChange = async () => {
     if (!token) {
       Alert.alert("Error", "Authentication required. Please log in again.");
@@ -254,10 +238,8 @@ export default function DiaperScreen({ navigation }) {
         notes: notes || null,
       };
 
-      // No need to pass token here, it's handled by the API interceptors
       const newChange = await createDiaperChange(currentChild.id, diaperData);
 
-      // Add the new change to the state with a proper Date object
       setDiaperChanges([
         {
           ...newChange,
@@ -266,7 +248,6 @@ export default function DiaperScreen({ navigation }) {
         ...diaperChanges,
       ]);
 
-      // Reset form
       setSelectedType(null);
       setSelectedColor(null);
       setSelectedConsistency(null);
@@ -282,7 +263,6 @@ export default function DiaperScreen({ navigation }) {
     }
   };
 
-  // Handle delete diaper change
   const handleDeleteDiaperChange = async (diaperChange) => {
     if (!token) {
       Alert.alert("Error", "Authentication required. Please log in again.");
@@ -290,15 +270,10 @@ export default function DiaperScreen({ navigation }) {
     }
 
     try {
-      // No need to pass token here, it's handled by the API interceptors
       await deleteDiaperChange(currentChild.id, diaperChange.id);
-
-      // Remove the deleted change from state
       setDiaperChanges(
         diaperChanges.filter((change) => change.id !== diaperChange.id)
       );
-
-      // Show success message
       Alert.alert("Success", "Diaper change deleted successfully");
     } catch (error) {
       console.error("Error deleting diaper change:", error);
@@ -306,7 +281,6 @@ export default function DiaperScreen({ navigation }) {
     }
   };
 
-  // Calculate today's diaper changes
   const getTodayChanges = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -319,21 +293,8 @@ export default function DiaperScreen({ navigation }) {
 
   const todayChanges = getTodayChanges();
   const todayTotal = todayChanges.length;
-  const isChangesEnough = todayTotal >= recommendations.minChanges;
 
-  // Calculate the percentage of recommended changes
-  const calculateChangesPercentage = () => {
-    const percentage = Math.round(
-      (todayTotal / recommendations.minChanges) * 100
-    );
-    return Math.min(percentage, 100);
-  };
-
-  const changesPercentage = calculateChangesPercentage();
-
-  // Prepare data for pie chart
   const getPieChartData = () => {
-    // Count types
     const wetCount = todayChanges.filter(
       (change) => change.type === "wet"
     ).length;
@@ -379,9 +340,7 @@ export default function DiaperScreen({ navigation }) {
     return data;
   };
 
-  // Prepare data for color distribution chart (for dirty diapers) - Updated for ColumnChart
   const getColorChartData = () => {
-    // Create poop icons with different colors - rearranged in order of most common stool colors
     const yellowPoopIcon = (
       <FontAwesome5 name="poo" size={16} color="#FFD700" />
     );
@@ -389,7 +348,6 @@ export default function DiaperScreen({ navigation }) {
     const greenPoopIcon = <FontAwesome5 name="poo" size={16} color="#008000" />;
     const blackPoopIcon = <FontAwesome5 name="poo" size={16} color="#323232" />;
 
-    // Initialize with default values for all colors - rearranged in order of most common
     const colorData = {
       labels: ["Yellow", "Brown", "Green", "Black"],
       data: [0, 0, 0, 0],
@@ -398,7 +356,6 @@ export default function DiaperScreen({ navigation }) {
       unit: "",
     };
 
-    // If we have diaperChanges data, update the values
     if (diaperChanges && diaperChanges.length > 0) {
       const today = new Date().toDateString();
       const todayChanges = diaperChanges.filter(
@@ -408,16 +365,15 @@ export default function DiaperScreen({ navigation }) {
           change.color
       );
 
-      // Count occurrences of each color - updated to match new order
       todayChanges.forEach((change) => {
         if (change.color.toLowerCase() === "yellow") {
-          colorData.data[0] += 1; // Yellow is now index 0
+          colorData.data[0] += 1;
         } else if (change.color.toLowerCase() === "brown") {
-          colorData.data[1] += 1; // Brown is now index 1
+          colorData.data[1] += 1;
         } else if (change.color.toLowerCase() === "green") {
-          colorData.data[2] += 1; // Green is now index 2
+          colorData.data[2] += 1;
         } else if (change.color.toLowerCase() === "black") {
-          colorData.data[3] += 1; // Black is now index 3
+          colorData.data[3] += 1;
         }
       });
     }
@@ -425,47 +381,6 @@ export default function DiaperScreen({ navigation }) {
     return colorData;
   };
 
-  // Update the getDiaperTypeData function to handle undefined data
-  const getDiaperTypeData = () => {
-    const typeData = [
-      { name: "Wet", value: 0, color: "#4682B4", icon: "💧" },
-      { name: "Soiled", value: 0, color: "#8B4513", icon: "💩" },
-      { name: "Both", value: 0, color: "#9370DB", icon: "💧💩" },
-    ];
-
-    // If we have diaperChanges data, update the values
-    if (diaperChanges && diaperChanges.length > 0) {
-      const today = new Date().toDateString();
-      const todayChanges = diaperChanges.filter((change) =>
-        new Date(change.date).toDateString()
-      );
-
-      // Count occurrences of each type
-      todayChanges.forEach((change) => {
-        if (change.type === "both") {
-          typeData[2].value += 1; // Both
-        } else if (change.type === "wet") {
-          typeData[0].value += 1; // Wet
-        } else if (change.type === "dirty") {
-          typeData[1].value += 1; // Soiled
-        }
-      });
-    }
-
-    return typeData;
-  };
-
-  // Additional validation to ensure colorChartData has all required properties
-  const colorChartData = getColorChartData();
-  const isValidChartData =
-    colorChartData &&
-    Array.isArray(colorChartData.labels) &&
-    Array.isArray(colorChartData.data) &&
-    Array.isArray(colorChartData.colors) &&
-    Array.isArray(colorChartData.icons) &&
-    colorChartData.labels.length > 0;
-
-  // Format time for display
   const formatTime = (date) => {
     return new Date(date).toLocaleTimeString([], {
       hour: "2-digit",
@@ -473,7 +388,6 @@ export default function DiaperScreen({ navigation }) {
     });
   };
 
-  // Format date for display
   const formatDate = (date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -493,7 +407,6 @@ export default function DiaperScreen({ navigation }) {
     }
   };
 
-  // Set up the notification button in the header
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -550,16 +463,6 @@ export default function DiaperScreen({ navigation }) {
     );
   }
 
-  // Check if we have any dirty diapers with color data
-  const hasColorData = diaperChanges.some(
-    (change) =>
-      (change.type === "dirty" || change.type === "both") && change.color
-  );
-
-  // Get color chart data if we have dirty diapers
-
-  // Additional validation to ensure colorChartData has all required properties
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
@@ -569,7 +472,6 @@ export default function DiaperScreen({ navigation }) {
         refreshing={refreshing}
         onRefresh={handleRefresh}
       >
-        {/* Child Info Card */}
         <ChildInfoCard
           childData={currentChild}
           screenType="diaper"
@@ -583,7 +485,6 @@ export default function DiaperScreen({ navigation }) {
           customTitle="Child Information"
         />
 
-        {/* Recommendations Card */}
         <ChildRecommendationCard
           recommendations={recommendations.tips}
           itemsToAvoid={[
@@ -595,7 +496,6 @@ export default function DiaperScreen({ navigation }) {
           screenType="diaper"
         />
 
-        {/* Diaper Type Distribution Chart */}
         <View
           style={[
             styles.chartContainer,
@@ -645,7 +545,6 @@ export default function DiaperScreen({ navigation }) {
           )}
         </View>
 
-        {/* Color Distribution Chart (for dirty diapers) - Using ColumnChart */}
         <View
           style={[
             styles.chartContainer,
@@ -676,7 +575,6 @@ export default function DiaperScreen({ navigation }) {
           />
         </View>
 
-        {/* Add New Diaper Change */}
         <View
           style={[
             styles.inputContainer,
@@ -690,7 +588,6 @@ export default function DiaperScreen({ navigation }) {
             Log details about the most recent diaper change
           </Text>
 
-          {/* Date/Time Picker */}
           <View style={styles.dateTimeContainer}>
             <Text style={[styles.inputLabel, { color: theme.text }]}>
               Time of Change
@@ -759,7 +656,6 @@ export default function DiaperScreen({ navigation }) {
             )}
           </View>
 
-          {/* Diaper Type Selection */}
           <View style={styles.typeSelectionContainer}>
             <Text style={[styles.inputLabel, { color: theme.text }]}>
               Diaper Type
@@ -865,7 +761,6 @@ export default function DiaperScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Color Selection (for dirty or both) */}
           {(selectedType === "dirty" || selectedType === "both") && (
             <View style={styles.colorSelectionContainer}>
               <Text style={[styles.inputLabel, { color: theme.text }]}>
@@ -1003,7 +898,6 @@ export default function DiaperScreen({ navigation }) {
             </View>
           )}
 
-          {/* Consistency Selection (for dirty or both) */}
           {(selectedType === "dirty" || selectedType === "both") && (
             <View style={styles.consistencySelectionContainer}>
               <Text style={[styles.inputLabel, { color: theme.text }]}>
@@ -1106,7 +1000,6 @@ export default function DiaperScreen({ navigation }) {
             </View>
           )}
 
-          {/* Save Button */}
           <TouchableOpacity
             style={[
               styles.saveButton,
@@ -1137,7 +1030,6 @@ export default function DiaperScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Recent Diaper Changes with Delete Functionality */}
         <RecentActivityCard
           title="Recent Diaper Changes"
           activities={diaperChanges.slice(0, 5)}
@@ -1237,123 +1129,112 @@ export default function DiaperScreen({ navigation }) {
           maxItems={5}
         />
 
-        {/* Today's Summary */}
         <View
           style={[
             styles.summaryContainer,
             { backgroundColor: theme.cardBackground },
           ]}
         >
-          <View style={styles.chartHeader}>
-            <Ionicons
-              name="today"
-              size={24}
-              color={theme.text}
-              style={styles.sectionIcon}
-            />
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Today's Summary
-            </Text>
-          </View>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: theme.text, marginBottom: 12 },
+            ]}
+          >
+            Today's Summary
+          </Text>
 
-          <View style={styles.summaryContent}>
-            <View style={styles.summaryItem}>
-              <Text
-                style={[styles.summaryLabel, { color: theme.textSecondary }]}
-              >
-                Total Changes
-              </Text>
-              <Text
-                style={[
-                  styles.summaryValue,
-                  { color: isChangesEnough ? theme.success : theme.danger },
-                ]}
-              >
-                {todayTotal}
-              </Text>
-              <Text
-                style={[styles.summarySubtext, { color: theme.textSecondary }]}
-              >
-                of {recommendations.changesPerDay} recommended
-              </Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.summaryItem}>
-              <Text
-                style={[styles.summaryLabel, { color: theme.textSecondary }]}
-              >
-                Wet Only
-              </Text>
-              <Text style={[styles.summaryValue, { color: theme.text }]}>
-                {todayChanges.filter((change) => change.type === "wet").length}
-              </Text>
-              <Text
-                style={[styles.summarySubtext, { color: theme.textSecondary }]}
-              >
-                diapers
-              </Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.summaryItem}>
-              <Text
-                style={[styles.summaryLabel, { color: theme.textSecondary }]}
-              >
-                Dirty/Both
-              </Text>
-              <Text style={[styles.summaryValue, { color: theme.text }]}>
-                {
-                  todayChanges.filter(
-                    (change) =>
-                      change.type === "dirty" || change.type === "both"
-                  ).length
-                }
-              </Text>
-              <Text
-                style={[styles.summarySubtext, { color: theme.textSecondary }]}
-              >
-                diapers
-              </Text>
-            </View>
-          </View>
-
-          {/* Progress bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressLabelRow}>
-              <Text
-                style={[styles.progressLabel, { color: theme.textSecondary }]}
-              >
-                Progress toward daily minimum:
-              </Text>
-              <Text
-                style={[
-                  styles.progressPercentage,
-                  { color: isChangesEnough ? theme.success : theme.danger },
-                ]}
-              >
-                {changesPercentage}%
-              </Text>
-            </View>
+          <View style={styles.summaryRow}>
             <View
               style={[
-                styles.progressBarContainer,
-                { backgroundColor: `${theme.danger}30` },
+                styles.summaryCardSmall,
+                { backgroundColor: `${theme.backgroundSecondary}` },
               ]}
             >
               <View
                 style={[
-                  styles.progressBar,
-                  {
-                    width: `${changesPercentage}%`,
-                    backgroundColor: isChangesEnough
-                      ? theme.success
-                      : theme.danger,
-                  },
+                  styles.iconCircleSmall,
+                  { backgroundColor: "#5A87FF20" },
                 ]}
-              />
+              >
+                <FontAwesome5 name="tint" size={20} color="#5A87FF" />
+              </View>
+              <Text style={[styles.summaryValueSmall, { color: theme.text }]}>
+                {todayChanges.filter((change) => change.type === "wet").length}
+              </Text>
+              <Text
+                style={[
+                  styles.summaryLabelSmall,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                Wet Only
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.summaryCardSmall,
+                { backgroundColor: `${theme.backgroundSecondary}` },
+              ]}
+            >
+              <View
+                style={[
+                  styles.iconCircleSmall,
+                  { backgroundColor: "#A2845E20" },
+                ]}
+              >
+                <FontAwesome5 name="poo" size={20} color="#A2845E" />
+              </View>
+              <Text style={[styles.summaryValueSmall, { color: theme.text }]}>
+                {
+                  todayChanges.filter((change) => change.type === "dirty")
+                    .length
+                }
+              </Text>
+              <Text
+                style={[
+                  styles.summaryLabelSmall,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                Dirty Only
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.summaryCardSmall,
+                { backgroundColor: `${theme.backgroundSecondary}` },
+              ]}
+            >
+              <View
+                style={[
+                  styles.iconCircleSmall,
+                  { backgroundColor: "#FF2D5520" },
+                ]}
+              >
+                <View style={styles.combinedIcons}>
+                  <Ionicons name="water" size={16} color="#5A87FF" />
+                  <FontAwesome5
+                    name="poo"
+                    size={16}
+                    color="#A2845E"
+                    style={{ marginLeft: 4 }}
+                  />
+                </View>
+              </View>
+              <Text style={[styles.summaryValueSmall, { color: theme.text }]}>
+                {todayChanges.filter((change) => change.type === "both").length}
+              </Text>
+              <Text
+                style={[
+                  styles.summaryLabelSmall,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                Both
+              </Text>
             </View>
           </View>
         </View>
@@ -1367,7 +1248,6 @@ function CustomTimePicker({ initialTime, onTimeSelected, onCancel, theme }) {
   const [minutes, setMinutes] = useState(initialTime.getMinutes());
   const [period, setPeriod] = useState(hours >= 12 ? "PM" : "AM");
 
-  // Convert 24-hour format to 12-hour format for display
   const displayHours = hours % 12 === 0 ? 12 : hours % 12;
 
   const hourOptions = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -1375,7 +1255,6 @@ function CustomTimePicker({ initialTime, onTimeSelected, onCancel, theme }) {
 
   const handleConfirm = () => {
     const newDate = new Date(initialTime);
-    // Convert back to 24-hour format
     const newHours =
       period === "PM"
         ? hours === 12
@@ -1392,7 +1271,6 @@ function CustomTimePicker({ initialTime, onTimeSelected, onCancel, theme }) {
   return (
     <View style={styles.customTimePickerContainer}>
       <View style={styles.pickerRow}>
-        {/* Hours */}
         <View
           style={[
             styles.pickerColumn,
@@ -1443,7 +1321,6 @@ function CustomTimePicker({ initialTime, onTimeSelected, onCancel, theme }) {
           </ScrollView>
         </View>
 
-        {/* Minutes */}
         <View
           style={[
             styles.pickerColumn,
@@ -1482,7 +1359,6 @@ function CustomTimePicker({ initialTime, onTimeSelected, onCancel, theme }) {
           </ScrollView>
         </View>
 
-        {/* AM/PM */}
         <View style={styles.pickerColumn}>
           <Text style={[styles.pickerLabel, { color: theme.textSecondary }]}>
             AM/PM
@@ -2153,5 +2029,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  summaryCardSmall: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 8,
+    alignItems: "center",
+    marginHorizontal: 4,
+  },
+  iconCircleSmall: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  summaryValueSmall: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginVertical: 2,
+  },
+  summaryLabelSmall: {
+    fontSize: 12,
+    textAlign: "center",
+  },
+  summarySubvalueSmall: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 2,
   },
 });

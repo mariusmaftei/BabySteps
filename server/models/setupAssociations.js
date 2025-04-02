@@ -5,6 +5,7 @@ import Sleep from "./Sleep.js";
 import Vaccination from "./Vaccination.js";
 import Diaper from "./Diaper.js";
 import Growth from "./Growth.js";
+import Feeding from "./Feeding.js";
 
 const setupAssociations = () => {
   // User has many Children
@@ -58,6 +59,17 @@ const setupAssociations = () => {
   });
 
   Growth.belongsTo(Child, {
+    foreignKey: "childId",
+    as: "child",
+  });
+
+  // Child has many Feeding records
+  Child.hasMany(Feeding, {
+    foreignKey: "childId",
+    as: "feedingRecords",
+  });
+
+  Feeding.belongsTo(Child, {
     foreignKey: "childId",
     as: "child",
   });

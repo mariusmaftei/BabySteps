@@ -2,10 +2,10 @@ import Sleep from "../models/Sleep.js";
 import Child from "../models/Child.js";
 import { Op } from "sequelize";
 
-// Create a new sleep record
 export const createSleep = async (req, res) => {
   try {
-    const { childId, napHours, nightHours, date, notes } = req.body;
+    const { childId, napHours, nightHours, date, notes, sleepProgress } =
+      req.body;
 
     console.log("Received sleep data for database save:", {
       childId,
@@ -13,9 +13,9 @@ export const createSleep = async (req, res) => {
       nightHours,
       date,
       notes,
+      sleepProgress,
     });
 
-    // Validate child belongs to user
     const child = await Child.findOne({
       where: { id: childId, userId: req.user.id },
     });
@@ -31,7 +31,6 @@ export const createSleep = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Check if a record already exists for this child and date
     const existingRecord = await Sleep.findOne({
       where: {
         childId,
@@ -42,7 +41,6 @@ export const createSleep = async (req, res) => {
     let sleep;
 
     if (existingRecord) {
-      // Update existing record
       console.log(
         "Updating existing sleep record in database:",
         existingRecord.id
@@ -50,17 +48,18 @@ export const createSleep = async (req, res) => {
       existingRecord.napHours = napHours;
       existingRecord.nightHours = nightHours;
       existingRecord.notes = notes;
+      existingRecord.sleepProgress = sleepProgress;
       sleep = await existingRecord.save();
       console.log("Sleep record updated successfully in database:", sleep.id);
       return res.status(200).json(sleep);
     } else {
-      // Create new record
       console.log("Creating new sleep record in database with data:", {
         childId,
         napHours,
         nightHours,
         date: new Date(date),
         notes,
+        sleepProgress,
       });
       sleep = await Sleep.create({
         childId,
@@ -68,6 +67,7 @@ export const createSleep = async (req, res) => {
         nightHours,
         date: new Date(date),
         notes,
+        sleepProgress,
       });
       console.log(
         "Sleep record created successfully in database with ID:",
@@ -83,12 +83,65 @@ export const createSleep = async (req, res) => {
   }
 };
 
-// Get all sleep records for a child
+export const updateSleep = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { napHours, nightHours, date, notes, sleepProgress } = req.body;
+
+    console.log(`Updating sleep record in database with ID: ${id}`, {
+      napHours,
+      nightHours,
+      date,
+      notes,
+      sleepProgress,
+    });
+
+    const sleep = await Sleep.findByPk(id);
+
+    if (!sleep) {
+      console.error("Sleep record not found in database:", id);
+      return res.status(404).json({ message: "Sleep record not found" });
+    }
+
+    const child = await Child.findOne({
+      where: { id: sleep.childId, userId: req.user.id },
+    });
+
+    if (!child) {
+      console.error(
+        "Not authorized to update this sleep record:",
+        sleep.childId,
+        req.user.id
+      );
+      return res
+        .status(403)
+        .json({ message: "Not authorized to update this sleep record" });
+    }
+
+    sleep.napHours = napHours !== undefined ? napHours : sleep.napHours;
+    sleep.nightHours = nightHours !== undefined ? nightHours : sleep.nightHours;
+    sleep.date = date ? new Date(date) : sleep.date;
+    sleep.notes = notes !== undefined ? notes : sleep.notes;
+    sleep.sleepProgress =
+      sleepProgress !== undefined ? sleepProgress : sleep.sleepProgress;
+
+    await sleep.save();
+    console.log("Sleep record updated successfully in database:", sleep.id);
+
+    return res.status(200).json(sleep);
+  } catch (error) {
+    console.error("Database error updating sleep record:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
+  }
+};
+
+// Keep the rest of the controller functions unchanged
 export const getSleepByChild = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Validate child belongs to user
     const child = await Child.findOne({
       where: { id: childId, userId: req.user.id },
     });
@@ -113,7 +166,6 @@ export const getSleepByChild = async (req, res) => {
   }
 };
 
-// Get a specific sleep record
 export const getSleepById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -124,7 +176,6 @@ export const getSleepById = async (req, res) => {
       return res.status(404).json({ message: "Sleep record not found" });
     }
 
-    // Validate child belongs to user
     const child = await Child.findOne({
       where: { id: sleep.childId, userId: req.user.id },
     });
@@ -144,61 +195,6 @@ export const getSleepById = async (req, res) => {
   }
 };
 
-// Update a sleep record
-export const updateSleep = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { napHours, nightHours, date, notes } = req.body;
-
-    console.log(`Updating sleep record in database with ID: ${id}`, {
-      napHours,
-      nightHours,
-      date,
-      notes,
-    });
-
-    const sleep = await Sleep.findByPk(id);
-
-    if (!sleep) {
-      console.error("Sleep record not found in database:", id);
-      return res.status(404).json({ message: "Sleep record not found" });
-    }
-
-    // Validate child belongs to user
-    const child = await Child.findOne({
-      where: { id: sleep.childId, userId: req.user.id },
-    });
-
-    if (!child) {
-      console.error(
-        "Not authorized to update this sleep record:",
-        sleep.childId,
-        req.user.id
-      );
-      return res
-        .status(403)
-        .json({ message: "Not authorized to update this sleep record" });
-    }
-
-    // Update the record
-    sleep.napHours = napHours !== undefined ? napHours : sleep.napHours;
-    sleep.nightHours = nightHours !== undefined ? nightHours : sleep.nightHours;
-    sleep.date = date ? new Date(date) : sleep.date;
-    sleep.notes = notes !== undefined ? notes : sleep.notes;
-
-    await sleep.save();
-    console.log("Sleep record updated successfully in database:", sleep.id);
-
-    return res.status(200).json(sleep);
-  } catch (error) {
-    console.error("Database error updating sleep record:", error);
-    return res
-      .status(500)
-      .json({ message: "Server error", error: error.message });
-  }
-};
-
-// Delete a sleep record
 export const deleteSleep = async (req, res) => {
   try {
     const { id } = req.params;
@@ -212,7 +208,6 @@ export const deleteSleep = async (req, res) => {
       return res.status(404).json({ message: "Sleep record not found" });
     }
 
-    // Validate child belongs to user
     const child = await Child.findOne({
       where: { id: sleep.childId, userId: req.user.id },
     });
@@ -242,13 +237,11 @@ export const deleteSleep = async (req, res) => {
   }
 };
 
-// Get sleep records for a date range
 export const getSleepByDateRange = async (req, res) => {
   try {
     const { childId } = req.params;
     const { startDate, endDate } = req.query;
 
-    // Validate child belongs to user
     const child = await Child.findOne({
       where: { id: childId, userId: req.user.id },
     });
@@ -259,7 +252,6 @@ export const getSleepByDateRange = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Set up date range filter
     const dateFilter = {};
     if (startDate && endDate) {
       dateFilter.date = {
@@ -292,12 +284,10 @@ export const getSleepByDateRange = async (req, res) => {
   }
 };
 
-// Get today's sleep record for a child
 export const getTodaySleep = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Validate child belongs to user
     const child = await Child.findOne({
       where: { id: childId, userId: req.user.id },
     });
@@ -308,7 +298,6 @@ export const getTodaySleep = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Get today's date (start and end)
     const today = new Date();
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
@@ -337,12 +326,10 @@ export const getTodaySleep = async (req, res) => {
   }
 };
 
-// Add this new function to get sleep data based on time (before/after noon)
 export const getCurrentSleepData = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Validate child belongs to user
     const child = await Child.findOne({
       where: { id: childId, userId: req.user.id },
     });
@@ -353,30 +340,23 @@ export const getCurrentSleepData = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Get current time
     const now = new Date();
     const currentHour = now.getHours();
 
-    // If before noon (12 PM), get yesterday's data
-    // If after noon, get today's data
     let targetDate;
     if (currentHour < 12) {
-      // Before noon - get yesterday's data
       targetDate = new Date(now);
       targetDate.setDate(targetDate.getDate() - 1);
     } else {
-      // After noon - get today's data
       targetDate = now;
     }
 
-    // Format the date to YYYY-MM-DD
     const formattedDate = targetDate.toISOString().split("T")[0];
 
     console.log(
       `Getting sleep data for child ${childId} for date ${formattedDate} (current hour: ${currentHour})`
     );
 
-    // Find the sleep record for the target date
     const sleepRecord = await Sleep.findOne({
       where: {
         childId,
@@ -405,17 +385,14 @@ export const getCurrentSleepData = async (req, res) => {
   }
 };
 
-// Add this new function to auto-fill missing sleep records
 export const autoFillSleepRecords = async (req, res) => {
   try {
     console.log("Starting auto-fill process for missing sleep records");
 
-    // Get yesterday's date
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayFormatted = yesterday.toISOString().split("T")[0];
 
-    // Get all children
     const children = await Child.findAll();
     console.log(
       `Found ${children.length} children to check for missing sleep records`
@@ -423,7 +400,6 @@ export const autoFillSleepRecords = async (req, res) => {
 
     let autoFilledCount = 0;
 
-    // For each child, check if they have a sleep record for yesterday
     for (const child of children) {
       const existingRecord = await Sleep.findOne({
         where: {
@@ -432,14 +408,12 @@ export const autoFillSleepRecords = async (req, res) => {
         },
       });
 
-      // If no record exists, create one with recommended values based on age
       if (!existingRecord) {
         console.log(
           `No sleep record found for child ${child.id} on ${yesterdayFormatted}, creating auto-filled record`
         );
 
-        // Get child's age in months for recommendations
-        let ageInMonths = 24; // Default to toddler if no age
+        let ageInMonths = 24;
         if (child.age) {
           const ageText = child.age;
           const ageNum = Number.parseInt(ageText.split(" ")[0]) || 0;
@@ -447,33 +421,26 @@ export const autoFillSleepRecords = async (req, res) => {
           ageInMonths = ageUnit === "months" ? ageNum : ageNum * 12;
         }
 
-        // Get recommended sleep hours based on age
         let recommendedNapHours = 2;
         let recommendedNightHours = 10;
 
         if (ageInMonths < 4) {
-          // Newborn (0-3 months)
           recommendedNapHours = 8;
           recommendedNightHours = 8;
         } else if (ageInMonths >= 4 && ageInMonths <= 12) {
-          // Infant (4-12 months)
           recommendedNapHours = 4;
           recommendedNightHours = 10;
         } else if (ageInMonths > 12 && ageInMonths <= 24) {
-          // Toddler (1-2 years)
           recommendedNapHours = 2;
           recommendedNightHours = 11;
         } else if (ageInMonths > 24 && ageInMonths <= 60) {
-          // Preschooler (3-5 years)
           recommendedNapHours = 1;
           recommendedNightHours = 11;
         } else {
-          // School-age (6-12 years)
           recommendedNapHours = 0;
           recommendedNightHours = 10;
         }
 
-        // Create auto-filled record
         await Sleep.create({
           childId: child.id,
           napHours: recommendedNapHours,
@@ -481,6 +448,7 @@ export const autoFillSleepRecords = async (req, res) => {
           date: yesterdayFormatted,
           notes: "Auto-filled with recommended values",
           autoFilled: true,
+          sleepProgress: 0, // Default to 0 for auto-filled records
         });
 
         autoFilledCount++;

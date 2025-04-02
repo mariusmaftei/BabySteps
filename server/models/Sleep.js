@@ -48,6 +48,13 @@ const Sleep = sequelize.define(
         throw new Error("Do not try to set the `totalHours` value!");
       },
     },
+    sleepProgress: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+      comment:
+        "Percentage difference from recommended sleep hours (can be negative or positive)",
+    },
     date: {
       type: DataTypes.DATEONLY,
       allowNull: false,
@@ -64,9 +71,8 @@ const Sleep = sequelize.define(
     },
   },
   {
-    timestamps: true, // This will add createdAt and updatedAt fields
+    timestamps: true,
     indexes: [
-      // Create a unique index on childId and date
       {
         unique: true,
         fields: ["childId", "date"],

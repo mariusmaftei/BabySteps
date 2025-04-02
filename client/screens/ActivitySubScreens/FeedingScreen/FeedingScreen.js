@@ -6,11 +6,15 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  Dimensions,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  FontAwesome6,
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
 import CustomButton from "../../../components/UI/Button/Button";
 import ChildRecommendationCard from "../../../components/UI/Cards/ChildRecommendationCard";
 
@@ -20,83 +24,99 @@ import { useChildActivity } from "../../../context/child-activity-context";
 import ChildInfoCard from "../../../components/UI/Cards/ChildInfoCard";
 import ColumnChart from "../../../components/UI/Charts/ColumnChart";
 import RecentActivityCard from "../../../components/UI/Cards/RecentActivityCard";
-
-const screenWidth = Dimensions.get("window").width;
+import * as feedingService from "../../../services/feeding-service";
+import SummaryCards from "../../../components/UI/Cards/SummaryCards";
 
 export default function FeedingScreen({ navigation }) {
   const { theme } = useTheme();
   const { currentChild } = useChildActivity();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [activeTab, setActiveTab] = useState("today");
-  const [activeInfoTab, setActiveInfoTab] = useState("recommended");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Get child's age as a number for recommendations
   const childAgeText = currentChild?.age || "0 months";
   const childAgeNum = Number.parseInt(childAgeText.split(" ")[0]) || 0;
   const childAgeUnit = childAgeText.includes("month") ? "months" : "years";
-
-  // Convert age to months if in years for more precise recommendations
   const childAgeInMonths =
     childAgeUnit === "months" ? childAgeNum : childAgeNum * 12;
 
-  // State for feeding inputs
   const [breastFeedings, setBreastFeedings] = useState([]);
   const [bottleFeedings, setBottleFeedings] = useState([]);
   const [solidFoodFeedings, setSolidFoodFeedings] = useState([]);
 
-  // Current feeding input state
   const [currentFeeding, setCurrentFeeding] = useState({
-    type: "breast", // 'breast', 'bottle', 'solid'
+    type: "breast",
     startTime: null,
     endTime: null,
-    duration: 0, // in minutes for breast feeding
-    amount: "", // in ml for bottle, grams for solid
+    duration: 0,
+    amount: "",
     note: "",
   });
 
-  // Mock data for the past week (in a real app, this would come from an API)
-  const [weeklyData, setWeeklyData] = useState({
-    breast: [
-      { day: "Mon", count: 8, totalMinutes: 120 },
-      { day: "Tue", count: 7, totalMinutes: 105 },
-      { day: "Wed", count: 9, totalMinutes: 135 },
-      { day: "Thu", count: 8, totalMinutes: 120 },
-      { day: "Fri", count: 7, totalMinutes: 105 },
-      { day: "Sat", count: 8, totalMinutes: 120 },
-      { day: "Sun", count: 6, totalMinutes: 90 },
-    ],
-    bottle: [
-      { day: "Mon", count: 2, totalMl: 180 },
-      { day: "Tue", count: 3, totalMl: 270 },
-      { day: "Wed", count: 2, totalMl: 180 },
-      { day: "Thu", count: 3, totalMl: 270 },
-      { day: "Fri", count: 2, totalMl: 180 },
-      { day: "Sat", count: 3, totalMl: 270 },
-      { day: "Sun", count: 2, totalMl: 180 },
-    ],
-    solid:
-      childAgeInMonths >= 6
-        ? [
-            { day: "Mon", count: 1, totalGrams: 30 },
-            { day: "Tue", count: 1, totalGrams: 35 },
-            { day: "Wed", count: 2, totalGrams: 45 },
-            { day: "Thu", count: 2, totalGrams: 50 },
-            { day: "Fri", count: 2, totalGrams: 55 },
-            { day: "Sat", count: 3, totalGrams: 60 },
-            { day: "Sun", count: 3, totalGrams: 65 },
-          ]
-        : [],
-  });
-
-  // Timer for breastfeeding
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
-  const [activeBreast, setActiveBreast] = useState(null); // 'left', 'right', or null
+  const [activeBreast, setActiveBreast] = useState(null);
 
-  // Start/stop timer for breastfeeding
-  const toggleTimer = (breast) => {
+  useEffect(() => {
+    if (currentChild?.id) {
+      loadFeedingData();
+    }
+  }, [currentChild]);
+
+  const loadFeedingData = async () => {
+    if (!currentChild?.id) return;
+
+    setIsLoading(true);
+
+    try {
+      const todayData = await feedingService.getTodayFeedingData(
+        currentChild.id
+      );
+
+      const breastData = todayData.filter((item) => item.type === "breast");
+      const bottleData = todayData.filter((item) => item.type === "bottle");
+      const solidData = todayData.filter((item) => item.type === "solid");
+
+      const formattedBreastData = breastData.map((item) => ({
+        id: item.id,
+        type: "breast",
+        startTime: item.startTime,
+        endTime: item.endTime,
+        duration: item.duration || 0,
+        side: item.side || "left",
+        note: item.notes || item.note || "",
+        timestamp: item.timestamp,
+      }));
+
+      const formattedBottleData = bottleData.map((item) => ({
+        id: item.id,
+        type: "bottle",
+        amount: item.amount || 0,
+        note: item.notes || item.note || "",
+        timestamp: item.timestamp,
+      }));
+
+      const formattedSolidData = solidData.map((item) => ({
+        id: item.id,
+        type: "solid",
+        amount: item.amount || 0,
+        note: item.notes || item.note || "",
+        timestamp: item.timestamp,
+      }));
+
+      setBreastFeedings(formattedBreastData);
+      setBottleFeedings(formattedBottleData);
+      setSolidFoodFeedings(formattedSolidData);
+
+      await feedingService.getWeeklyFeedingData(currentChild.id);
+    } catch (err) {
+      console.error("Error loading feeding data:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleTimer = async (breast) => {
     if (!isTimerRunning) {
-      // Start timer
       setIsTimerRunning(true);
       setActiveBreast(breast);
       setCurrentFeeding({
@@ -106,12 +126,20 @@ export default function FeedingScreen({ navigation }) {
         side: breast,
       });
     } else {
-      // Stop timer
       setIsTimerRunning(false);
       const endTime = new Date();
       const durationInMinutes = Math.round(timerSeconds / 60);
 
-      // Add to breastFeedings array
+      if (durationInMinutes <= 0) {
+        Alert.alert(
+          "Invalid Duration",
+          "Breastfeeding duration must be greater than 0 minutes."
+        );
+        setTimerSeconds(0);
+        setActiveBreast(null);
+        return;
+      }
+
       const newFeeding = {
         ...currentFeeding,
         endTime,
@@ -121,12 +149,27 @@ export default function FeedingScreen({ navigation }) {
       };
 
       setBreastFeedings([...breastFeedings, newFeeding]);
-
-      // Reset timer and active breast
       setTimerSeconds(0);
       setActiveBreast(null);
 
-      // Show confirmation
+      try {
+        const feedingData = {
+          childId: currentChild.id,
+          startTime: currentFeeding.startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          duration: durationInMinutes,
+          side: activeBreast,
+          notes: currentFeeding.note || "",
+          date: new Date().toISOString().split("T")[0],
+          timestamp: endTime.toISOString(),
+        };
+
+        await feedingService.saveBreastfeedingData(feedingData);
+        await loadFeedingData();
+      } catch (err) {
+        console.error("Error saving breastfeeding data:", err);
+      }
+
       Alert.alert(
         "Feeding Recorded",
         `${
@@ -137,20 +180,71 @@ export default function FeedingScreen({ navigation }) {
     }
   };
 
-  // Timer effect
   useEffect(() => {
     let interval = null;
     if (isTimerRunning) {
       interval = setInterval(() => {
-        setTimerSeconds((seconds) => seconds + 1);
+        setTimerSeconds((seconds) => {
+          const newSeconds = seconds + 1;
+
+          if (newSeconds >= 2700) {
+            clearInterval(interval);
+
+            const endTime = new Date();
+            const durationInMinutes = 45;
+
+            const newFeeding = {
+              ...currentFeeding,
+              endTime,
+              duration: durationInMinutes,
+              side: activeBreast,
+              timestamp: endTime.toISOString(),
+            };
+
+            setBreastFeedings((prevFeedings) => [...prevFeedings, newFeeding]);
+
+            const feedingData = {
+              childId: currentChild.id,
+              startTime: currentFeeding.startTime.toISOString(),
+              endTime: endTime.toISOString(),
+              duration: durationInMinutes,
+              side: activeBreast,
+              notes: currentFeeding.note || "Auto-stopped after 45 minutes",
+              date: new Date().toISOString().split("T")[0],
+              timestamp: endTime.toISOString(),
+            };
+
+            setTimeout(async () => {
+              try {
+                await feedingService.saveBreastfeedingData(feedingData);
+                await loadFeedingData();
+
+                Alert.alert(
+                  "Timer Auto-Stopped",
+                  `Breastfeeding timer automatically stopped after ${durationInMinutes} minutes.`,
+                  [{ text: "OK" }]
+                );
+              } catch (err) {
+                console.error("Error auto-saving breastfeeding data:", err);
+              }
+            }, 100);
+
+            setIsTimerRunning(false);
+            setTimerSeconds(0);
+            setActiveBreast(null);
+
+            return 0;
+          }
+
+          return newSeconds;
+        });
       }, 1000);
     } else if (interval) {
       clearInterval(interval);
     }
     return () => clearInterval(interval);
-  }, [isTimerRunning]);
+  }, [isTimerRunning, currentFeeding, activeBreast, currentChild]);
 
-  // Format timer display
   const formatTime = (totalSeconds) => {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
@@ -159,16 +253,16 @@ export default function FeedingScreen({ navigation }) {
       .padStart(2, "0")}`;
   };
 
-  // Add bottle feeding
-  const addBottleFeeding = () => {
+  const addBottleFeeding = async () => {
     if (
       !currentFeeding.amount ||
       isNaN(Number.parseInt(currentFeeding.amount)) ||
-      Number.parseInt(currentFeeding.amount) <= 0
+      Number.parseInt(currentFeeding.amount) <= 0 ||
+      currentFeeding.amount.length > 4
     ) {
       Alert.alert(
         "Invalid Amount",
-        "Please enter a valid amount in milliliters."
+        "Please enter a valid amount between 1 and 9999 milliliters."
       );
       return;
     }
@@ -182,14 +276,28 @@ export default function FeedingScreen({ navigation }) {
 
     setBottleFeedings([...bottleFeedings, newFeeding]);
 
-    // Reset input
     setCurrentFeeding({
       ...currentFeeding,
       amount: "",
       note: "",
     });
 
-    // Show confirmation
+    try {
+      const feedingData = {
+        childId: currentChild.id,
+        amount: Number.parseInt(currentFeeding.amount),
+        unit: "ml",
+        notes: currentFeeding.note || "",
+        date: new Date().toISOString().split("T")[0],
+        timestamp: new Date().toISOString(),
+      };
+
+      await feedingService.saveBottleFeedingData(feedingData);
+      await loadFeedingData();
+    } catch (err) {
+      console.error("Error saving bottle feeding data:", err);
+    }
+
     Alert.alert(
       "Feeding Recorded",
       `Bottle feeding recorded: ${newFeeding.amount} ml.`,
@@ -197,14 +305,17 @@ export default function FeedingScreen({ navigation }) {
     );
   };
 
-  // Add solid food feeding
-  const addSolidFeeding = () => {
+  const addSolidFeeding = async () => {
     if (
       !currentFeeding.amount ||
       isNaN(Number.parseInt(currentFeeding.amount)) ||
-      Number.parseInt(currentFeeding.amount) <= 0
+      Number.parseInt(currentFeeding.amount) <= 0 ||
+      currentFeeding.amount.length > 3
     ) {
-      Alert.alert("Invalid Amount", "Please enter a valid amount in grams.");
+      Alert.alert(
+        "Invalid Amount",
+        "Please enter a valid amount between 1 and 999 grams."
+      );
       return;
     }
 
@@ -217,14 +328,29 @@ export default function FeedingScreen({ navigation }) {
 
     setSolidFoodFeedings([...solidFoodFeedings, newFeeding]);
 
-    // Reset input
     setCurrentFeeding({
       ...currentFeeding,
       amount: "",
       note: "",
     });
 
-    // Show confirmation
+    try {
+      const feedingData = {
+        childId: currentChild.id,
+        foodType: currentFeeding.note || "Solid food",
+        amount: Number.parseInt(currentFeeding.amount),
+        unit: "g",
+        notes: currentFeeding.note || "",
+        date: new Date().toISOString().split("T")[0],
+        timestamp: new Date().toISOString(),
+      };
+
+      await feedingService.saveSolidFoodData(feedingData);
+      await loadFeedingData();
+    } catch (err) {
+      console.error("Error saving solid food data:", err);
+    }
+
     Alert.alert(
       "Feeding Recorded",
       `Solid food feeding recorded: ${newFeeding.amount} grams.`,
@@ -232,29 +358,26 @@ export default function FeedingScreen({ navigation }) {
     );
   };
 
-  // Calculate daily totals
   const dailyTotals = {
     breastCount: breastFeedings.length,
     breastMinutes: breastFeedings.reduce(
-      (total, feeding) => total + (feeding.duration || 0),
+      (total, feeding) => total + (Number.parseInt(feeding.duration) || 0),
       0
     ),
     bottleCount: bottleFeedings.length,
     bottleMl: bottleFeedings.reduce(
-      (total, feeding) => total + (feeding.amount || 0),
+      (total, feeding) => total + (Number.parseInt(feeding.amount) || 0),
       0
     ),
     solidCount: solidFoodFeedings.length,
     solidGrams: solidFoodFeedings.reduce(
-      (total, feeding) => total + (feeding.amount || 0),
+      (total, feeding) => total + (Number.parseInt(feeding.amount) || 0),
       0
     ),
   };
 
-  // Get feeding recommendations based on age
   const getFeedingRecommendations = (ageInMonths) => {
     if (ageInMonths < 6) {
-      // 0-6 months
       return {
         ageGroup: "Infant (0-6 months)",
         feedingType: "Breast milk or formula only",
@@ -268,12 +391,11 @@ export default function FeedingScreen({ navigation }) {
           "Exclusively breastfeed or formula feed",
           "Burp baby during and after feedings",
         ],
-        recommendedBreastMinutes: 240, // 4 hours total (both breasts)
-        recommendedBottleMl: 750, // ml per day
-        recommendedSolidGrams: 0, // not recommended
+        recommendedBreastMinutes: 240,
+        recommendedBottleMl: 750,
+        recommendedSolidGrams: 0,
       };
     } else if (ageInMonths >= 6 && ageInMonths < 12) {
-      // 6-12 months
       return {
         ageGroup: "Infant (6-12 months)",
         feedingType: "Breast milk/formula + complementary foods",
@@ -292,12 +414,11 @@ export default function FeedingScreen({ navigation }) {
           "Continue breast milk or formula as the primary nutrition source",
           "Progress from purees to mashed and soft finger foods",
         ],
-        recommendedBreastMinutes: 180, // 3 hours total (both breasts)
-        recommendedBottleMl: 800, // ml per day
-        recommendedSolidGrams: 150, // grams per day (increasing with age)
+        recommendedBreastMinutes: 180,
+        recommendedBottleMl: 800,
+        recommendedSolidGrams: 150,
       };
     } else {
-      // 12+ months
       return {
         ageGroup: "Toddler (12+ months)",
         feedingType: "Family foods + milk",
@@ -311,94 +432,29 @@ export default function FeedingScreen({ navigation }) {
           "Offer a variety of foods from all food groups",
           "Expect food jags and pickiness; continue to offer rejected foods",
         ],
-        recommendedBreastMinutes: 120, // 2 hours total (both breasts)
-        recommendedBottleMl: 450, // ml per day
-        recommendedSolidGrams: 300, // grams per day
+        recommendedBreastMinutes: 120,
+        recommendedBottleMl: 450,
+        recommendedSolidGrams: 300,
       };
     }
   };
 
-  // Get unrecommended foods based on age
-  const getUnrecommendedFoods = (ageInMonths) => {
-    const commonUnrecommendedFoods = [
-      {
-        name: "Honey",
-        reason: "Risk of infant botulism",
-        alternative: "Mashed banana or applesauce for sweetness",
-        safeAge: 12,
-      },
-      {
-        name: "Cow's milk (as main drink)",
-        reason: "Hard to digest and lacks proper nutrients for infants",
-        alternative: "Breast milk or formula",
-        safeAge: 12,
-      },
-      {
-        name: "Added salt or sugar",
-        reason:
-          "Harmful for developing kidneys and promotes poor eating habits",
-        alternative: "Natural flavors from fruits and vegetables",
-        safeAge: 24,
-      },
-      {
-        name: "Fruit juice",
-        reason: "High in sugar and low in fiber",
-        alternative: "Water and whole fruits (pureed if needed)",
-        safeAge: 12,
-      },
-      {
-        name: "Choking hazards (nuts, grapes, popcorn, etc.)",
-        reason: "Risk of choking",
-        alternative: "Finely ground nuts, quartered grapes (for 12+ months)",
-        safeAge: 48,
-      },
-      {
-        name: "Unpasteurized foods",
-        reason: "Risk of harmful bacteria",
-        alternative: "Pasteurized versions",
-        safeAge: 60,
-      },
-      {
-        name: "Highly allergenic foods without medical guidance",
-        reason: "Risk of severe allergic reactions",
-        alternative: "Introduce one at a time with pediatrician guidance",
-        safeAge: "Varies",
-      },
-      {
-        name: "Processed foods with additives",
-        reason: "Contain unhealthy levels of salt, sugar, and preservatives",
-        alternative: "Homemade foods with simple ingredients",
-        safeAge: "Limit at all ages",
-      },
-    ];
-
-    // Filter based on age
-    return commonUnrecommendedFoods.filter(
-      (food) => typeof food.safeAge === "number" && food.safeAge > ageInMonths
-    );
-  };
-
   const recommendations = getFeedingRecommendations(childAgeInMonths);
-  const unrecommendedFoods = getUnrecommendedFoods(childAgeInMonths);
 
-  // Define colors for different feeding types
-  const breastColor = "#FF9500"; // Orange/yellow color
-  const bottleColor = "#5A87FF"; // Blue color
-  const solidColor = "#4CD964"; // Green color
+  const breastColor = "#FF9500";
+  const bottleColor = "#5A87FF";
+  const solidColor = "#4CD964";
 
-  // Get the maximum value for scaling the chart
   const getMaxChartValue = () => {
     const breastValue = dailyTotals.breastMinutes;
-    const bottleValue = dailyTotals.bottleMl / 10; // Scale down ml for better visualization
-    const solidValue = childAgeInMonths >= 6 ? dailyTotals.solidGrams / 5 : 0; // Scale down grams for better visualization
+    const bottleValue = dailyTotals.bottleMl / 10;
+    const solidValue = childAgeInMonths >= 6 ? dailyTotals.solidGrams / 5 : 0;
 
-    // Get recommended values (scaled the same way)
     const recBreastValue = recommendations.recommendedBreastMinutes;
     const recBottleValue = recommendations.recommendedBottleMl / 10;
     const recSolidValue =
       childAgeInMonths >= 6 ? recommendations.recommendedSolidGrams / 5 : 0;
 
-    // Find the maximum value among actual and recommended values
     return Math.max(
       breastValue,
       bottleValue,
@@ -406,75 +462,89 @@ export default function FeedingScreen({ navigation }) {
       recBreastValue,
       recBottleValue,
       recSolidValue,
-      10 // Minimum value to avoid division by zero
+      10
     );
   };
 
-  // Calculate bar height with proper scaling
   const calculateBarHeight = (value, maxValue) => {
-    const maxDisplayHeight = 150; // Maximum height in pixels
+    const maxDisplayHeight = 150;
     const scaleFactor = maxDisplayHeight / maxValue;
-
-    // Scale the value based on the maximum
     return value * scaleFactor;
   };
 
-  // Prepare chart data for the ColumnChart component
   const chartData = [
     {
       value: dailyTotals.breastMinutes,
       label: "Breastfeeding",
       color: breastColor,
       unit: "min",
-      icon: <Ionicons name="woman-outline" size={16} color={breastColor} />,
+      icon: (
+        <FontAwesome6
+          name="person-breastfeeding"
+          size={16}
+          color={breastColor}
+        />
+      ),
     },
     {
       value: dailyTotals.bottleMl,
       label: "Bottle Feeding",
       color: bottleColor,
       unit: "ml",
-      icon: <Ionicons name="flask-outline" size={16} color={bottleColor} />,
+      icon: (
+        <MaterialCommunityIcons
+          name="baby-bottle-outline"
+          size={16}
+          color={bottleColor}
+        />
+      ),
     },
   ];
 
-  // Add solid food data if age appropriate
   if (childAgeInMonths >= 6) {
     chartData.push({
       value: dailyTotals.solidGrams,
       label: "Solid Food",
       color: solidColor,
       unit: "g",
-      icon: <Ionicons name="nutrition-outline" size={16} color={solidColor} />,
+      icon: <Ionicons name="nutrition" size={16} color={solidColor} />,
     });
   }
 
-  // Prepare target values for the chart
   const targetValues = [
     recommendations.recommendedBreastMinutes,
     recommendations.recommendedBottleMl,
     childAgeInMonths >= 6 ? recommendations.recommendedSolidGrams : 0,
   ];
 
-  // Set up the notification button in the header
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => setNotificationsEnabled(!notificationsEnabled)}
-        >
-          <Ionicons
-            name={notificationsEnabled ? "notifications" : "notifications-off"}
-            size={24}
-            color={theme.primary}
-          />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row" }}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={loadFeedingData}
+          >
+            <Ionicons name="refresh" size={24} color={theme.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => setNotificationsEnabled(!notificationsEnabled)}
+          >
+            <Ionicons
+              name={
+                notificationsEnabled ? "notifications" : "notifications-off"
+              }
+              size={24}
+              color={theme.primary}
+            />
+          </TouchableOpacity>
+        </View>
       ),
       title: `${currentChild?.name?.split(" ")[0] || "Baby"}'s Feeding`,
     });
   }, [navigation, notificationsEnabled, theme, currentChild]);
 
-  // Render feeding item for the RecentActivityCard
   const renderFeedingItem = (feeding, index) => {
     return (
       <View style={styles.feedingItem}>
@@ -492,23 +562,21 @@ export default function FeedingScreen({ navigation }) {
               },
             ]}
           >
-            <Ionicons
-              name={
-                feeding.type === "breast"
-                  ? "woman-outline"
-                  : feeding.type === "bottle"
-                  ? "flask-outline"
-                  : "nutrition-outline"
-              }
-              size={16}
-              color={
-                feeding.type === "breast"
-                  ? "#FF9500"
-                  : feeding.type === "bottle"
-                  ? "#5A87FF"
-                  : "#4CD964"
-              }
-            />
+            {feeding.type === "breast" ? (
+              <FontAwesome6
+                name="person-breastfeeding"
+                size={16}
+                color="#FF9500"
+              />
+            ) : feeding.type === "bottle" ? (
+              <MaterialCommunityIcons
+                name="baby-bottle-outline"
+                size={16}
+                color="#5A87FF"
+              />
+            ) : (
+              <Ionicons name="nutrition" size={16} color="#4CD964" />
+            )}
           </View>
 
           <View style={styles.feedingDetails}>
@@ -540,12 +608,31 @@ export default function FeedingScreen({ navigation }) {
     );
   };
 
+  const deleteFeeding = async (item) => {
+    try {
+      setIsLoading(true);
+      await feedingService.deleteFeedingData(item.id);
+      await loadFeedingData();
+      Alert.alert("Success", "Feeding record deleted successfully");
+    } catch (error) {
+      console.error("Error deleting feeding record:", error);
+      Alert.alert("Error", "Failed to delete feeding record");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Child Info Card */}
+        {isLoading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        )}
+
         <ChildInfoCard
           childData={currentChild}
           customTitle="Child Information"
@@ -558,7 +645,6 @@ export default function FeedingScreen({ navigation }) {
           }
         />
 
-        {/* Child Recommendation Card */}
         <ChildRecommendationCard
           childData={currentChild}
           screenType="feeding"
@@ -571,7 +657,6 @@ export default function FeedingScreen({ navigation }) {
           }
         />
 
-        {/* Feeding Chart using the new ColumnChart component */}
         <ColumnChart
           title="Daily Feeding Chart"
           data={chartData}
@@ -581,7 +666,6 @@ export default function FeedingScreen({ navigation }) {
           targetLegendText="Recommended Daily Target"
         />
 
-        {/* Record Feeding Section */}
         <View
           style={[
             styles.recordContainer,
@@ -592,7 +676,6 @@ export default function FeedingScreen({ navigation }) {
             Record Feeding
           </Text>
 
-          {/* Breastfeeding Timer */}
           <View
             style={[
               styles.timerContainer,
@@ -606,7 +689,11 @@ export default function FeedingScreen({ navigation }) {
                   { backgroundColor: "#FF950020" },
                 ]}
               >
-                <Ionicons name="time" size={24} color="#FF9500" />
+                <FontAwesome6
+                  name="person-breastfeeding"
+                  size={24}
+                  color="#FF9500"
+                />
               </View>
               <Text style={[styles.timerTitle, { color: theme.text }]}>
                 Breastfeeding Timer
@@ -709,7 +796,6 @@ export default function FeedingScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Bottle Feeding Input */}
           <View
             style={[
               styles.inputSection,
@@ -723,7 +809,11 @@ export default function FeedingScreen({ navigation }) {
                   { backgroundColor: "#5A87FF20" },
                 ]}
               >
-                <Ionicons name="flask-outline" size={24} color="#5A87FF" />
+                <MaterialCommunityIcons
+                  name="baby-bottle-outline"
+                  size={24}
+                  color="#5A87FF"
+                />
               </View>
               <Text style={[styles.inputTitle, { color: theme.text }]}>
                 Bottle Feeding
@@ -750,13 +840,16 @@ export default function FeedingScreen({ navigation }) {
                       ? currentFeeding.amount
                       : ""
                   }
-                  onChangeText={(value) =>
-                    setCurrentFeeding({
-                      ...currentFeeding,
-                      type: "bottle",
-                      amount: value.replace(/[^0-9]/g, ""),
-                    })
-                  }
+                  onChangeText={(value) => {
+                    const numericValue = value.replace(/[^0-9]/g, "");
+                    if (numericValue.length <= 4) {
+                      setCurrentFeeding({
+                        ...currentFeeding,
+                        type: "bottle",
+                        amount: numericValue,
+                      });
+                    }
+                  }}
                   keyboardType="numeric"
                   placeholder="0"
                   placeholderTextColor={theme.textTertiary}
@@ -808,7 +901,6 @@ export default function FeedingScreen({ navigation }) {
             />
           </View>
 
-          {/* Solid Food Input (only for 6+ months) */}
           {childAgeInMonths >= 6 && (
             <View
               style={[
@@ -823,11 +915,7 @@ export default function FeedingScreen({ navigation }) {
                     { backgroundColor: "#4CD96420" },
                   ]}
                 >
-                  <Ionicons
-                    name="nutrition-outline"
-                    size={24}
-                    color="#4CD964"
-                  />
+                  <Ionicons name="nutrition" size={24} color="#4CD964" />
                 </View>
                 <Text style={[styles.inputTitle, { color: theme.text }]}>
                   Solid Food
@@ -856,13 +944,16 @@ export default function FeedingScreen({ navigation }) {
                         ? currentFeeding.amount
                         : ""
                     }
-                    onChangeText={(value) =>
-                      setCurrentFeeding({
-                        ...currentFeeding,
-                        type: "solid",
-                        amount: value.replace(/[^0-9]/g, ""),
-                      })
-                    }
+                    onChangeText={(value) => {
+                      const numericValue = value.replace(/[^0-9]/g, "");
+                      if (numericValue.length <= 3) {
+                        setCurrentFeeding({
+                          ...currentFeeding,
+                          type: "solid",
+                          amount: numericValue,
+                        });
+                      }
+                    }}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={theme.textTertiary}
@@ -918,7 +1009,6 @@ export default function FeedingScreen({ navigation }) {
           )}
         </View>
 
-        {/* Recent Feedings */}
         <RecentActivityCard
           title="Recent Feedings"
           activities={[
@@ -936,97 +1026,18 @@ export default function FeedingScreen({ navigation }) {
           }
           onViewAll={() => console.log("View all feedings")}
           renderActivityItem={renderFeedingItem}
+          showDeleteButton={true}
+          onDeleteItem={deleteFeeding}
+          deleteConfirmTitle="Delete Feeding Record"
+          deleteConfirmMessage="Are you sure you want to delete this feeding record? This action cannot be undone."
         />
 
-        {/* Daily Summary */}
-        <View
-          style={[
-            styles.summaryContainer,
-            { backgroundColor: theme.cardBackground },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Today's Feeding Summary
-          </Text>
-
-          <View style={styles.summaryGrid}>
-            <View
-              style={[
-                styles.summaryCard,
-                { backgroundColor: `${theme.backgroundSecondary}` },
-              ]}
-            >
-              <View
-                style={[styles.iconCircle, { backgroundColor: "#FF950020" }]}
-              >
-                <Ionicons name="woman-outline" size={24} color="#FF9500" />
-              </View>
-              <Text style={[styles.summaryValue, { color: theme.text }]}>
-                {dailyTotals.breastCount}
-              </Text>
-              <Text
-                style={[styles.summaryLabel, { color: theme.textSecondary }]}
-              >
-                Breastfeedings
-              </Text>
-              <Text style={[styles.summarySubvalue, { color: theme.primary }]}>
-                {dailyTotals.breastMinutes} min
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.summaryCard,
-                { backgroundColor: `${theme.backgroundSecondary}` },
-              ]}
-            >
-              <View
-                style={[styles.iconCircle, { backgroundColor: "#5A87FF20" }]}
-              >
-                <Ionicons name="body-outline" size={24} color="#5A87FF" />
-              </View>
-              <Text style={[styles.summaryValue, { color: theme.text }]}>
-                {dailyTotals.bottleCount}
-              </Text>
-              <Text
-                style={[styles.summaryLabel, { color: theme.textSecondary }]}
-              >
-                Bottle Feeds
-              </Text>
-              <Text style={[styles.summarySubvalue, { color: theme.primary }]}>
-                {dailyTotals.bottleMl} ml
-              </Text>
-            </View>
-
-            {childAgeInMonths >= 6 && (
-              <View
-                style={[
-                  styles.summaryCard,
-                  { backgroundColor: `${theme.backgroundSecondary}` },
-                ]}
-              >
-                <View
-                  style={[styles.iconCircle, { backgroundColor: "#4CD96420" }]}
-                >
-                  <Ionicons name="nutrition" size={24} color="#4CD964" />
-                </View>
-                <Text style={[styles.summaryValue, { color: theme.text }]}>
-                  {dailyTotals.solidCount}
-                </Text>
-                <Text
-                  style={[styles.summaryLabel, { color: theme.textSecondary }]}
-                >
-                  Solid Feeds
-                </Text>
-                <Text
-                  style={[styles.summarySubvalue, { color: theme.primary }]}
-                >
-                  {dailyTotals.solidGrams} g
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
+        <SummaryCards
+          title="Today's Feeding Summary"
+          data={dailyTotals}
+          theme={theme}
+          showSolidFood={childAgeInMonths >= 6}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -1043,104 +1054,16 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 10,
   },
-  avoidFoodsContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  avoidFoodsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  avoidFoodsIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
     justifyContent: "center",
-    marginRight: 12,
-  },
-  avoidFoodsTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  avoidFoodsList: {
-    backgroundColor: "rgba(0, 0, 0, 0.03)",
-    borderRadius: 12,
-    padding: 12,
-  },
-  avoidFoodItem: {
-    marginBottom: 4,
-  },
-  avoidFoodHeader: {
-    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 4,
-  },
-  avoidFoodIcon: {
-    marginRight: 6,
-  },
-  avoidFoodName: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  avoidFoodReason: {
-    fontSize: 13,
-    marginLeft: 22,
-  },
-  summaryContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 16,
-  },
-  summaryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  summaryCard: {
-    width: "48%",
-    borderRadius: 12,
-    padding: 12,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginVertical: 4,
-  },
-  summaryLabel: {
-    fontSize: 14,
-  },
-  summarySubvalue: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginTop: 4,
+    zIndex: 1000,
   },
   recordContainer: {
     borderRadius: 16,
@@ -1154,6 +1077,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 16,
   },
   timerContainer: {
     borderRadius: 12,

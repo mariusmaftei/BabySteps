@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -37,18 +39,15 @@ const SleepScreen = () => {
   const [napHours, setNapHours] = useState("");
   const [nightHours, setNightHours] = useState("");
   const [notes, setNotes] = useState("");
-  const [sleepHistory, setSleepHistory] = useState([]);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [currentDate, setCurrentDate] = useState(
     new Date().toISOString().split("T")[0]
   );
   const [customTotalHours, setCustomTotalHours] = useState(0);
   const [showingYesterdayData, setShowingYesterdayData] = useState(false);
-  const [isDefaultData, setIsDefaultData] = useState(false);
-  // Add a new state variable for edit mode
   const [isEditMode, setIsEditMode] = useState(true);
+  const [sleepPercentage, setSleepPercentage] = useState(0);
 
-  // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return "";
     const date = new Date(dateString);
@@ -59,37 +58,22 @@ const SleepScreen = () => {
     });
   };
 
-  // Update the getChildAgeInMonths function to be more precise
   const getChildAgeInMonths = () => {
-    if (!currentChild || !currentChild.age) return 24; // Default to toddler if no age
+    if (!currentChild || !currentChild.age) return 24;
 
     const ageText = currentChild.age;
     const ageNum = Number.parseInt(ageText.split(" ")[0]) || 0;
     const ageUnit = ageText.includes("month") ? "months" : "years";
 
-    // Convert age to months if in years for more precise recommendations
     return ageUnit === "months" ? ageNum : ageNum * 12;
   };
 
-  // Add a function to get the WHO age group description
-  const getWHOAgeGroup = (ageInMonths) => {
-    if (ageInMonths < 4) {
-      return "0-3 months";
-    } else if (ageInMonths >= 4 && ageInMonths <= 12) {
-      return "4-12 months";
-    } else if (ageInMonths > 12 && ageInMonths <= 24) {
-      return "1-2 years";
-    } else if (ageInMonths > 24 && ageInMonths <= 60) {
-      return "3-5 years";
-    } else {
-      return "6-12 years";
-    }
-  };
-
-  // Update the getSleepRecommendations function to match WHO guidelines
   const getSleepRecommendations = (ageInMonths) => {
-    if (ageInMonths < 4) {
-      // Newborn (0-3 months) - WHO recommendation: 14-17 hours
+    // Cap age at 12 months since the app is only for infants
+    const cappedAge = Math.min(ageInMonths, 12);
+
+    if (cappedAge < 4) {
+      // Newborn (0-3 months)
       return {
         ageGroup: "Newborn (0-3 months)",
         totalSleep: "14-17 hours/day",
@@ -102,8 +86,8 @@ const SleepScreen = () => {
         recommendedNapHours: 8,
         recommendedNightHours: 8,
       };
-    } else if (ageInMonths >= 4 && ageInMonths <= 12) {
-      // Infant (4-12 months) - WHO recommendation: 12-16 hours
+    } else {
+      // Infant (4-12 months)
       return {
         ageGroup: "Infant (4-12 months)",
         totalSleep: "12-16 hours/day",
@@ -116,105 +100,31 @@ const SleepScreen = () => {
         recommendedNapHours: 4,
         recommendedNightHours: 10,
       };
-    } else if (ageInMonths > 12 && ageInMonths <= 24) {
-      // Toddler (1-2 years) - WHO recommendation: 11-14 hours
-      return {
-        ageGroup: "Toddler (1-2 years)",
-        totalSleep: "11-14 hours/day",
-        naptime: "1 nap (12:00 - 2:00 PM)",
-        bedtime: "7:00 - 8:30 PM",
-        naptimeHours: "12:00 PM - 2:00 PM",
-        bedtimeHours: "7:00 PM - 8:30 PM",
-        minHours: 11,
-        maxHours: 14,
-        recommendedNapHours: 2,
-        recommendedNightHours: 11,
-      };
-    } else if (ageInMonths > 24 && ageInMonths <= 60) {
-      // Preschooler (3-5 years) - WHO recommendation: 10-13 hours
-      return {
-        ageGroup: "Preschooler (3-5 years)",
-        totalSleep: "10-13 hours/day",
-        naptime: "1 nap (12:30 - 2:00 PM) or none",
-        bedtime: "7:00 - 8:30 PM",
-        naptimeHours: "12:30 PM - 2:00 PM (if needed)",
-        bedtimeHours: "7:00 PM - 8:30 PM",
-        minHours: 10,
-        maxHours: 13,
-        recommendedNapHours: 1,
-        recommendedNightHours: 11,
-      };
-    } else {
-      // School-age (6-12 years) - WHO recommendation: 9-12 hours
-      return {
-        ageGroup: "School-age (6-12 years)",
-        totalSleep: "9-12 hours/day",
-        naptime: "No naps needed",
-        bedtime: "7:30 - 9:00 PM",
-        naptimeHours: "Not applicable",
-        bedtimeHours: "7:30 PM - 9:00 PM",
-        minHours: 9,
-        maxHours: 12,
-        recommendedNapHours: 0,
-        recommendedNightHours: 10,
-      };
     }
   };
 
-  // Add this function to handle updating the total hours when inputs change
   const updateTotalHours = (nap, night) => {
     const napValue = Number.parseFloat(nap) || 0;
     const nightValue = Number.parseFloat(night) || 0;
     setCustomTotalHours(napValue + nightValue);
   };
 
-  // Get recommendations based on child's age
   const childAgeInMonths = getChildAgeInMonths();
   const recommendations = getSleepRecommendations(childAgeInMonths);
 
-  // Check if sleep hours meet recommendations
   const isSleepSufficient = customTotalHours >= recommendations.minHours;
 
-  // Calculate the percentage difference from recommended sleep
   const calculateSleepPercentage = () => {
     const diff = customTotalHours - recommendations.minHours;
     const percentage = Math.round((diff / recommendations.minHours) * 100);
+    setSleepPercentage(percentage);
     return percentage;
   };
 
-  const sleepPercentage = calculateSleepPercentage();
   const sleepPercentageText =
     sleepPercentage >= 0 ? `+${sleepPercentage}%` : `${sleepPercentage}%`;
 
-  // Define sunny color for nap time
-  const sunnyColor = "#FF9500"; // Orange/yellow color for sun
-
-  // Helper function to convert hex to rgb
-  const hexToRgb = (hex) => {
-    // Remove # if present
-    hex = hex.replace("#", "");
-
-    // Parse the hex values
-    const r = Number.parseInt(hex.substring(0, 2), 16);
-    const g = Number.parseInt(hex.substring(2, 4), 16);
-    const b = Number.parseInt(hex.substring(4, 6), 16);
-
-    return `${r}, ${g}, ${b}`;
-  };
-
-  // Calculate bar height with proper scaling
-  const calculateBarHeight = (hours) => {
-    const value = Number.parseFloat(hours) || 0;
-    const maxDisplayHeight = 150; // Maximum height in pixels
-    const scaleFactor = 15; // Base scale factor
-
-    // If the value would exceed our max height, we need to scale differently
-    if (value * scaleFactor > maxDisplayHeight) {
-      return maxDisplayHeight;
-    }
-
-    return value * scaleFactor;
-  };
+  const sunnyColor = "#FF9500";
 
   useEffect(() => {
     if (!currentChildId) {
@@ -222,11 +132,13 @@ const SleepScreen = () => {
       return;
     }
 
-    // Load sleep data directly without explicit API initialization
     loadSleepData();
   }, [currentChildId]);
 
-  // Set up the notification button in the header
+  useEffect(() => {
+    calculateSleepPercentage();
+  }, [customTotalHours, recommendations.minHours]);
+
   React.useLayoutEffect(() => {
     if (currentChild && navigation) {
       navigation.setOptions({
@@ -249,24 +161,15 @@ const SleepScreen = () => {
     }
   }, [navigation, notificationsEnabled, theme, currentChild]);
 
-  // Update the loadSleepData function to better handle the case when there's no data
   const loadSleepData = async () => {
     setLoading(true);
     try {
-      // Load sleep history
       const history = await getChildSleepData(currentChildId);
-      setSleepHistory(
-        Array.isArray(history)
-          ? history.sort((a, b) => new Date(b.date) - new Date(a.date))
-          : []
-      );
 
-      // For a new child, don't even try to fetch current data, just create a default record
-      if (history.length === 0) {
+      if (!Array.isArray(history) || history.length === 0) {
         console.log("No sleep history found, creating default record");
         const today = new Date().toISOString().split("T")[0];
 
-        // Create a default record with zeros
         const defaultRecord = {
           id: null,
           childId: currentChildId,
@@ -277,7 +180,7 @@ const SleepScreen = () => {
           totalHours: "0",
           isBeforeNoon: false,
           targetDate: today,
-          isDefaultData: true,
+          sleepProgress: 0,
         };
 
         setNapHours("");
@@ -286,14 +189,12 @@ const SleepScreen = () => {
         setSelectedRecord(defaultRecord);
         setCurrentDate(today);
         updateTotalHours("0", "0");
-        setIsDefaultData(true);
         setIsEditMode(true);
 
         setLoading(false);
         return;
       }
 
-      // If we have history, try to load current data
       if (!selectedRecord) {
         try {
           console.log("Fetching current sleep data...");
@@ -315,27 +216,29 @@ const SleepScreen = () => {
               currentData.nightHours.toString()
             );
             setShowingYesterdayData(currentData.isBeforeNoon);
-            setIsDefaultData(currentData.isDefaultData || false);
             setIsEditMode(!currentData.id);
+
+            if (currentData.sleepProgress !== undefined) {
+              setSleepPercentage(currentData.sleepProgress);
+            } else {
+              calculateSleepPercentage();
+            }
           } else {
             resetForm();
           }
         } catch (error) {
           console.error("Error fetching current sleep data:", error);
-          // If there's an error, just create a default record
           resetForm();
         }
       }
     } catch (error) {
       console.error("Error loading sleep data:", error);
-      // Reset the form with zeros
       resetForm();
     } finally {
       setLoading(false);
     }
   };
 
-  // Update the resetForm function to set edit mode to true
   const resetForm = () => {
     const today = new Date().toISOString().split("T")[0];
 
@@ -350,15 +253,14 @@ const SleepScreen = () => {
       date: today,
       notes: "",
       totalHours: "0",
-      isDefaultData: true,
+      sleepProgress: 0,
     });
     setCurrentDate(today);
     updateTotalHours("0", "0");
-    setIsDefaultData(true);
     setIsEditMode(true);
+    setSleepPercentage(0);
   };
 
-  // Update the handleSelectSleepRecord function to set edit mode to false initially
   const handleSelectSleepRecord = (record) => {
     setSelectedRecord(record);
     setNapHours(record.napHours.toString());
@@ -366,15 +268,18 @@ const SleepScreen = () => {
     setNotes(record.notes || "");
     setCurrentDate(record.date);
     updateTotalHours(record.napHours.toString(), record.nightHours.toString());
-    setIsDefaultData(false);
     setIsEditMode(false);
+
+    if (record.sleepProgress !== undefined) {
+      setSleepPercentage(record.sleepProgress);
+    } else {
+      calculateSleepPercentage();
+    }
   };
 
   const handleNapHoursChange = (value) => {
-    // Validate input to only allow whole numbers
     const validatedValue = value.replace(/[^0-9]/g, "");
 
-    // Limit to max 2 digits
     if (validatedValue.length > 2) {
       return;
     } else {
@@ -384,10 +289,8 @@ const SleepScreen = () => {
   };
 
   const handleNightHoursChange = (value) => {
-    // Validate input to only allow whole numbers
     const validatedValue = value.replace(/[^0-9]/g, "");
 
-    // Limit to max 2 digits
     if (validatedValue.length > 2) {
       return;
     } else {
@@ -396,7 +299,6 @@ const SleepScreen = () => {
     }
   };
 
-  // Update the handleSaveSleepData function to prioritize database saving
   const handleSaveSleepData = async () => {
     if (!currentChildId) {
       Alert.alert("Error", "No child selected");
@@ -414,7 +316,6 @@ const SleepScreen = () => {
       return;
     }
 
-    // If we're in view mode, switch to edit mode and return
     if (!isEditMode) {
       setIsEditMode(true);
       return;
@@ -425,6 +326,8 @@ const SleepScreen = () => {
       console.log("Current child ID:", currentChildId);
       console.log("Selected record:", selectedRecord);
 
+      const currentPercentage = calculateSleepPercentage();
+
       const sleepData = {
         id: selectedRecord?.id,
         childId: currentChildId,
@@ -432,6 +335,7 @@ const SleepScreen = () => {
         nightHours: Number.parseFloat(nightHours) || 0,
         date: currentDate,
         notes: notes,
+        sleepProgress: currentPercentage,
       };
 
       console.log("Sleep data prepared for saving to database:", sleepData);
@@ -453,21 +357,14 @@ const SleepScreen = () => {
       if (result) {
         Alert.alert("Success", "Sleep data saved successfully to database");
 
-        // Reload data to show updated history
         await loadSleepData();
 
-        // If we were editing a past record, reset to today
         if (selectedRecord && !isToday(selectedRecord.date)) {
           resetForm();
         } else {
-          // Switch to view mode after saving
           setIsEditMode(false);
         }
-
-        // Clear the default data flag after saving
-        setIsDefaultData(false);
       } else {
-        // This should not happen if the database save was successful
         Alert.alert("Error", "Failed to save sleep data to database");
       }
     } catch (error) {
@@ -481,16 +378,6 @@ const SleepScreen = () => {
     }
   };
 
-  const handleNewRecord = () => {
-    resetForm();
-  };
-
-  // Add a function to handle edit mode toggle:
-  const toggleEditMode = () => {
-    setIsEditMode(!isEditMode);
-  };
-
-  // Display a message if no child is selected
   if (!currentChildId) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -508,7 +395,6 @@ const SleepScreen = () => {
     );
   }
 
-  // Prepare data for the ColumnChart
   const chartData = [
     {
       value: Number.parseFloat(napHours) || 0,
@@ -526,7 +412,6 @@ const SleepScreen = () => {
     },
   ];
 
-  // Target values for the chart
   const targetValues = [
     recommendations.recommendedNapHours,
     recommendations.recommendedNightHours,
@@ -545,10 +430,8 @@ const SleepScreen = () => {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Child Info Card */}
           <ChildInfoCard
             childData={currentChild}
-            screenType="sleep"
             customIcon={
               <Ionicons
                 name="information-circle"
@@ -559,14 +442,12 @@ const SleepScreen = () => {
             customTitle="Child Information"
           />
 
-          {/* Child Recommendation Card */}
           <ChildRecommendationCard
             childData={currentChild}
             screenType="sleep"
             customTitle="Sleep Guidelines"
           />
 
-          {/* Sleep Chart using ColumnChart component */}
           <ColumnChart
             data={chartData}
             targetValues={targetValues}
@@ -575,7 +456,6 @@ const SleepScreen = () => {
             targetLegendText="Recommended Sleep Hours"
           />
 
-          {/* Reset Time Info Banner */}
           <View
             style={[
               styles.infoBanner,
@@ -613,7 +493,6 @@ const SleepScreen = () => {
             </View>
           )}
 
-          {/* Sleep Hours Input */}
           <View
             style={[
               styles.inputContainer,
@@ -813,7 +692,6 @@ const SleepScreen = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Total Sleep Summary */}
           <View
             style={[
               styles.totalSummaryContainer,
@@ -848,7 +726,6 @@ const SleepScreen = () => {
               Recommended: {recommendations.totalSleep}
             </Text>
 
-            {/* Total sleep percentage chart with positive/negative values */}
             <View style={styles.totalPercentageContainer}>
               <View style={styles.percentageRow}>
                 <Text
@@ -860,7 +737,6 @@ const SleepScreen = () => {
                   Compared to minimum goal ({recommendations.minHours} hrs):
                 </Text>
 
-                {/* Display percentage with + or - sign */}
                 <Text
                   style={[
                     styles.percentageText,
@@ -876,12 +752,9 @@ const SleepScreen = () => {
                 </Text>
               </View>
 
-              {/* Progress bar for positive/negative values */}
               <View style={styles.totalProgressBarContainer}>
-                {/* Center line (0%) */}
                 <View style={styles.centerLine} />
 
-                {/* Negative bar (if applicable) */}
                 {sleepPercentage < 0 && (
                   <View
                     style={[
@@ -897,7 +770,6 @@ const SleepScreen = () => {
                   />
                 )}
 
-                {/* Positive bar (if applicable) */}
                 {sleepPercentage > 0 && (
                   <View
                     style={[
@@ -911,7 +783,6 @@ const SleepScreen = () => {
                 )}
               </View>
 
-              {/* Scale labels */}
               <View style={styles.scaleLabels}>
                 <Text
                   style={[styles.scaleLabel, { color: theme.textSecondary }]}
@@ -963,7 +834,6 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 10,
   },
-  // New Age Group styles
   ageGroupContainer: {
     marginBottom: 16,
   },
@@ -1004,7 +874,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
-  // New info banners
   infoBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1019,7 +888,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 12,
   },
-  // Summary view styles
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1052,7 +920,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  // Removed old ageBanner styles
   chartContainer: {
     borderRadius: 16,
     padding: 16,
@@ -1107,13 +974,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  totalSummaryLabel: {
-    fontSize: 16,
-    fontWeight: "500",
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,

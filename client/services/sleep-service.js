@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api, { ensureToken } from "./api";
 
-// Sleep data structure for frontend
 const createSleepRecord = (data) => {
   return {
     id: data.id || null,
@@ -15,10 +14,10 @@ const createSleepRecord = (data) => {
       Number.parseFloat(data.nightHours || 0)
     ).toFixed(1),
     autoFilled: data.autoFilled || false,
+    sleepProgress: data.sleepProgress || 0,
   };
 };
 
-// Format date for display
 export const formatDate = (dateString) => {
   const date = new Date(dateString);
   return date.toLocaleDateString("en-US", {
@@ -28,7 +27,6 @@ export const formatDate = (dateString) => {
   });
 };
 
-// Check if a date is today
 export const isToday = (dateString) => {
   const date = new Date(dateString);
   const today = new Date();
@@ -39,10 +37,8 @@ export const isToday = (dateString) => {
   );
 };
 
-// Get all sleep data for a child
 export const getChildSleepData = async (childId) => {
   try {
-    // Ensure API has auth token before making request
     await ensureToken();
 
     console.log(`Fetching sleep data for child ID: ${childId}`);
@@ -51,22 +47,18 @@ export const getChildSleepData = async (childId) => {
     return response.data.map((item) => createSleepRecord(item));
   } catch (error) {
     console.error("Error fetching sleep data:", error);
-    // Log more details about the error
     if (error.response) {
       console.error("Error response data:", error.response.data);
       console.error("Error response status:", error.response.status);
     } else if (error.request) {
       console.error("Error request:", error.request);
     }
-    // Return empty array instead of falling back to local storage
     return [];
   }
 };
 
-// Get today's sleep data for a child
 export const getTodaySleepData = async (childId) => {
   try {
-    // Ensure API has auth token before making request
     await ensureToken();
 
     console.log(`Fetching today's sleep data for child ID: ${childId}`);
@@ -74,28 +66,23 @@ export const getTodaySleepData = async (childId) => {
     console.log("Today's sleep data response:", response.data);
     return response.data ? createSleepRecord(response.data) : null;
   } catch (error) {
-    // If 404, it means no record for today
     if (error.response && error.response.status === 404) {
       console.log("No sleep record found for today");
       return null;
     }
     console.error("Error fetching today's sleep data:", error);
-    // Log more details about the error
     if (error.response) {
       console.error("Error response data:", error.response.data);
       console.error("Error response status:", error.response.status);
     } else if (error.request) {
       console.error("Error request:", error.request);
     }
-    // Return null instead of falling back to local storage
     return null;
   }
 };
 
-// Get sleep data for a specific date range
 export const getSleepDataByDateRange = async (childId, startDate, endDate) => {
   try {
-    // Ensure API has auth token before making request
     await ensureToken();
 
     const formattedStartDate = startDate.toISOString().split("T")[0];
@@ -111,19 +98,16 @@ export const getSleepDataByDateRange = async (childId, startDate, endDate) => {
     return response.data.map((item) => createSleepRecord(item));
   } catch (error) {
     console.error("Error fetching sleep data by date range:", error);
-    // Log more details about the error
     if (error.response) {
       console.error("Error response data:", error.response.data);
       console.error("Error response status:", error.response.status);
     } else if (error.request) {
       console.error("Error request:", error.request);
     }
-    // Return empty array instead of falling back to local storage
     return [];
   }
 };
 
-// Get sleep data for the last 7 days
 export const getWeeklySleepData = async (childId) => {
   const endDate = new Date();
   const startDate = new Date();
@@ -132,41 +116,33 @@ export const getWeeklySleepData = async (childId) => {
   return await getSleepDataByDateRange(childId, startDate, endDate);
 };
 
-// Helper function to calculate child's age in months
 const getChildAgeInMonths = (child) => {
-  if (!child || !child.age) return 24; // Default to toddler if no age
+  if (!child || !child.age) return 24;
 
   const ageText = child.age;
   const ageNum = Number.parseInt(ageText.split(" ")[0]) || 0;
   const ageUnit = ageText.includes("month") ? "months" : "years";
 
-  // Convert age to months if in years for more precise recommendations
   return ageUnit === "months" ? ageNum : ageNum * 12;
 };
 
-// Helper function to get recommended sleep hours based on age
 const getRecommendedSleepHours = (ageInMonths) => {
   let recommendedNapHours = 2;
   let recommendedNightHours = 10;
 
   if (ageInMonths < 4) {
-    // Newborn (0-3 months)
     recommendedNapHours = 8;
     recommendedNightHours = 8;
   } else if (ageInMonths >= 4 && ageInMonths <= 12) {
-    // Infant (4-12 months)
     recommendedNapHours = 4;
     recommendedNightHours = 10;
   } else if (ageInMonths > 12 && ageInMonths <= 24) {
-    // Toddler (1-2 years)
     recommendedNapHours = 2;
     recommendedNightHours = 11;
   } else if (ageInMonths > 24 && ageInMonths <= 60) {
-    // Preschooler (3-5 years)
     recommendedNapHours = 1;
     recommendedNightHours = 11;
   } else {
-    // School-age (6-12 years)
     recommendedNapHours = 0;
     recommendedNightHours = 10;
   }
@@ -174,17 +150,14 @@ const getRecommendedSleepHours = (ageInMonths) => {
   return { recommendedNapHours, recommendedNightHours };
 };
 
-// Add this new function to get current sleep data based on time of day
 export const getCurrentSleepData = async (childId) => {
   try {
-    // Ensure API has auth token before making request
     await ensureToken();
 
     console.log(`Fetching current sleep data for child ID: ${childId}`);
     const response = await api.get(`/sleep/child/${childId}/current`);
     console.log("Current sleep data response:", response.data);
 
-    // Return the data with additional info about whether it's yesterday's data
     return {
       ...createSleepRecord(response.data),
       isBeforeNoon: response.data.isBeforeNoon,
@@ -193,12 +166,10 @@ export const getCurrentSleepData = async (childId) => {
   } catch (error) {
     console.log("Error in getCurrentSleepData:", error.message);
 
-    // Create a default record with zeros
     const today = new Date().toISOString().split("T")[0];
     let targetDate = today;
     let isBeforeNoon = false;
 
-    // Try to extract data from error response if available
     if (error.response && error.response.status === 404) {
       console.log("404 error - No sleep record found");
       console.log("Error response data:", error.response.data);
@@ -213,7 +184,6 @@ export const getCurrentSleepData = async (childId) => {
       `Creating default sleep record for date: ${targetDate}, isBeforeNoon: ${isBeforeNoon}`
     );
 
-    // Return a default record with zeros
     return {
       id: null,
       childId,
@@ -224,34 +194,31 @@ export const getCurrentSleepData = async (childId) => {
       totalHours: "0",
       isBeforeNoon: isBeforeNoon,
       targetDate: targetDate,
-      isDefaultData: true, // Mark this as default data
+      isDefaultData: true,
+      sleepProgress: 0,
     };
   }
 };
 
-// Save sleep data
 export const saveSleepData = async (sleepData) => {
   try {
-    // Ensure API has auth token before making request
     await ensureToken();
 
-    // If we have an ID, update existing record
     if (sleepData.id) {
       return await updateSleepData(sleepData);
     }
 
-    // Ensure data is properly formatted
     const formattedData = {
       childId: sleepData.childId,
       napHours: Number.parseFloat(sleepData.napHours) || 0,
       nightHours: Number.parseFloat(sleepData.nightHours) || 0,
       date: sleepData.date || new Date().toISOString().split("T")[0],
       notes: sleepData.notes || "",
+      sleepProgress: sleepData.sleepProgress || 0,
     };
 
     console.log("Saving sleep data to database:", formattedData);
 
-    // Otherwise create a new record
     const response = await api.post("/sleep", formattedData);
     console.log("Save sleep data response:", response.data);
     console.log("Database save successful with ID:", response.data.id);
@@ -259,7 +226,6 @@ export const saveSleepData = async (sleepData) => {
     return createSleepRecord(response.data);
   } catch (error) {
     console.error("Error saving sleep data to database:", error);
-    // Log more details about the error
     if (error.response) {
       console.error("Error response data:", error.response.data);
       console.error("Error response status:", error.response.status);
@@ -268,24 +234,21 @@ export const saveSleepData = async (sleepData) => {
     } else {
       console.error("Error message:", error.message);
     }
-    // Throw the error instead of falling back to local storage
     throw error;
   }
 };
 
-// Update existing sleep data
 export const updateSleepData = async (sleepData) => {
   try {
-    // Ensure API has auth token before making request
     await ensureToken();
 
-    // Ensure data is properly formatted
     const formattedData = {
       childId: sleepData.childId,
       napHours: Number.parseFloat(sleepData.napHours) || 0,
       nightHours: Number.parseFloat(sleepData.nightHours) || 0,
       date: sleepData.date || new Date().toISOString().split("T")[0],
       notes: sleepData.notes || "",
+      sleepProgress: sleepData.sleepProgress || 0,
     };
 
     console.log(
@@ -299,7 +262,6 @@ export const updateSleepData = async (sleepData) => {
     return createSleepRecord(response.data);
   } catch (error) {
     console.error("Error updating sleep data in database:", error);
-    // Log more details about the error
     if (error.response) {
       console.error("Error response data:", error.response.data);
       console.error("Error response status:", error.response.status);
@@ -308,15 +270,12 @@ export const updateSleepData = async (sleepData) => {
     } else {
       console.error("Error message:", error.message);
     }
-    // Throw the error instead of falling back to local storage
     throw error;
   }
 };
 
-// Delete sleep data
 export const deleteSleepData = async (sleepId) => {
   try {
-    // Ensure API has auth token before making request
     await ensureToken();
 
     console.log(`Deleting sleep data with ID: ${sleepId} from database`);
@@ -325,7 +284,6 @@ export const deleteSleepData = async (sleepId) => {
     return true;
   } catch (error) {
     console.error("Error deleting sleep data from database:", error);
-    // Log more details about the error
     if (error.response) {
       console.error("Error response data:", error.response.data);
       console.error("Error response status:", error.response.status);
@@ -336,10 +294,8 @@ export const deleteSleepData = async (sleepId) => {
   }
 };
 
-// Add this function to the sleep-service.js file
 export const fetchSleepRecords = async (childId) => {
   try {
-    // Ensure API has auth token before making request
     await ensureToken();
 
     console.log(`Fetching sleep records for child ID: ${childId}`);
@@ -348,22 +304,19 @@ export const fetchSleepRecords = async (childId) => {
     return response.data.map((item) => createSleepRecord(item));
   } catch (error) {
     console.error("Error fetching sleep records:", error);
-    // Log more details about the error
     if (error.response) {
       console.error("Error response data:", error.response.data);
       console.error("Error response status:", error.response.status);
     } else if (error.request) {
       console.error("Error request:", error.request);
     }
-    // Return empty array
     return [];
   }
 };
 
-// Local storage functions - keeping these for reference but they won't be used
+// Local storage functions kept for reference but not used
 const SLEEP_STORAGE_KEY = "kindergrow_sleep_data";
 
-// Get all sleep data from local storage
 const getLocalSleepData = async (childId) => {
   try {
     console.log(`Getting local sleep data for child ID: ${childId}`);
@@ -384,7 +337,6 @@ const getLocalSleepData = async (childId) => {
   }
 };
 
-// Get today's sleep data from local storage
 const getLocalTodaySleepData = async (childId) => {
   try {
     console.log(`Getting local today's sleep data for child ID: ${childId}`);
@@ -401,7 +353,6 @@ const getLocalTodaySleepData = async (childId) => {
   }
 };
 
-// Get sleep data by date range from local storage
 const getLocalSleepDataByDateRange = async (childId, startDate, endDate) => {
   try {
     console.log(
@@ -426,7 +377,6 @@ const getLocalSleepDataByDateRange = async (childId, startDate, endDate) => {
   }
 };
 
-// Save sleep data to local storage
 const saveLocalSleepData = async (sleepData) => {
   try {
     console.log("Saving sleep data to local storage:", sleepData);
