@@ -20,8 +20,8 @@ import {
   getChildSleepData,
   saveSleepData,
   updateSleepData,
-  isToday,
   getCurrentSleepData,
+  getTodaySleepData,
 } from "../../../services/sleep-service";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ChildInfoCard from "../../../components/UI/Cards/ChildInfoCard";
@@ -47,6 +47,9 @@ const SleepScreen = () => {
   const [showingYesterdayData, setShowingYesterdayData] = useState(false);
   const [isEditMode, setIsEditMode] = useState(true);
   const [sleepPercentage, setSleepPercentage] = useState(0);
+  const [isFirstRecord, setIsFirstRecord] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  const [savedRecord, setSavedRecord] = useState(null);
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -139,6 +142,32 @@ const SleepScreen = () => {
     calculateSleepPercentage();
   }, [customTotalHours, recommendations.minHours]);
 
+  // Use the saved record if we just saved one
+  useEffect(() => {
+    if (justSaved && savedRecord) {
+      console.log("Using saved record instead of fetching:", savedRecord);
+      setSelectedRecord(savedRecord);
+      setNapHours(savedRecord.napHours.toString());
+      setNightHours(savedRecord.nightHours.toString());
+      setNotes(savedRecord.notes || "");
+      setCurrentDate(savedRecord.date);
+      updateTotalHours(
+        savedRecord.napHours.toString(),
+        savedRecord.nightHours.toString()
+      );
+      setIsEditMode(false);
+
+      if (savedRecord.sleepProgress !== undefined) {
+        setSleepPercentage(savedRecord.sleepProgress);
+      } else {
+        calculateSleepPercentage();
+      }
+
+      setJustSaved(false);
+      setSavedRecord(null);
+    }
+  }, [justSaved, savedRecord]);
+
   React.useLayoutEffect(() => {
     if (currentChild && navigation) {
       navigation.setOptions({
@@ -164,10 +193,37 @@ const SleepScreen = () => {
   const loadSleepData = async () => {
     setLoading(true);
     try {
+      // If we just saved a record, use that instead of fetching
+      if (justSaved && savedRecord) {
+        console.log("Using saved record instead of fetching:", savedRecord);
+        setSelectedRecord(savedRecord);
+        setNapHours(savedRecord.napHours.toString());
+        setNightHours(savedRecord.nightHours.toString());
+        setNotes(savedRecord.notes || "");
+        setCurrentDate(savedRecord.date);
+        updateTotalHours(
+          savedRecord.napHours.toString(),
+          savedRecord.nightHours.toString()
+        );
+        setIsEditMode(false);
+
+        if (savedRecord.sleepProgress !== undefined) {
+          setSleepPercentage(savedRecord.sleepProgress);
+        } else {
+          calculateSleepPercentage();
+        }
+
+        setJustSaved(false);
+        setSavedRecord(null);
+        setLoading(false);
+        return;
+      }
+
       const history = await getChildSleepData(currentChildId);
 
       if (!Array.isArray(history) || history.length === 0) {
         console.log("No sleep history found, creating default record");
+        setIsFirstRecord(true);
         const today = new Date().toISOString().split("T")[0];
 
         const defaultRecord = {
@@ -195,6 +251,39 @@ const SleepScreen = () => {
         return;
       }
 
+      setIsFirstRecord(false);
+
+      // Try to get today's data first
+      try {
+        const todayData = await getTodaySleepData(currentChildId);
+        if (todayData) {
+          console.log("Found today's sleep data:", todayData);
+          setNapHours(todayData.napHours.toString());
+          setNightHours(todayData.nightHours.toString());
+          setNotes(todayData.notes || "");
+          setSelectedRecord(todayData);
+          setCurrentDate(todayData.date);
+          updateTotalHours(
+            todayData.napHours.toString(),
+            todayData.nightHours.toString()
+          );
+          setShowingYesterdayData(false);
+          setIsEditMode(false);
+
+          if (todayData.sleepProgress !== undefined) {
+            setSleepPercentage(todayData.sleepProgress);
+          } else {
+            calculateSleepPercentage();
+          }
+
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        console.log("No today's sleep data found, trying current data");
+      }
+
+      // If no today's data, try to get current data
       if (!selectedRecord) {
         try {
           console.log("Fetching current sleep data...");
@@ -216,7 +305,7 @@ const SleepScreen = () => {
               currentData.nightHours.toString()
             );
             setShowingYesterdayData(currentData.isBeforeNoon);
-            setIsEditMode(!currentData.id);
+            setIsEditMode(!currentData.id || currentData.isDefaultData);
 
             if (currentData.sleepProgress !== undefined) {
               setSleepPercentage(currentData.sleepProgress);
@@ -228,7 +317,33 @@ const SleepScreen = () => {
           }
         } catch (error) {
           console.error("Error fetching current sleep data:", error);
-          resetForm();
+
+          // If all else fails, use the most recent record from history
+          if (history.length > 0) {
+            const mostRecent = history.sort(
+              (a, b) => new Date(b.date) - new Date(a.date)
+            )[0];
+
+            console.log("Using most recent record:", mostRecent);
+            setNapHours(mostRecent.napHours.toString());
+            setNightHours(mostRecent.nightHours.toString());
+            setNotes(mostRecent.notes || "");
+            setSelectedRecord(mostRecent);
+            setCurrentDate(mostRecent.date);
+            updateTotalHours(
+              mostRecent.napHours.toString(),
+              mostRecent.nightHours.toString()
+            );
+            setIsEditMode(false);
+
+            if (mostRecent.sleepProgress !== undefined) {
+              setSleepPercentage(mostRecent.sleepProgress);
+            } else {
+              calculateSleepPercentage();
+            }
+          } else {
+            resetForm();
+          }
         }
       }
     } catch (error) {
@@ -278,9 +393,9 @@ const SleepScreen = () => {
   };
 
   const handleNapHoursChange = (value) => {
-    const validatedValue = value.replace(/[^0-9]/g, "");
+    const validatedValue = value.replace(/[^0-9.]/g, "");
 
-    if (validatedValue.length > 2) {
+    if (validatedValue.length > 4) {
       return;
     } else {
       setNapHours(validatedValue);
@@ -289,9 +404,9 @@ const SleepScreen = () => {
   };
 
   const handleNightHoursChange = (value) => {
-    const validatedValue = value.replace(/[^0-9]/g, "");
+    const validatedValue = value.replace(/[^0-9.]/g, "");
 
-    if (validatedValue.length > 2) {
+    if (validatedValue.length > 4) {
       return;
     } else {
       setNightHours(validatedValue);
@@ -357,13 +472,29 @@ const SleepScreen = () => {
       if (result) {
         Alert.alert("Success", "Sleep data saved successfully to database");
 
-        await loadSleepData();
+        // Store the saved record to use directly instead of fetching
+        setJustSaved(true);
+        setSavedRecord(result);
 
-        if (selectedRecord && !isToday(selectedRecord.date)) {
-          resetForm();
+        // Update the UI with the saved record
+        setSelectedRecord(result);
+        setNapHours(result.napHours.toString());
+        setNightHours(result.nightHours.toString());
+        setNotes(result.notes || "");
+        setCurrentDate(result.date);
+        updateTotalHours(
+          result.napHours.toString(),
+          result.nightHours.toString()
+        );
+        setIsEditMode(false);
+
+        if (result.sleepProgress !== undefined) {
+          setSleepPercentage(result.sleepProgress);
         } else {
-          setIsEditMode(false);
+          calculateSleepPercentage();
         }
+
+        setIsFirstRecord(false);
       } else {
         Alert.alert("Error", "Failed to save sleep data to database");
       }
@@ -472,6 +603,26 @@ const SleepScreen = () => {
               Sleep data resets daily at 12:00 PM
             </Text>
           </View>
+
+          {isFirstRecord && (
+            <View
+              style={[
+                styles.infoBanner,
+                { backgroundColor: `${theme.info}20` },
+              ]}
+            >
+              <Ionicons
+                name="information-circle"
+                size={18}
+                color={theme.info}
+                style={styles.bannerIcon}
+              />
+              <Text style={[styles.bannerText, { color: theme.text }]}>
+                This is your first sleep record for this child. Enter the sleep
+                hours and save to start tracking.
+              </Text>
+            </View>
+          )}
 
           {showingYesterdayData && (
             <View
@@ -965,7 +1116,7 @@ const styles = StyleSheet.create({
   },
   totalSleepValue: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   totalSummaryContainer: {
     borderRadius: 16,

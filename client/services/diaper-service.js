@@ -108,3 +108,84 @@ export const deleteDiaperChange = async (childId, diaperChangeId) => {
     );
   }
 };
+
+// Add functions to fetch diaper data for charts
+export const getDiaperDataByDateRange = async (childId, startDate, endDate) => {
+  try {
+    await ensureToken();
+
+    const formattedStartDate = startDate.toISOString().split("T")[0];
+    const formattedEndDate = endDate.toISOString().split("T")[0];
+
+    console.log(
+      `Fetching diaper data for child ID: ${childId} from ${formattedStartDate} to ${formattedEndDate}`
+    );
+    const response = await api.get(
+      `/diaper/child/${childId}/date-range?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
+    );
+    console.log("Diaper data by date range response:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching diaper data by date range:", error);
+    if (error.response) {
+      console.error("Error response data:", error.response.data);
+      console.error("Error response status:", error.response.status);
+    } else if (error.request) {
+      console.error("Error request:", error.request);
+    }
+    return [];
+  }
+};
+
+export const getWeeklyDiaperData = async (childId) => {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 7);
+
+  return await getDiaperDataByDateRange(childId, startDate, endDate);
+};
+
+export const getMonthlyDiaperData = async (childId) => {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 30); // Get last 30 days
+
+  return await getDiaperDataByDateRange(childId, startDate, endDate);
+};
+
+export const getYearlyDiaperData = async (childId) => {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setFullYear(startDate.getFullYear() - 1); // Get last 365 days
+
+  return await getDiaperDataByDateRange(childId, startDate, endDate);
+};
+
+// Add this function to aggregate diaper data by month for yearly view
+export const aggregateDiaperDataByMonth = (diaperData) => {
+  const monthlyData = {};
+
+  diaperData.forEach((record) => {
+    const date = new Date(record.date);
+    const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+
+    if (!monthlyData[monthKey]) {
+      monthlyData[monthKey] = {
+        month: date.toLocaleDateString("en-US", { month: "short" }),
+        count: 0,
+        date: new Date(date.getFullYear(), date.getMonth(), 1),
+      };
+    }
+
+    monthlyData[monthKey].count += 1;
+  });
+
+  // Sort by date
+  return Object.values(monthlyData)
+    .map((item) => ({
+      date: item.date.toISOString().split("T")[0],
+      month: item.month,
+      count: item.count,
+    }))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+};

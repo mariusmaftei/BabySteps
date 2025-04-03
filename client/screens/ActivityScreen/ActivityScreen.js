@@ -35,42 +35,143 @@ import { getProgressColor } from "../../utils/growth-utils";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const isSmallDevice = SCREEN_WIDTH < 375;
 
+// Constants for icon sizes
+const ICON_SIZE = isSmallDevice ? 9 : 11;
+const SMALL_ICON_SIZE = isSmallDevice ? 8 : 9;
+
+// Extracted component for child switcher item
+const ChildSwitcherItem = React.memo(
+  ({ child, currentChildId, theme, onSelect, getChildImageSource }) => {
+    const isSelected = String(child.id) === String(currentChildId);
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.childSwitcherItem,
+          isSelected && { backgroundColor: `${theme.primary}15` },
+          { borderBottomColor: theme.borderLight },
+        ]}
+        onPress={() => onSelect(child.id)}
+      >
+        <Image
+          source={getChildImageSource(child)}
+          style={styles.childSwitcherImage}
+          defaultSource={defaultChildImage}
+        />
+        <View style={styles.childSwitcherInfo}>
+          <Text style={[styles.childSwitcherName, { color: theme.text }]}>
+            {child.name}
+          </Text>
+          <Text
+            style={[styles.childSwitcherAge, { color: theme.textSecondary }]}
+          >
+            {child.age}
+          </Text>
+        </View>
+        {isSelected && (
+          <View
+            style={[
+              styles.currentChildIndicator,
+              { backgroundColor: theme.primary },
+            ]}
+          >
+            <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  }
+);
+
+// Extracted component for activity card
+const ActivityCard = React.memo(({ item, index, onPress, renderContent }) => {
+  return (
+    <TouchableOpacity
+      key={index}
+      style={[styles.card, { shadowColor: "#000" }]}
+      activeOpacity={0.9}
+      onPress={() => onPress(item)}
+    >
+      {renderContent(item)}
+    </TouchableOpacity>
+  );
+});
+
 function ActivityScreen({ navigation }) {
   const { theme } = useTheme();
   const { currentChild, currentChildId, children, switchChild } =
     useChildActivity();
   const { updateCurrentScreen } = useNotification();
 
+  // State management
   const [showChildSwitcherModal, setShowChildSwitcherModal] = useState(false);
   const [localChildren, setLocalChildren] = useState([]);
   const [showAddChildPrompt, setShowAddChildPrompt] = useState(false);
-  const [sleepData, setSleepData] = useState([]);
-  const [sleepPercentage, setSleepPercentage] = useState(0);
-  const [vaccinationProgress, setVaccinationProgress] = useState(0);
-  const [weightProgress, setWeightProgress] = useState(0);
-  const [heightProgress, setHeightProgress] = useState(0);
-  const [headCircProgress, setHeadCircProgress] = useState(0);
-  const [diaperCount, setDiaperCount] = useState(0);
-  const [breastfeedingCount, setBreastfeedingCount] = useState(0);
-  const [bottlefeedingCount, setBottlefeedingCount] = useState(0);
-  const [solidfoodCount, setSolidfoodCount] = useState(0);
-  const [musicPercentage, setMusicPercentage] = useState(75);
-  const [latestGrowthRecord, setLatestGrowthRecord] = useState(null);
 
-  const iconSize = isSmallDevice ? 9 : 11;
-  const smallIconSize = isSmallDevice ? 8 : 9;
+  // Activity data state - consolidated into a single object
+  const [activityData, setActivityData] = useState({
+    sleep: {
+      records: [],
+      percentage: 0,
+    },
+    vaccination: {
+      progress: 0,
+    },
+    growth: {
+      height: 0,
+      weight: 0,
+      headCirc: 0,
+      latestRecord: null,
+    },
+    diaper: {
+      count: 0,
+    },
+    feeding: {
+      breast: 0,
+      bottle: 0,
+      solid: 0,
+    },
+    music: {
+      percentage: 75,
+    },
+  });
 
+  // Derived state
   const noChildren = !currentChild || currentChild.id === "default";
 
+  // Memoized functions
   const getChildImageSource = useCallback((child) => {
-    if (child?.imageSrc && child.imageSrc !== "default") {
+    if (!child) return defaultChildImage;
+    if (child.imageSrc && child.imageSrc !== "default") {
       return { uri: child.imageSrc };
-    } else if (child?.image && child.image !== "default") {
+    } else if (child.image && child.image !== "default") {
       return { uri: child.image };
     }
     return defaultChildImage;
   }, []);
 
+  // Count red icons for mood determination
+  const countRedIcons = useMemo(() => {
+    let count = 0;
+    const { sleep, growth, diaper, feeding } = activityData;
+
+    if (sleep.percentage <= 0) count++;
+    if (growth.height <= 0 || growth.weight <= 0 || growth.headCirc <= 0)
+      count++;
+    if (diaper.count <= 0) count++;
+    if (feeding.breast <= 0 && feeding.bottle <= 0 && feeding.solid <= 0)
+      count++;
+
+    return count;
+  }, [activityData]);
+
+  const isHappyMood = useMemo(() => countRedIcons < 2, [countRedIcons]);
+  const getMoodImage = useMemo(
+    () => (isHappyMood ? happyChildImage : sadChildImage),
+    [isHappyMood]
+  );
+
+  // Activity cards data
   const activityCards = useMemo(
     () => [
       {
@@ -81,10 +182,7 @@ function ActivityScreen({ navigation }) {
         gradient: ["#5A87FF", "#709DFF"],
         image:
           "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/sleeping-child.jpg-kFbvedsqniZ96VLUXSOV0eJkAur7TZ.jpeg",
-        trend: currentChild?.activities?.sleep?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.sleep?.trend || "0%",
+        trend: "dynamic",
         screen: "SleepScreen",
       },
       {
@@ -95,16 +193,8 @@ function ActivityScreen({ navigation }) {
         gradient: ["#FF9500", "#FFAC30"],
         image:
           "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Feeding-child.jpg-zD7Y5eQyPiLnGi7o7ph6xNgLw9bdVW.jpeg",
-        trend: currentChild?.activities?.feeding?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.feeding?.trend || "0%",
+        trend: "dynamic",
         screen: "FeedingScreen",
-        feedingIcons: [
-          { type: "breastfeeding", icon: "woman" },
-          { type: "bottlefeeding", icon: "water" },
-          { type: "solidfood", icon: "restaurant" },
-        ],
       },
       {
         title: "Growth",
@@ -114,10 +204,7 @@ function ActivityScreen({ navigation }) {
         gradient: ["#4CD964", "#7AE28C"],
         image:
           "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/child-growth.jpg-UWt4Kw8CtpknvXrh0f4NDTDbNovWuy.jpeg",
-        trend: currentChild?.activities?.growth?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.growth?.trend || "0%",
+        trend: "dynamic",
         screen: "GrowthScreen",
       },
       {
@@ -128,10 +215,7 @@ function ActivityScreen({ navigation }) {
         gradient: ["#00B4D8", "#48CAE4"],
         image:
           "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/diaper.jpg-FaQNeaZWZLIIiQ91zJ9jFp56kijoWa.jpeg",
-        trend: currentChild?.activities?.diaper?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.diaper?.trend || "0%",
+        trend: "dynamic",
         screen: "DiaperScreen",
       },
       {
@@ -142,10 +226,7 @@ function ActivityScreen({ navigation }) {
         gradient: ["#007AFF", "#4DA3FF"],
         image:
           "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/heatly-child.jpg-kyeSB4d3cISzh9dPjtHnSvLRzZG6D1.jpeg",
-        trend: currentChild?.activities?.health?.trend?.startsWith("+")
-          ? "up"
-          : "down",
-        trendValue: currentChild?.activities?.health?.trend || "0%",
+        trend: "dynamic",
         screen: "HealthScreen",
       },
       {
@@ -157,56 +238,17 @@ function ActivityScreen({ navigation }) {
         image:
           "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/relaxing.jpg-njSGsa3qQi5ELgv3r4dECK349CakfZ.jpeg",
         trend: "up",
-        trendValue: `${musicPercentage}%`,
         screen: "MusicScreen",
       },
     ],
-    [currentChild, musicPercentage]
+    []
   );
 
-  const countRedIcons = useMemo(() => {
-    let count = 0;
-
-    if (sleepPercentage <= 0) count++;
-
-    if (heightProgress <= 0 || weightProgress <= 0 || headCircProgress <= 0)
-      count++;
-
-    if (diaperCount <= 0) count++;
-
-    if (
-      breastfeedingCount <= 0 &&
-      bottlefeedingCount <= 0 &&
-      solidfoodCount <= 0
-    )
-      count++;
-
-    return count;
-  }, [
-    sleepPercentage,
-    heightProgress,
-    weightProgress,
-    headCircProgress,
-    diaperCount,
-    breastfeedingCount,
-    bottlefeedingCount,
-    solidfoodCount,
-  ]);
-
-  const isHappyMood = useMemo(() => {
-    return countRedIcons < 2;
-  }, [countRedIcons]);
-
-  const getMoodImage = useMemo(() => {
-    return isHappyMood ? happyChildImage : sadChildImage;
-  }, [isHappyMood]);
-
+  // Handlers
   const handleCardPress = useCallback(
     (item) => {
       if (item.screen) {
         navigation.navigate(item.screen);
-      } else {
-        console.log(`${item.title} pressed`);
       }
     },
     [navigation]
@@ -214,238 +256,45 @@ function ActivityScreen({ navigation }) {
 
   const fetchDataForChild = useCallback(async (childId) => {
     try {
-      console.log(`Directly fetching data for child ID: ${childId}`);
+      // Reset data first
+      setActivityData((prev) => ({
+        ...prev,
+        sleep: { ...prev.sleep, percentage: 0 },
+        vaccination: { progress: 0 },
+        growth: { height: 0, weight: 0, headCirc: 0, latestRecord: null },
+        diaper: { count: 0 },
+        feeding: { breast: 0, bottle: 0, solid: 0 },
+      }));
 
-      setSleepPercentage(0);
-      setVaccinationProgress(0);
-      setDiaperCount(0);
-      setBreastfeedingCount(0);
-      setBottlefeedingCount(0);
-      setSolidfoodCount(0);
-
+      // Fetch sleep data
       const sleepRecords = await fetchSleepRecords(childId);
-      setSleepData(sleepRecords);
-
       const today = new Date().toISOString().split("T")[0];
       const todayRecord = sleepRecords.find((record) => record.date === today);
+      const sleepPercentage = todayRecord?.sleepProgress || 0;
 
-      if (todayRecord && todayRecord.sleepProgress !== undefined) {
-        setSleepPercentage(todayRecord.sleepProgress);
-      } else {
-        setSleepPercentage(0);
-      }
-
+      // Fetch vaccination data
       const vaccProgress = await VaccinationService.getVaccinationProgress(
         childId
       );
-      setVaccinationProgress(vaccProgress?.percentage || 0);
 
+      // Fetch growth data
       const latestRecord = await GrowthService.getLatestGrowthRecord(childId);
-      if (latestRecord) {
-        const heightProgressValue = latestRecord.heightProgress || 0;
-        const weightProgressValue = latestRecord.weightProgress || 0;
-        const headCircProgressValue =
-          latestRecord.headCircumferenceProgress || 0;
+      const heightProgress = latestRecord?.heightProgress || 0;
+      const weightProgress = latestRecord?.weightProgress || 0;
+      const headCircProgress = latestRecord?.headCircumferenceProgress || 0;
 
-        setHeightProgress(heightProgressValue);
-        setWeightProgress(weightProgressValue);
-        setHeadCircProgress(headCircProgressValue);
-
-        setLatestGrowthRecord(latestRecord);
-      } else {
-        setHeightProgress(0);
-        setWeightProgress(0);
-        setHeadCircProgress(0);
-        setLatestGrowthRecord(null);
-      }
-
-      try {
-        const diaperChanges = await getDiaperChanges(childId);
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const todayDiapers = diaperChanges.filter((diaper) => {
-          const diaperDate = new Date(diaper.date);
-          diaperDate.setHours(0, 0, 0, 0);
-          return diaperDate.getTime() === today.getTime();
-        });
-
-        setDiaperCount(todayDiapers.length);
-      } catch (error) {
-        console.error("Error fetching diaper data:", error);
-        setDiaperCount(0);
-      }
-
-      try {
-        const feedingData = await feedingService.getTodayFeedingData(childId);
-
-        const breastData = feedingData.filter(
-          (item) => item.type === "breast"
-        ).length;
-        const bottleData = feedingData.filter(
-          (item) => item.type === "bottle"
-        ).length;
-        const solidData = feedingData.filter(
-          (item) => item.type === "solid"
-        ).length;
-
-        setBreastfeedingCount(breastData);
-        setBottlefeedingCount(bottleData);
-        setSolidfoodCount(solidData);
-      } catch (error) {
-        console.error("Error fetching feeding data:", error);
-        setBreastfeedingCount(0);
-        setBottlefeedingCount(0);
-        setSolidfoodCount(0);
-      }
-    } catch (error) {
-      console.error("Error fetching data for child:", error);
-    }
-  }, []);
-
-  const handleSelectChild = useCallback(
-    (childId) => {
-      console.log(`Attempting to switch to child with ID: ${childId}`);
-
-      const childExists = localChildren.some(
-        (child) => String(child.id) === String(childId)
-      );
-
-      if (!childExists) {
-        console.warn(
-          `Child with ID ${childId} not found in local children list`
-        );
-        return;
-      }
-
-      setSleepPercentage(0);
-      setVaccinationProgress(0);
-      setLatestGrowthRecord(null);
-      setDiaperCount(0);
-
-      const success = switchChild(childId);
-      if (success) {
-        setTimeout(() => {
-          console.log("Fetching data for newly selected child:", childId);
-          fetchDataForChild(childId);
-        }, 300);
-      }
-      console.log(`Switch child result: ${success ? "success" : "failed"}`);
-
-      setShowChildSwitcherModal(false);
-    },
-    [switchChild, localChildren, fetchDataForChild]
-  );
-
-  useEffect(() => {
-    if (children && Array.isArray(children)) {
-      console.log(
-        "Children updated in Activity screen:",
-        children.length,
-        "children"
-      );
-      setLocalChildren(children);
-    }
-  }, [children]);
-
-  const fetchSleepData = useCallback(async () => {
-    try {
-      console.log(`Fetching sleep data for child ID: ${currentChild.id}`);
-      const records = await fetchSleepRecords(currentChild.id);
-      setSleepData(records);
-
-      const today = new Date().toISOString().split("T")[0];
-      const todayRecord = records.find((record) => record.date === today);
-
-      if (todayRecord && todayRecord.sleepProgress !== undefined) {
-        setSleepPercentage(todayRecord.sleepProgress);
-      } else {
-        setSleepPercentage(0);
-      }
-    } catch (error) {
-      console.error("Error fetching sleep data:", error);
-      setSleepPercentage(0);
-    }
-  }, [currentChild]);
-
-  const fetchVaccinationProgress = useCallback(async () => {
-    try {
-      console.log(
-        `Fetching vaccination progress for child ID: ${currentChild.id}`
-      );
-      const progressData = await VaccinationService.getVaccinationProgress(
-        currentChild.id
-      );
-      setVaccinationProgress(progressData.percentage || 0);
-    } catch (error) {
-      console.error("Error fetching vaccination progress:", error);
-      setVaccinationProgress(0);
-    }
-  }, [currentChild]);
-
-  const fetchGrowthProgress = useCallback(async () => {
-    try {
-      console.log(`Fetching growth data for child ID: ${currentChild.id}`);
-
-      const latestRecord = await GrowthService.getLatestGrowthRecord(
-        currentChild.id
-      );
-
-      if (latestRecord) {
-        console.log("Latest growth record:", latestRecord);
-
-        const heightProgressValue = latestRecord.heightProgress || 0;
-        const weightProgressValue = latestRecord.weightProgress || 0;
-        const headCircProgressValue =
-          latestRecord.headCircumferenceProgress || 0;
-
-        setHeightProgress(heightProgressValue);
-        setWeightProgress(weightProgressValue);
-        setHeadCircProgress(headCircProgressValue);
-
-        setLatestGrowthRecord(latestRecord);
-      } else {
-        console.log("No growth records found");
-        setHeightProgress(0);
-        setWeightProgress(0);
-        setHeadCircProgress(0);
-        setLatestGrowthRecord(null);
-      }
-    } catch (error) {
-      console.error("Error fetching growth data:", error);
-    }
-  }, [currentChild]);
-
-  const fetchDiaperData = useCallback(async () => {
-    try {
-      console.log(`Fetching diaper data for child ID: ${currentChild.id}`);
-      const diaperChanges = await getDiaperChanges(currentChild.id);
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
+      // Fetch diaper data
+      const diaperChanges = await getDiaperChanges(childId);
+      const today2 = new Date();
+      today2.setHours(0, 0, 0, 0);
       const todayDiapers = diaperChanges.filter((diaper) => {
         const diaperDate = new Date(diaper.date);
         diaperDate.setHours(0, 0, 0, 0);
-        return diaperDate.getTime() === today.getTime();
+        return diaperDate.getTime() === today2.getTime();
       });
 
-      setDiaperCount(todayDiapers.length);
-    } catch (error) {
-      console.error("Error fetching diaper data:", error);
-      setDiaperCount(0);
-    }
-  }, [currentChild]);
-
-  const fetchFeedingData = useCallback(async () => {
-    try {
-      console.log(`Fetching feeding data for child ID: ${currentChild.id}`);
-
-      const feedingData = await feedingService.getTodayFeedingData(
-        currentChild.id
-      );
-
+      // Fetch feeding data
+      const feedingData = await feedingService.getTodayFeedingData(childId);
       const breastData = feedingData.filter(
         (item) => item.type === "breast"
       ).length;
@@ -456,617 +305,383 @@ function ActivityScreen({ navigation }) {
         (item) => item.type === "solid"
       ).length;
 
-      setBreastfeedingCount(breastData);
-      setBottlefeedingCount(bottleData);
-      setSolidfoodCount(solidData);
+      // Update all data at once
+      setActivityData({
+        sleep: {
+          records: sleepRecords,
+          percentage: sleepPercentage,
+        },
+        vaccination: {
+          progress: vaccProgress?.percentage || 0,
+        },
+        growth: {
+          height: heightProgress,
+          weight: weightProgress,
+          headCirc: headCircProgress,
+          latestRecord,
+        },
+        diaper: {
+          count: todayDiapers.length,
+        },
+        feeding: {
+          breast: breastData,
+          bottle: bottleData,
+          solid: solidData,
+        },
+        music: {
+          percentage: 75, // Default value
+        },
+      });
     } catch (error) {
-      console.error("Error fetching feeding data:", error);
-      setBreastfeedingCount(0);
-      setBottlefeedingCount(0);
-      setSolidfoodCount(0);
+      console.error("Error fetching data for child:", error);
     }
-  }, [currentChild]);
+  }, []);
 
-  useEffect(() => {
-    setSleepPercentage(0);
-    setVaccinationProgress(0);
-    setLatestGrowthRecord(null);
-    setDiaperCount(0);
-    setBreastfeedingCount(0);
-    setBottlefeedingCount(0);
-    setSolidfoodCount(0);
+  const handleSelectChild = useCallback(
+    (childId) => {
+      const childExists = localChildren.some(
+        (child) => String(child.id) === String(childId)
+      );
+      if (!childExists) return;
 
-    if (currentChild && currentChild.id !== "default") {
-      fetchSleepData();
-      fetchVaccinationProgress();
-      fetchGrowthProgress();
-      fetchDiaperData();
-      fetchFeedingData();
-    }
-  }, [
-    currentChild,
-    currentChildId,
-    fetchSleepData,
-    fetchVaccinationProgress,
-    fetchGrowthProgress,
-    fetchDiaperData,
-    fetchFeedingData,
-  ]);
+      // Reset activity data
+      setActivityData((prev) => ({
+        ...prev,
+        sleep: { ...prev.sleep, percentage: 0 },
+        vaccination: { progress: 0 },
+        growth: { height: 0, weight: 0, headCirc: 0, latestRecord: null },
+        diaper: { count: 0 },
+        feeding: { breast: 0, bottle: 0, solid: 0 },
+      }));
 
-  useEffect(() => {
-    setShowAddChildPrompt(noChildren);
-  }, [noChildren]);
-
-  useEffect(() => {
-    if (showChildSwitcherModal) {
-      console.log("Child switcher modal opened, refreshing children data");
-      setLocalChildren([...children]);
-    }
-  }, [showChildSwitcherModal, children]);
-
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => setShowChildSwitcherModal(true)}
-          disabled={noChildren}
-        >
-          <Ionicons
-            name="people"
-            size={24}
-            color={noChildren ? theme.textTertiary : theme.primary}
-          />
-        </TouchableOpacity>
-      ),
-      title: noChildren
-        ? "Add a Child"
-        : `${currentChild.name.split(" ")[0]}'s Activity`,
-      headerTitle: () => (
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
-          {noChildren
-            ? "Add a Child"
-            : `${currentChild.name.split(" ")[0]}'s Activity`}
-        </Text>
-      ),
-    });
-
-    updateCurrentScreen("Activity");
-  }, [navigation, theme, currentChild, noChildren, updateCurrentScreen]);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
-      console.log("Activity screen focused, refreshing data");
-      setLocalChildren([...children]);
-
-      if (currentChild && currentChild.id !== "default") {
-        fetchDataForChild(currentChild.id);
+      const success = switchChild(childId);
+      if (success) {
+        setTimeout(() => fetchDataForChild(childId), 300);
       }
-    });
 
-    return unsubscribe;
-  }, [navigation, children, currentChild, fetchDataForChild]);
+      setShowChildSwitcherModal(false);
+    },
+    [switchChild, localChildren, fetchDataForChild]
+  );
 
-  const renderActivityCard = useCallback(
-    (item, index) => {
+  // Render activity card content - extracted for better organization
+  const renderActivityCardContent = useCallback(
+    (item) => {
+      const { sleep, vaccination, growth, diaper, feeding, music } =
+        activityData;
+
       if (item.title === "Sleep") {
         return (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.card,
-              {
-                shadowColor: theme.isDark ? "#000" : "#000",
-              },
-            ]}
-            activeOpacity={0.9}
-            onPress={() => handleCardPress(item)}
+          <ImageBackground
+            source={{ uri: item.image }}
+            style={styles.cardBackground}
+            imageStyle={styles.cardImage}
+            resizeMode="cover"
           >
-            <ImageBackground
-              source={{ uri: item.image }}
-              style={styles.cardBackground}
-              imageStyle={styles.cardImage}
-              resizeMode="cover"
-            >
-              {item.trend && (
-                <View style={styles.trendIconContainer}>
-                  <View
-                    style={[
-                      styles.trendIconBackground,
-                      {
-                        backgroundColor:
-                          sleepPercentage > 0 ? "#4CD964" : "#FF3B30",
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={
-                        sleepPercentage >= 0 ? "trending-up" : "trending-down"
-                      }
-                      size={iconSize}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.trendText}>
-                      {sleepPercentage >= 0
-                        ? `+${sleepPercentage}%`
-                        : `${sleepPercentage}%`}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              <View style={styles.imageTextContainer}>
-                <Text style={styles.imageCardTitle}>{item.title}</Text>
-                {item.subtitle && (
-                  <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
-                )}
-              </View>
-            </ImageBackground>
-          </TouchableOpacity>
-        );
-      }
-
-      if (item.title === "Health") {
-        return (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.card,
-              {
-                shadowColor: theme.isDark ? "#000" : "#000",
-              },
-            ]}
-            activeOpacity={0.9}
-            onPress={() => handleCardPress(item)}
-          >
-            <ImageBackground
-              source={{ uri: item.image }}
-              style={styles.cardBackground}
-              imageStyle={styles.cardImage}
-              resizeMode="cover"
-            >
-              <View style={styles.trendIconContainer}>
-                <View
-                  style={[
-                    styles.trendIconBackground,
-                    {
-                      backgroundColor: "#007AFF",
-                    },
-                  ]}
-                >
-                  <Ionicons name="medical" size={iconSize} color="#FFFFFF" />
-                  <Text style={styles.trendText}>{vaccinationProgress}%</Text>
-                </View>
-              </View>
-
-              <View style={styles.imageTextContainer}>
-                <Text style={styles.imageCardTitle}>{item.title}</Text>
-                {item.subtitle && (
-                  <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
-                )}
-              </View>
-            </ImageBackground>
-          </TouchableOpacity>
-        );
-      }
-
-      if (item.title === "Growth") {
-        return (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.card,
-              {
-                shadowColor: theme.isDark ? "#000" : "#000",
-              },
-            ]}
-            activeOpacity={0.9}
-            onPress={() => handleCardPress(item)}
-          >
-            <ImageBackground
-              source={{ uri: item.image }}
-              style={styles.cardBackground}
-              imageStyle={styles.cardImage}
-              resizeMode="cover"
-            >
-              <View style={styles.growthProgressContainer}>
-                <View
-                  style={[
-                    styles.growthBadge,
-                    {
-                      backgroundColor:
-                        heightProgress > 0
-                          ? getProgressColor(heightProgress, theme)
-                          : "#FF3B30",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="resize-outline"
-                    size={smallIconSize}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.growthBadgeText}>
-                    {heightProgress > 0
-                      ? `+${heightProgress}%`
-                      : `${heightProgress}%`}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.growthBadge,
-                    {
-                      backgroundColor:
-                        weightProgress > 0
-                          ? getProgressColor(weightProgress, theme)
-                          : "#FF3B30",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="barbell-outline"
-                    size={smallIconSize}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.growthBadgeText}>
-                    {weightProgress > 0
-                      ? `+${weightProgress}%`
-                      : `${weightProgress}%`}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.growthBadge,
-                    {
-                      backgroundColor:
-                        headCircProgress > 0
-                          ? getProgressColor(headCircProgress, theme)
-                          : "#FF3B30",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="ellipse-outline"
-                    size={smallIconSize}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.growthBadgeText}>
-                    {headCircProgress > 0
-                      ? `+${headCircProgress}%`
-                      : `${headCircProgress}%`}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.imageTextContainer}>
-                <Text style={styles.imageCardTitle}>{item.title}</Text>
-                {item.subtitle && (
-                  <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
-                )}
-              </View>
-            </ImageBackground>
-          </TouchableOpacity>
-        );
-      }
-
-      if (item.title === "Music") {
-        return (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.card,
-              {
-                shadowColor: theme.isDark ? "#000" : "#000",
-              },
-            ]}
-            activeOpacity={0.9}
-            onPress={() => handleCardPress(item)}
-          >
-            <ImageBackground
-              source={{ uri: item.image }}
-              style={styles.cardBackground}
-              imageStyle={styles.cardImage}
-              resizeMode="cover"
-            >
-              <View style={styles.trendIconContainer}>
-                <View
-                  style={[
-                    styles.musicIconBackground,
-                    {
-                      backgroundColor: "#007AFF",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="musical-notes"
-                    size={iconSize}
-                    color="#FFFFFF"
-                  />
-                  <Ionicons
-                    name="musical-note"
-                    size={iconSize}
-                    color="#FFFFFF"
-                    style={styles.trebleClefIcon}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.imageTextContainer}>
-                <Text style={styles.imageCardTitle}>{item.title}</Text>
-                {item.subtitle && (
-                  <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
-                )}
-              </View>
-            </ImageBackground>
-          </TouchableOpacity>
-        );
-      }
-
-      if (item.title === "Diaper") {
-        return (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.card,
-              {
-                shadowColor: theme.isDark ? "#000" : "#000",
-              },
-            ]}
-            activeOpacity={0.9}
-            onPress={() => handleCardPress(item)}
-          >
-            <ImageBackground
-              source={{ uri: item.image }}
-              style={styles.cardBackground}
-              imageStyle={styles.cardImage}
-              resizeMode="cover"
-            >
-              <View style={styles.trendIconContainer}>
-                <View
-                  style={[
-                    styles.trendIconBackground,
-                    {
-                      backgroundColor: diaperCount > 0 ? "#00B4D8" : "#FF3B30",
-                    },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="human-baby-changing-table"
-                    size={iconSize}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.trendText}>{diaperCount}</Text>
-                </View>
-              </View>
-
-              <View style={styles.imageTextContainer}>
-                <Text style={styles.imageCardTitle}>{item.title}</Text>
-                {item.subtitle && (
-                  <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
-                )}
-              </View>
-            </ImageBackground>
-          </TouchableOpacity>
-        );
-      }
-
-      if (item.title === "Feeding") {
-        return (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.card,
-              {
-                shadowColor: theme.isDark ? "#000" : "#000",
-              },
-            ]}
-            activeOpacity={0.9}
-            onPress={() => handleCardPress(item)}
-          >
-            <ImageBackground
-              source={{ uri: item.image }}
-              style={styles.cardBackground}
-              imageStyle={styles.cardImage}
-              resizeMode="cover"
-            >
-              <View style={styles.feedingStatsContainer}>
-                <View
-                  style={[
-                    styles.feedingStatBadge,
-                    {
-                      backgroundColor:
-                        breastfeedingCount > 0 ? "#FF9500" : "#FF3B30",
-                    },
-                  ]}
-                >
-                  <FontAwesome6
-                    name="person-breastfeeding"
-                    size={smallIconSize}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.feedingStatText}>
-                    {breastfeedingCount}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.feedingStatBadge,
-                    {
-                      backgroundColor:
-                        bottlefeedingCount > 0 ? "#5A87FF" : "#FF3B30",
-                    },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="baby-bottle-outline"
-                    size={smallIconSize}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.feedingStatText}>
-                    {bottlefeedingCount}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.feedingStatBadge,
-                    {
-                      backgroundColor:
-                        solidfoodCount > 0 ? "#4CD964" : "#FF3B30",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="nutrition"
-                    size={smallIconSize}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.feedingStatText}>{solidfoodCount}</Text>
-                </View>
-              </View>
-
-              <View style={styles.imageTextContainer}>
-                <Text style={styles.imageCardTitle}>{item.title}</Text>
-                {item.subtitle && (
-                  <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
-                )}
-              </View>
-            </ImageBackground>
-          </TouchableOpacity>
-        );
-      }
-
-      if (item.image) {
-        return (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.card,
-              {
-                shadowColor: theme.isDark ? "#000" : "#000",
-              },
-            ]}
-            activeOpacity={0.9}
-            onPress={() => handleCardPress(item)}
-          >
-            <ImageBackground
-              source={{ uri: item.image }}
-              style={styles.cardBackground}
-              imageStyle={styles.cardImage}
-              resizeMode="cover"
-            >
-              {item.trend && (
-                <View style={styles.trendIconContainer}>
-                  <View
-                    style={[
-                      styles.trendIconBackground,
-                      {
-                        backgroundColor:
-                          item.title === "Health"
-                            ? "#007AFF"
-                            : item.title === "Music"
-                            ? "#007AFF"
-                            : item.trend === "up" ||
-                              (item.trendValue &&
-                                Number.parseFloat(item.trendValue) > 0)
-                            ? "#4CD964"
-                            : "#FF3B30",
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={
-                        item.trend === "up" ? "trending-up" : "trending-down"
-                      }
-                      size={iconSize}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.trendText}>{item.trendValue}</Text>
-                  </View>
-                </View>
-              )}
-
-              <View style={styles.imageTextContainer}>
-                <Text style={styles.imageCardTitle}>{item.title}</Text>
-                {item.subtitle && (
-                  <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
-                )}
-              </View>
-            </ImageBackground>
-          </TouchableOpacity>
-        );
-      }
-
-      return (
-        <TouchableOpacity
-          key={index}
-          style={[
-            styles.card,
-            {
-              backgroundColor: item.color,
-              shadowColor: theme.isDark ? "#000" : "#000",
-            },
-          ]}
-          activeOpacity={0.9}
-          onPress={() => handleCardPress(item)}
-        >
-          {item.trend && (
             <View style={styles.trendIconContainer}>
               <View
                 style={[
                   styles.trendIconBackground,
                   {
                     backgroundColor:
-                      item.title === "Health"
-                        ? "#007AFF"
-                        : item.title === "Music"
-                        ? "#007AFF"
-                        : item.trend === "up" ||
-                          (item.trendValue &&
-                            Number.parseFloat(item.trendValue) > 0)
-                        ? "#4CD964"
+                      sleep.percentage > 0 ? "#4CD964" : "#FF3B30",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={sleep.percentage >= 0 ? "trending-up" : "trending-down"}
+                  size={ICON_SIZE}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.trendText}>
+                  {sleep.percentage >= 0
+                    ? `+${sleep.percentage}%`
+                    : `${sleep.percentage}%`}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.imageTextContainer}>
+              <Text style={styles.imageCardTitle}>{item.title}</Text>
+              {item.subtitle && (
+                <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
+              )}
+            </View>
+          </ImageBackground>
+        );
+      }
+
+      if (item.title === "Health") {
+        return (
+          <ImageBackground
+            source={{ uri: item.image }}
+            style={styles.cardBackground}
+            imageStyle={styles.cardImage}
+            resizeMode="cover"
+          >
+            <View style={styles.trendIconContainer}>
+              <View
+                style={[
+                  styles.trendIconBackground,
+                  { backgroundColor: "#007AFF" },
+                ]}
+              >
+                <Ionicons name="medical" size={ICON_SIZE} color="#FFFFFF" />
+                <Text style={styles.trendText}>{vaccination.progress}%</Text>
+              </View>
+            </View>
+            <View style={styles.imageTextContainer}>
+              <Text style={styles.imageCardTitle}>{item.title}</Text>
+              {item.subtitle && (
+                <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
+              )}
+            </View>
+          </ImageBackground>
+        );
+      }
+
+      if (item.title === "Growth") {
+        return (
+          <ImageBackground
+            source={{ uri: item.image }}
+            style={styles.cardBackground}
+            imageStyle={styles.cardImage}
+            resizeMode="cover"
+          >
+            <View style={styles.growthProgressContainer}>
+              <View
+                style={[
+                  styles.growthBadge,
+                  {
+                    backgroundColor:
+                      growth.height > 0
+                        ? getProgressColor(growth.height, theme)
                         : "#FF3B30",
                   },
                 ]}
               >
                 <Ionicons
-                  name={item.trend === "up" ? "trending-up" : "trending-down"}
-                  size={iconSize}
+                  name="resize-outline"
+                  size={SMALL_ICON_SIZE}
                   color="#FFFFFF"
                 />
-                <Text style={styles.trendText}>{item.trendValue}</Text>
+                <Text style={styles.growthBadgeText}>
+                  {growth.height > 0
+                    ? `+${growth.height}%`
+                    : `${growth.height}%`}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.growthBadge,
+                  {
+                    backgroundColor:
+                      growth.weight > 0
+                        ? getProgressColor(growth.weight, theme)
+                        : "#FF3B30",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="barbell-outline"
+                  size={SMALL_ICON_SIZE}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.growthBadgeText}>
+                  {growth.weight > 0
+                    ? `+${growth.weight}%`
+                    : `${growth.weight}%`}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.growthBadge,
+                  {
+                    backgroundColor:
+                      growth.headCirc > 0
+                        ? getProgressColor(growth.headCirc, theme)
+                        : "#FF3B30",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="ellipse-outline"
+                  size={SMALL_ICON_SIZE}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.growthBadgeText}>
+                  {growth.headCirc > 0
+                    ? `+${growth.headCirc}%`
+                    : `${growth.headCirc}%`}
+                </Text>
               </View>
             </View>
-          )}
+            <View style={styles.imageTextContainer}>
+              <Text style={styles.imageCardTitle}>{item.title}</Text>
+              {item.subtitle && (
+                <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
+              )}
+            </View>
+          </ImageBackground>
+        );
+      }
 
-          <View style={styles.cardContent}>
-            <Ionicons name={item.icon} size={36} color="#FFFFFF" />
-            <Text style={styles.cardTitle}>{item.title}</Text>
+      if (item.title === "Music") {
+        return (
+          <ImageBackground
+            source={{ uri: item.image }}
+            style={styles.cardBackground}
+            imageStyle={styles.cardImage}
+            resizeMode="cover"
+          >
+            <View style={styles.trendIconContainer}>
+              <View
+                style={[
+                  styles.musicIconBackground,
+                  { backgroundColor: "#007AFF" },
+                ]}
+              >
+                <Ionicons
+                  name="musical-notes"
+                  size={ICON_SIZE}
+                  color="#FFFFFF"
+                />
+                <Ionicons
+                  name="musical-note"
+                  size={ICON_SIZE}
+                  color="#FFFFFF"
+                  style={styles.trebleClefIcon}
+                />
+              </View>
+            </View>
+            <View style={styles.imageTextContainer}>
+              <Text style={styles.imageCardTitle}>{item.title}</Text>
+              {item.subtitle && (
+                <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
+              )}
+            </View>
+          </ImageBackground>
+        );
+      }
+
+      if (item.title === "Diaper") {
+        return (
+          <ImageBackground
+            source={{ uri: item.image }}
+            style={styles.cardBackground}
+            imageStyle={styles.cardImage}
+            resizeMode="cover"
+          >
+            <View style={styles.trendIconContainer}>
+              <View
+                style={[
+                  styles.trendIconBackground,
+                  { backgroundColor: diaper.count > 0 ? "#00B4D8" : "#FF3B30" },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="human-baby-changing-table"
+                  size={ICON_SIZE}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.trendText}>{diaper.count}</Text>
+              </View>
+            </View>
+            <View style={styles.imageTextContainer}>
+              <Text style={styles.imageCardTitle}>{item.title}</Text>
+              {item.subtitle && (
+                <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
+              )}
+            </View>
+          </ImageBackground>
+        );
+      }
+
+      if (item.title === "Feeding") {
+        return (
+          <ImageBackground
+            source={{ uri: item.image }}
+            style={styles.cardBackground}
+            imageStyle={styles.cardImage}
+            resizeMode="cover"
+          >
+            <View style={styles.feedingStatsContainer}>
+              <View
+                style={[
+                  styles.feedingStatBadge,
+                  {
+                    backgroundColor: feeding.breast > 0 ? "#FF9500" : "#FF3B30",
+                  },
+                ]}
+              >
+                <FontAwesome6
+                  name="person-breastfeeding"
+                  size={SMALL_ICON_SIZE}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.feedingStatText}>{feeding.breast}</Text>
+              </View>
+              <View
+                style={[
+                  styles.feedingStatBadge,
+                  {
+                    backgroundColor: feeding.bottle > 0 ? "#5A87FF" : "#FF3B30",
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="baby-bottle-outline"
+                  size={SMALL_ICON_SIZE}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.feedingStatText}>{feeding.bottle}</Text>
+              </View>
+              <View
+                style={[
+                  styles.feedingStatBadge,
+                  {
+                    backgroundColor: feeding.solid > 0 ? "#4CD964" : "#FF3B30",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="nutrition"
+                  size={SMALL_ICON_SIZE}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.feedingStatText}>{feeding.solid}</Text>
+              </View>
+            </View>
+            <View style={styles.imageTextContainer}>
+              <Text style={styles.imageCardTitle}>{item.title}</Text>
+              {item.subtitle && (
+                <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
+              )}
+            </View>
+          </ImageBackground>
+        );
+      }
+
+      // Default image card
+      return (
+        <ImageBackground
+          source={{ uri: item.image }}
+          style={styles.cardBackground}
+          imageStyle={styles.cardImage}
+          resizeMode="cover"
+        >
+          <View style={styles.imageTextContainer}>
+            <Text style={styles.imageCardTitle}>{item.title}</Text>
+            {item.subtitle && (
+              <Text style={styles.imageCardSubtitle}>{item.subtitle}</Text>
+            )}
           </View>
-        </TouchableOpacity>
+        </ImageBackground>
       );
     },
-    [
-      theme,
-      handleCardPress,
-      sleepPercentage,
-      vaccinationProgress,
-      heightProgress,
-      weightProgress,
-      headCircProgress,
-      musicPercentage,
-      diaperCount,
-      breastfeedingCount,
-      bottlefeedingCount,
-      solidfoodCount,
-      iconSize,
-      smallIconSize,
-    ]
+    [activityData, theme, ICON_SIZE, SMALL_ICON_SIZE]
   );
 
+  // Child switcher modal - memoized to prevent re-renders
   const childSwitcherModal = useMemo(
     () => (
       <Modal
@@ -1083,7 +698,7 @@ function ActivityScreen({ navigation }) {
               styles.modalContent,
               {
                 backgroundColor: theme.modalBackground,
-                shadowColor: theme.isDark ? "#000" : "#000",
+                shadowColor: "#000",
               },
             ]}
           >
@@ -1110,69 +725,16 @@ function ActivityScreen({ navigation }) {
                   No children found. Add a child in settings.
                 </Text>
               ) : (
-                localChildren.map((child) => {
-                  console.log(
-                    `Rendering child in switcher: ${child.id}, name: ${child.name}`
-                  );
-
-                  return (
-                    <TouchableOpacity
-                      key={child.id}
-                      style={[
-                        styles.childSwitcherItem,
-                        String(child.id) === String(currentChildId) && {
-                          backgroundColor: `${theme.primary}15`,
-                        },
-                        { borderBottomColor: theme.borderLight },
-                      ]}
-                      onPress={() => handleSelectChild(child.id)}
-                    >
-                      <Image
-                        source={getChildImageSource(child)}
-                        style={styles.childSwitcherImage}
-                        defaultSource={defaultChildImage}
-                        onError={(e) => {
-                          console.log(
-                            "Error loading child image:",
-                            e.nativeEvent.error
-                          );
-                        }}
-                      />
-                      <View style={styles.childSwitcherInfo}>
-                        <Text
-                          style={[
-                            styles.childSwitcherName,
-                            { color: theme.text },
-                          ]}
-                        >
-                          {child.name}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.childSwitcherAge,
-                            { color: theme.textSecondary },
-                          ]}
-                        >
-                          {child.age}
-                        </Text>
-                      </View>
-                      {String(child.id) === String(currentChildId) && (
-                        <View
-                          style={[
-                            styles.currentChildIndicator,
-                            { backgroundColor: theme.primary },
-                          ]}
-                        >
-                          <Ionicons
-                            name="checkmark"
-                            size={12}
-                            color="#FFFFFF"
-                          />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })
+                localChildren.map((child) => (
+                  <ChildSwitcherItem
+                    key={child.id}
+                    child={child}
+                    currentChildId={currentChildId}
+                    theme={theme}
+                    onSelect={handleSelectChild}
+                    getChildImageSource={getChildImageSource}
+                  />
+                ))
               )}
             </ScrollView>
 
@@ -1186,13 +748,7 @@ function ActivityScreen({ navigation }) {
                 navigation.navigate("Settings");
               }}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+              <View style={styles.buttonContent}>
                 <Ionicons name="add-circle" size={20} color="#FFFFFF" />
                 <Text style={styles.addChildText}>Manage Children</Text>
               </View>
@@ -1206,12 +762,75 @@ function ActivityScreen({ navigation }) {
       theme,
       localChildren,
       currentChildId,
-      getChildImageSource,
       handleSelectChild,
+      getChildImageSource,
       navigation,
     ]
   );
 
+  // Effects
+  useEffect(() => {
+    if (children && Array.isArray(children)) {
+      setLocalChildren(children);
+    }
+  }, [children]);
+
+  useEffect(() => {
+    setShowAddChildPrompt(noChildren);
+  }, [noChildren]);
+
+  useEffect(() => {
+    if (showChildSwitcherModal) {
+      setLocalChildren([...children]);
+    }
+  }, [showChildSwitcherModal, children]);
+
+  useEffect(() => {
+    if (currentChild && currentChild.id !== "default") {
+      fetchDataForChild(currentChild.id);
+    }
+  }, [currentChild, currentChildId, fetchDataForChild]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      setLocalChildren([...children]);
+      if (currentChild && currentChild.id !== "default") {
+        fetchDataForChild(currentChild.id);
+      }
+    });
+    return unsubscribe;
+  }, [navigation, children, currentChild, fetchDataForChild]);
+
+  // Header configuration
+  React.useLayoutEffect(() => {
+    const title = noChildren
+      ? "Add a Child"
+      : `${currentChild.name.split(" ")[0]}'s Activity`;
+
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => setShowChildSwitcherModal(true)}
+          disabled={noChildren}
+        >
+          <Ionicons
+            name="people"
+            size={24}
+            color={noChildren ? theme.textTertiary : theme.primary}
+          />
+        </TouchableOpacity>
+      ),
+      title,
+      headerTitle: () => (
+        <Text style={[styles.headerTitle, { color: theme.text }]}>{title}</Text>
+      ),
+    });
+
+    updateCurrentScreen("Activity");
+  }, [navigation, theme, currentChild, noChildren, updateCurrentScreen]);
+
+  // Render
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
@@ -1256,24 +875,12 @@ function ActivityScreen({ navigation }) {
                   { borderColor: theme.background },
                 ]}
                 defaultSource={defaultChildImage}
-                onError={(e) => {
-                  console.log(
-                    "Error loading child profile image:",
-                    e.nativeEvent.error
-                  );
-                }}
               />
               <View style={styles.smallImageContainer}>
                 <Image
                   source={getMoodImage}
                   style={styles.smallChildImage}
                   resizeMode="contain"
-                  onError={(e) => {
-                    console.log(
-                      "Error loading mood image:",
-                      e.nativeEvent.error
-                    );
-                  }}
                 />
               </View>
             </View>
@@ -1289,9 +896,15 @@ function ActivityScreen({ navigation }) {
           </View>
 
           <View style={styles.cardGrid}>
-            {activityCards.map((item, index) =>
-              renderActivityCard(item, index)
-            )}
+            {activityCards.map((item, index) => (
+              <ActivityCard
+                key={`${item.title}-${index}`}
+                item={item}
+                index={index}
+                onPress={handleCardPress}
+                renderContent={renderActivityCardContent}
+              />
+            ))}
           </View>
         </ScrollView>
       )}
@@ -1301,48 +914,45 @@ function ActivityScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  growthProgressContainer: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    zIndex: 10,
-  },
-  growthBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginLeft: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-    elevation: 2,
-    minWidth: 28,
-    justifyContent: "center",
-  },
-  growthBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "bold",
-    marginLeft: 2,
-    flexShrink: 1,
-  },
+  // Layout styles
   container: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
   },
+  cardGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+
+  // Header styles
   headerContainer: {
     alignItems: "center",
     marginBottom: 20,
     paddingTop: 10,
     width: "100%",
   },
+  headerText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  subHeaderText: {
+    fontSize: 14,
+    textAlign: "center",
+  },
+  headerButton: {
+    padding: 10,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+
+  // Profile image styles
   profileImageContainer: {
     position: "relative",
     width: 100,
@@ -1376,55 +986,13 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  childSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 8,
-    paddingHorizontal: 12,
+  smallChildImage: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  childImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 8,
-  },
-  childInfo: {
-    flex: 1,
-  },
-  childName: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  childAge: {
-    fontSize: 12,
-  },
-  moodImage: {
-    width: 70,
-    height: 70,
-    marginBottom: 8,
-  },
-  headerText: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  subHeaderText: {
-    fontSize: 14,
-    textAlign: "center",
-  },
-  cardGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
+
+  // Card styles
   card: {
     width: "48%",
     aspectRatio: 1,
@@ -1482,6 +1050,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
     flexShrink: 1,
   },
+
+  // Icon and badge styles
   trendIconContainer: {
     position: "absolute",
     top: 8,
@@ -1509,13 +1079,85 @@ const styles = StyleSheet.create({
     marginLeft: 2,
     flexShrink: 1,
   },
-  headerButton: {
-    padding: 10,
+  growthProgressContainer: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    zIndex: 10,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+  growthBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
+    minWidth: 28,
+    justifyContent: "center",
   },
+  growthBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "bold",
+    marginLeft: 2,
+    flexShrink: 1,
+  },
+  musicIconBackground: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
+    minWidth: 28,
+    justifyContent: "center",
+  },
+  trebleClefIcon: {
+    marginLeft: 2,
+  },
+  feedingStatsContainer: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    zIndex: 10,
+  },
+  feedingStatBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
+    minWidth: 28,
+    justifyContent: "center",
+  },
+  feedingStatText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "bold",
+    marginLeft: 2,
+    flexShrink: 1,
+  },
+
+  // Modal styles
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
@@ -1547,6 +1189,8 @@ const styles = StyleSheet.create({
   childList: {
     maxHeight: 300,
   },
+
+  // Child switcher styles
   childSwitcherItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -1580,20 +1224,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  addChildButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 15,
-  },
-  addChildText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    marginLeft: 8,
-    textAlign: "center",
-  },
+
+  // No child styles
   noChildContainer: {
     flex: 1,
     justifyContent: "center",
@@ -1614,6 +1246,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 30,
   },
+  noChildrenText: {
+    textAlign: "center",
+    padding: 20,
+    fontSize: 16,
+  },
+
+  // Button styles
   addChildButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1630,87 +1269,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  noChildrenText: {
-    textAlign: "center",
-    padding: 20,
-    fontSize: 16,
-  },
-  percentageText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginTop: 5,
-  },
-  musicIconBackground: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-    elevation: 2,
-    minWidth: 28,
-    justifyContent: "center",
-  },
-  trebleClefIcon: {
-    marginLeft: 2,
-  },
-  smallChildImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  feedingIconsContainer: {
-    position: "absolute",
-    top: 8,
-    left: 8,
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    zIndex: 10,
-  },
-  feedingIconBackground: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-    elevation: 2,
-  },
-  feedingStatsContainer: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    zIndex: 10,
-  },
-  feedingStatBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginLeft: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-    elevation: 2,
-    minWidth: 28,
-    justifyContent: "center",
-  },
-  feedingStatText: {
+  addChildText: {
     color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "bold",
-    marginLeft: 2,
-    flexShrink: 1,
+    fontWeight: "600",
+    marginLeft: 8,
+    textAlign: "center",
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 

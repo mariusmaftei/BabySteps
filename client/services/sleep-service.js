@@ -116,6 +116,72 @@ export const getWeeklySleepData = async (childId) => {
   return await getSleepDataByDateRange(childId, startDate, endDate);
 };
 
+export const getMonthlySleepData = async (childId) => {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 30); // Get last 30 days
+
+  return await getSleepDataByDateRange(childId, startDate, endDate);
+};
+
+export const getYearlySleepData = async (childId) => {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setFullYear(startDate.getFullYear() - 1); // Get last 365 days
+
+  return await getSleepDataByDateRange(childId, startDate, endDate);
+};
+
+// Add this helper function to format dates for different time periods
+export const formatDateForPeriod = (date, period) => {
+  if (period === "week") {
+    return new Date(date)
+      .toLocaleDateString("en-US", { weekday: "short" })
+      .substring(0, 3);
+  } else if (period === "month") {
+    return new Date(date)
+      .toLocaleDateString("en-US", { day: "2-digit", month: "short" })
+      .substring(0, 5);
+  } else if (period === "year") {
+    return new Date(date)
+      .toLocaleDateString("en-US", { month: "short" })
+      .substring(0, 3);
+  }
+  return date;
+};
+
+// Add this function to aggregate sleep data by month for yearly view
+export const aggregateSleepDataByMonth = (sleepData) => {
+  const monthlyData = {};
+
+  sleepData.forEach((record) => {
+    const date = new Date(record.date);
+    const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+
+    if (!monthlyData[monthKey]) {
+      monthlyData[monthKey] = {
+        month: date.toLocaleDateString("en-US", { month: "short" }),
+        totalHours: 0,
+        count: 0,
+        date: new Date(date.getFullYear(), date.getMonth(), 1),
+      };
+    }
+
+    monthlyData[monthKey].totalHours += Number.parseFloat(record.totalHours);
+    monthlyData[monthKey].count += 1;
+  });
+
+  // Calculate averages and sort by date
+  return Object.values(monthlyData)
+    .map((item) => ({
+      date: item.date.toISOString().split("T")[0],
+      month: item.month,
+      totalHours: (item.totalHours / item.count).toFixed(1),
+      count: item.count,
+    }))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+};
+
 const getChildAgeInMonths = (child) => {
   if (!child || !child.age) return 24;
 
