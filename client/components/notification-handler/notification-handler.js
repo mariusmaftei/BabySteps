@@ -1,26 +1,39 @@
+"use client";
+
 import { useEffect } from "react";
-import * as Notifications from "expo-notifications";
-import { useNotification } from "../../context/notification-context";
+import { Platform } from "react-native";
+import * as Device from "expo-device";
+import Constants from "expo-constants";
+import { useNavigation } from "@react-navigation/native";
+import { setupNotificationListeners } from "../../services/notification-service";
+
+// Check if running on emulator
+const isRunningOnEmulator = !Device.isDevice;
+
+// Check if using Expo Go
+const isUsingExpoGo = Constants.appOwnership === "expo";
+
+// Completely disable notifications on Android emulators with Expo Go
+const shouldDisableNotifications =
+  Platform.OS === "android" && isRunningOnEmulator && isUsingExpoGo;
 
 const NotificationHandler = () => {
-  const { updateCurrentScreen } = useNotification();
+  const navigation = useNavigation();
 
   useEffect(() => {
-    // Set up notification response handler
-    const subscription = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const data = response.notification.request.content.data;
+    // Skip notification setup on Android emulators with Expo Go
+    if (shouldDisableNotifications) {
+      return;
+    }
 
-        // If the notification has a screen to navigate to, update the current screen
-        if (data && data.screen) {
-          updateCurrentScreen(data.screen);
-        }
-      }
-    );
+    // Set up notification listeners
+    const cleanupListeners = setupNotificationListeners(navigation);
 
-    // Clean up the subscription
-    return () => subscription.remove();
-  }, [updateCurrentScreen]);
+    // Clean up listeners on unmount
+    return () => {
+      cleanupListeners();
+    };
+  }, [navigation]);
 
   // This component doesn't render anything
   return null;

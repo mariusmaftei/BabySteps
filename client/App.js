@@ -41,6 +41,8 @@ import { AuthProvider, useAuth } from "./context/auth-context";
 import NotificationHandler from "./components/notification-handler/notification-handler";
 import { NotificationProvider } from "./context/notification-context";
 
+console.log("App.js - Starting initialization");
+
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 const AuthStack = createStackNavigator();
@@ -176,6 +178,7 @@ function SplashScreen() {
 
 // Update the MainApp component to include the NotificationHandler
 function MainApp() {
+  console.log("MainApp - Component initializing");
   const { theme, setThemeByGender } = useTheme();
   const {
     isLoading: authLoading,
@@ -201,6 +204,7 @@ function MainApp() {
   // Check user authentication status and log out if user not found
   // Only run this once when isAuthenticated changes from false to true
   useEffect(() => {
+    console.log("MainApp - Authentication check effect running");
     const checkUser = async () => {
       if (isAuthenticated && !userChecked.current) {
         userChecked.current = true;
@@ -272,6 +276,10 @@ function MainApp() {
     );
   }
 
+  console.log(
+    "MainApp - Rendering UI with auth state:",
+    isAuthenticated ? "authenticated" : "not authenticated"
+  );
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
@@ -291,6 +299,7 @@ function MainApp() {
 
 // Root component with ThemeProvider and ChildActivityProvider
 export default function App() {
+  console.log("App - Root component initializing");
   return (
     <ThemeProvider>
       <AuthProvider>

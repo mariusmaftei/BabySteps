@@ -72,12 +72,16 @@ const MusicScreen = () => {
     fetchMusicData();
 
     // Initialize audio
+    // Update the Audio configuration method
     const setupAudio = async () => {
       try {
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
           shouldDuckAndroid: true,
+          // Remove deprecated properties and add new ones for SDK 53
+          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         });
         console.log("Audio mode set successfully");
       } catch (err) {
@@ -147,9 +151,14 @@ const MusicScreen = () => {
       console.log(`Loading song: ${song.title}, URL: ${song.trackUrl}`);
 
       // Load the new sound
+      // Update the Sound creation method
       const { sound, status } = await Audio.Sound.createAsync(
         { uri: song.trackUrl },
-        { shouldPlay: true, volume: volume },
+        {
+          shouldPlay: true,
+          volume: volume,
+          progressUpdateIntervalMillis: 1000,
+        },
         onPlaybackStatusUpdate
       );
 

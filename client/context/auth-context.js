@@ -5,6 +5,7 @@ import * as authService from "../services/auth-service";
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
+  console.log("AuthProvider - Initializing");
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -14,6 +15,7 @@ export const AuthProvider = ({ children }) => {
   // Check if user is already logged in
   useEffect(() => {
     const loadToken = async () => {
+      console.log("AuthProvider - Loading token from storage");
       try {
         const storedToken = await AsyncStorage.getItem("token");
         if (storedToken) {
@@ -38,6 +40,7 @@ export const AuthProvider = ({ children }) => {
       } catch (err) {
         console.error("Error loading token:", err);
       } finally {
+        console.log("AuthProvider - Finished loading auth state");
         setIsLoading(false);
       }
     };

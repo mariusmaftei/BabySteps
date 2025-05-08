@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import {
   View,
@@ -11,6 +13,7 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -98,6 +101,16 @@ export default function SettingsScreen({ navigation }) {
   } = useChildActivity();
   const { user, token, logout, updateUserProfile, getCurrentUser } = useAuth();
 
+  // Get notification context with all the updated methods
+  const {
+    settings,
+    toggleNotifications,
+    toggleHealthReminders,
+    scheduleTestNotification,
+    expoPushToken,
+    registerForPushNotifications,
+  } = useNotification();
+
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showAddChildModal, setShowAddChildModal] = useState(false);
 
@@ -112,27 +125,17 @@ export default function SettingsScreen({ navigation }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [isSelectingImage, setIsSelectingImage] = useState(false);
+  const [isTestingNotification, setIsTestingNotification] = useState(false);
 
   // Add these new state variables after the other state declarations
   const [showEditChildModal, setShowEditChildModal] = useState(false);
   const [editChildId, setEditChildId] = useState(null);
 
-  // Add this inside your SettingsScreen component, right after the other useState declarations
-  const { settings, toggleNotifications, toggleHealthReminders } =
-    useNotification();
-  // Find the line where we're using the useNotification hook
-  // Make sure this hook is called at the top level of the component, not inside a condition or loop
-  // Also ensure that all hooks are called in the same order on every render
-
-  // Check if there's any conditional rendering of hooks in the component
-  // For example, make sure we're not doing something like:
-  // if (condition) {
-  //   useState(...) // This would cause the error
-  // }
-
-  // The most likely issue is that the useNotification hook might not be properly imported or defined
-  // Make sure the import is correct:
-  // import { useNotification } from "../contexts/notification-context"
+  // Handle notification toggle
+  const handleToggleNotifications = async (value) => {
+    setNotificationsEnabled(value);
+    await toggleNotifications(value);
+  };
 
   // Fetch user profile on component mount
   useEffect(() => {
@@ -199,6 +202,55 @@ export default function SettingsScreen({ navigation }) {
       Alert.alert("Error", "Failed to select image. Please try again.");
     } finally {
       setIsSelectingImage(false);
+    }
+  };
+
+  // Handle test notification
+  const handleTestNotification = async () => {
+    if (isTestingNotification) return;
+
+    try {
+      setIsTestingNotification(true);
+      const notificationId = await scheduleTestNotification();
+
+      if (notificationId) {
+        Alert.alert(
+          "Test Notification Sent",
+          "A test notification has been scheduled and should appear in a few seconds."
+        );
+      } else {
+        Alert.alert(
+          "Notification Failed",
+          "Failed to schedule test notification. Please check permissions."
+        );
+      }
+    } catch (error) {
+      console.error("Error sending test notification:", error);
+      Alert.alert(
+        "Error",
+        "Failed to send test notification: " + error.message
+      );
+    } finally {
+      setIsTestingNotification(false);
+    }
+  };
+
+  // Handle push token registration
+  const handleRegisterPushToken = async () => {
+    try {
+      const token = await registerForPushNotifications();
+      if (token) {
+        Alert.alert(
+          "Push Token Registered",
+          `Successfully registered for push notifications. Token: ${token.substring(
+            0,
+            10
+          )}...`
+        );
+      }
+    } catch (error) {
+      console.error("Error registering push token:", error);
+      Alert.alert("Error", "Failed to register push token: " + error.message);
     }
   };
 
@@ -664,9 +716,6 @@ export default function SettingsScreen({ navigation }) {
     );
   };
 
-  // Remove the renderAddChildModal and renderEditChildModal functions
-  // Replace the modal rendering in the return statement with the AddChildModal component
-
   // Edit Profile Modal
   const renderEditProfileModal = () => {
     return (
@@ -1044,8 +1093,8 @@ export default function SettingsScreen({ navigation }) {
             {renderToggleSetting(
               "notifications",
               "Notifications",
-              notificationsEnabled,
-              setNotificationsEnabled
+              settings.enabled,
+              handleToggleNotifications
             )}
             {renderToggleSetting(
               "notifications",
@@ -1053,6 +1102,68 @@ export default function SettingsScreen({ navigation }) {
               settings.healthReminders,
               toggleHealthReminders
             )}
+
+            {/* Add Test Notification Button */}
+            <TouchableOpacity
+              style={[
+                styles.settingItem,
+                {
+                  borderBottomColor: theme.borderLight,
+                  justifyContent: "space-between",
+                },
+              ]}
+              onPress={handleTestNotification}
+              disabled={isTestingNotification}
+            >
+              <View style={styles.settingItemLeft}>
+                <Ionicons
+                  name="notifications-outline"
+                  size={24}
+                  color={theme.primary}
+                  style={styles.settingIcon}
+                />
+                <Text style={[styles.settingText, { color: theme.text }]}>
+                  Test Notification
+                </Text>
+              </View>
+              {isTestingNotification ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Ionicons name="send-outline" size={20} color={theme.primary} />
+              )}
+            </TouchableOpacity>
+
+            {/* Add Push Token Registration Button (only on physical devices) */}
+            {Platform.OS !== "web" && (
+              <TouchableOpacity
+                style={[
+                  styles.settingItem,
+                  {
+                    borderBottomColor: theme.borderLight,
+                    justifyContent: "space-between",
+                  },
+                ]}
+                onPress={handleRegisterPushToken}
+              >
+                <View style={styles.settingItemLeft}>
+                  <Ionicons
+                    name="cloud-outline"
+                    size={24}
+                    color={theme.primary}
+                    style={styles.settingIcon}
+                  />
+                  <Text style={[styles.settingText, { color: theme.text }]}>
+                    Register Push Token
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={theme.textTertiary}
+                />
+              </TouchableOpacity>
+            )}
+
             <View
               style={[
                 styles.settingItem,

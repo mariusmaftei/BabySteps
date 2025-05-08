@@ -98,6 +98,7 @@ const ActivityCard = React.memo(({ item, index, onPress, renderContent }) => {
 });
 
 function ActivityScreen({ navigation }) {
+  console.log("ActivityScreen - Component initializing");
   const { theme } = useTheme();
   const { currentChild, currentChildId, children, switchChild } =
     useChildActivity();
@@ -797,6 +798,7 @@ function ActivityScreen({ navigation }) {
       if (currentChild && currentChild.id !== "default") {
         fetchDataForChild(currentChild.id);
       }
+      console.log("ActivityScreen - Focus listener activated");
     });
     return unsubscribe;
   }, [navigation, children, currentChild, fetchDataForChild]);
@@ -831,6 +833,7 @@ function ActivityScreen({ navigation }) {
   }, [navigation, theme, currentChild, noChildren, updateCurrentScreen]);
 
   // Render
+  console.log("ActivityScreen - Rendering UI");
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}

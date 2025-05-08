@@ -12,6 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const ChildActivityContext = createContext();
 
 export const ChildActivityProvider = ({ children }) => {
+  console.log("ChildActivityProvider - Initializing");
   const { token, isAuthenticated } = useAuth();
   const [childrenData, setChildren] = useState([]);
   const [currentChildId, setCurrentChildId] = useState(null);
@@ -85,6 +86,7 @@ export const ChildActivityProvider = ({ children }) => {
   // Fetch children from API when authenticated
   useEffect(() => {
     const fetchChildren = async () => {
+      console.log("ChildActivityProvider - Starting to fetch children data");
       if (!isAuthenticated || !token) {
         console.log("Not authenticated, skipping children fetch");
         setIsLoading(false);
@@ -149,6 +151,7 @@ export const ChildActivityProvider = ({ children }) => {
         }
       } finally {
         setIsLoading(false);
+        console.log("ChildActivityProvider - Finished loading children data");
       }
     };
 

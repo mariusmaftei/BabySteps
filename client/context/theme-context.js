@@ -58,6 +58,8 @@ const boyTheme = {
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
+  // Add this console.log at the beginning of the ThemeProvider function:
+  console.log("ThemeProvider - Initializing");
   // Get device color scheme
   const deviceColorScheme = useColorScheme();
 
