@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -10,10 +12,12 @@ import {
   Animated,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useTheme } from "../../../context/theme-context";
 import Icon from "react-native-vector-icons/Feather";
 import Slider from "@react-native-community/slider";
+// Update Audio imports for SDK 53
 import { Audio } from "expo-av";
 import * as musicService from "../../../services/music-service";
 
@@ -34,6 +38,7 @@ const MusicScreen = () => {
   // Refs
   const soundRef = useRef(null);
   const progressIntervalRef = useRef(null);
+  const audioConfiguredRef = useRef(false);
 
   // Animation for the album rotation
   const spinValue = new Animated.Value(0);
@@ -71,21 +76,29 @@ const MusicScreen = () => {
 
     fetchMusicData();
 
-    // Initialize audio
-    // Update the Audio configuration method
+    // Initialize audio - Simplified for SDK 53
     const setupAudio = async () => {
+      // Skip if already configured to prevent multiple attempts
+      if (audioConfiguredRef.current) return;
+
       try {
-        await Audio.setAudioModeAsync({
+        // Minimal configuration that works on both platforms
+        const audioConfig = {
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
-          shouldDuckAndroid: true,
-          // Remove deprecated properties and add new ones for SDK 53
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-        });
-        console.log("Audio mode set successfully");
+        };
+
+        // Only add Android-specific properties on Android
+        if (Platform.OS === "android") {
+          audioConfig.shouldDuckAndroid = true;
+        }
+
+        await Audio.setAudioModeAsync(audioConfig);
+        console.log("Audio mode set successfully with minimal config");
+        audioConfiguredRef.current = true;
       } catch (err) {
         console.error("Error setting audio mode:", err);
+        // Don't try again if it failed - audio might still work
       }
     };
 
@@ -135,7 +148,7 @@ const MusicScreen = () => {
     outputRange: ["0deg", "360deg"],
   });
 
-  // Load and play a song
+  // Load and play a song - Updated for SDK 53
   const loadAndPlaySong = async (song) => {
     try {
       // Unload previous sound if exists
@@ -150,9 +163,8 @@ const MusicScreen = () => {
 
       console.log(`Loading song: ${song.title}, URL: ${song.trackUrl}`);
 
-      // Load the new sound
-      // Update the Sound creation method
-      const { sound, status } = await Audio.Sound.createAsync(
+      // Updated sound creation for SDK 53
+      const { sound } = await Audio.Sound.createAsync(
         { uri: song.trackUrl },
         {
           shouldPlay: true,
@@ -194,11 +206,15 @@ const MusicScreen = () => {
   const startProgressTracking = () => {
     progressIntervalRef.current = setInterval(async () => {
       if (soundRef.current) {
-        const status = await soundRef.current.getStatusAsync();
-        if (status.isLoaded) {
-          const newProgress = status.positionMillis / status.durationMillis;
-          setProgress(newProgress || 0);
-          setPosition(status.positionMillis || 0);
+        try {
+          const status = await soundRef.current.getStatusAsync();
+          if (status.isLoaded) {
+            const newProgress = status.positionMillis / status.durationMillis;
+            setProgress(newProgress || 0);
+            setPosition(status.positionMillis || 0);
+          }
+        } catch (err) {
+          console.error("Error getting playback status:", err);
         }
       }
     }, 1000);
