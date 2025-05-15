@@ -1,8 +1,40 @@
 import { api, setAuthToken, initializeApi } from "./api";
 
+// Flag to track if we're handling a duplicate email error
+let handlingDuplicateEmail = false;
+// Flag to track if we're handling an invalid credentials error
+let handlingInvalidCredentials = false;
+
+// Helper function to detect duplicate email errors
+const isDuplicateEmailErrorCheck = (error) => {
+  return (
+    error.response &&
+    error.response.status === 400 &&
+    (error.response.data.code === "EMAIL_EXISTS" ||
+      (error.response.data.message &&
+        error.response.data.message.includes("already exists")))
+  );
+};
+
+// Helper function to detect invalid credentials errors
+const isInvalidCredentialsCheck = (error) => {
+  return (
+    error.response &&
+    error.response.status === 400 &&
+    error.response.data &&
+    error.response.data.message &&
+    (error.response.data.message.includes("Invalid credentials") ||
+      error.response.data.message.includes("Invalid email") ||
+      error.response.data.message.includes("Invalid password"))
+  );
+};
+
 // Register a new user
 export const register = async (userData) => {
   try {
+    // Reset the flag at the start of each registration attempt
+    handlingDuplicateEmail = false;
+
     console.log("Registering user with data:", JSON.stringify(userData));
 
     // Validate that email exists before making the request
@@ -27,23 +59,37 @@ export const register = async (userData) => {
 
     return response.data;
   } catch (error) {
-    console.error("Registration error:", error);
+    // Check if this is a duplicate email error
+    if (isDuplicateEmailErrorCheck(error)) {
+      // Set the flag to indicate we're handling a duplicate email error
+      handlingDuplicateEmail = true;
 
+      // Create a custom error with the appropriate message and code
+      const customError = new Error(error.response.data.message);
+      customError.code = "EMAIL_EXISTS";
+
+      // Only log once for this specific error
+      console.log("Registration failed: Email already exists");
+
+      throw customError;
+    }
+
+    // For other errors, log them and rethrow
+    console.error("Registration error:", error);
     if (error.response) {
       console.error("Error response status:", error.response.status);
       console.error("Error response data:", error.response.data);
-      throw new Error(error.response.data.message || "Registration failed");
-    } else {
-      throw new Error(
-        error.message || "Network error. Please check your connection."
-      );
     }
+    throw error;
   }
 };
 
 // Login a user
 export const login = async (credentials) => {
   try {
+    // Reset the flag at the start of each login attempt
+    handlingInvalidCredentials = false;
+
     console.log("Logging in user:", credentials.email);
     const response = await api.post("/auth/login", credentials);
 
@@ -57,9 +103,27 @@ export const login = async (credentials) => {
 
     return response.data;
   } catch (error) {
+    // Check if this is an invalid credentials error
+    if (isInvalidCredentialsCheck(error)) {
+      // Set the flag to indicate we're handling an invalid credentials error
+      handlingInvalidCredentials = true;
+
+      // Create a custom error with the appropriate message
+      const customError = new Error("Invalid email or password");
+      customError.code = "INVALID_CREDENTIALS";
+
+      // Only log once for this specific error
+      console.log("Login failed: Invalid credentials");
+
+      throw customError;
+    }
+
+    // For other errors, log normally
     console.error("Login error:", error);
 
     if (error.response) {
+      console.error("Error response status:", error.response.status);
+      console.error("Error response data:", error.response.data);
       throw new Error(error.response.data.message || "Login failed");
     } else {
       throw new Error("Network error. Please check your connection.");
@@ -145,3 +209,7 @@ export const initializeApiService = async () => {
     return false;
   }
 };
+
+// Export the flags for other modules to check
+export const getDuplicateEmailErrorFlag = () => handlingDuplicateEmail;
+export const getInvalidCredentialsFlag = () => handlingInvalidCredentials;

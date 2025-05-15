@@ -72,6 +72,28 @@ const isExpected404Error = (url, status) => {
   return EXPECTED_404_ENDPOINTS.some((endpoint) => url.includes(endpoint));
 };
 
+// Function to check if this is a known error that should be handled quietly
+const isKnownError = (error) => {
+  // Check for duplicate email error
+  const isDuplicateEmail =
+    error.response &&
+    error.response.status === 400 &&
+    error.response.data &&
+    (error.response.data.code === "EMAIL_EXISTS" ||
+      (error.response.data.message &&
+        error.response.data.message.includes("already exists")));
+
+  // Check for invalid credentials error
+  const isInvalidCredentials =
+    error.response &&
+    error.response.status === 400 &&
+    error.response.data &&
+    error.response.data.message &&
+    error.response.data.message.includes("Invalid credentials");
+
+  return isDuplicateEmail || isInvalidCredentials;
+};
+
 // Add request interceptor for logging
 api.interceptors.request.use(
   (config) => {
@@ -91,8 +113,17 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Only log as error if it's not an expected 404
-    if (
+    // Check if this is a known error that should be handled quietly
+    if (error.response && isKnownError(error)) {
+      // For known errors, just log a simple message
+      if (error.response.data.message.includes("already exists")) {
+        console.log("Registration failed: Email already exists");
+      } else if (error.response.data.message.includes("Invalid credentials")) {
+        console.log("Login failed: Invalid credentials");
+      }
+    }
+    // Check if this is an expected 404
+    else if (
       error.response &&
       isExpected404Error(error.config.url, error.response.status)
     ) {
@@ -101,7 +132,9 @@ api.interceptors.response.use(
           error.response.data.message || "Not found"
         } (expected for new users)`
       );
-    } else {
+    }
+    // For other errors, log normally
+    else {
       console.error("API Response Error:", error);
       if (error.response) {
         console.error("Error Status:", error.response.status);

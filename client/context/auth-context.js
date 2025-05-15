@@ -48,6 +48,17 @@ export const AuthProvider = ({ children }) => {
     loadToken();
   }, []);
 
+  // Helper function to check if an error is an invalid credentials error
+  const isInvalidCredentialsError = (err) => {
+    return (
+      err.code === "INVALID_CREDENTIALS" ||
+      (err.message &&
+        (err.message.includes("Invalid email") ||
+          err.message.includes("Invalid credentials") ||
+          err.message.includes("Invalid password")))
+    );
+  };
+
   // Register a new user
   const register = async (userData) => {
     setError(null);
@@ -76,8 +87,21 @@ export const AuthProvider = ({ children }) => {
 
       return result;
     } catch (err) {
-      console.error("Registration error in auth context:", err);
-      setError(err.message || "Registration failed");
+      // Check if this is a duplicate email error
+      if (err.message && err.message.includes("User already exists")) {
+        // For duplicate email errors, just set the error without additional logging
+        setError(err.message);
+
+        // Only log this once if it's not already being handled by the service
+        if (!authService.getDuplicateEmailErrorFlag()) {
+          console.log("Registration failed: Email already exists");
+        }
+      } else {
+        // For other errors, log normally
+        console.error("Registration error in auth context:", err);
+        setError(err.message || "Registration failed");
+      }
+
       throw err;
     }
   };
@@ -105,8 +129,21 @@ export const AuthProvider = ({ children }) => {
 
       return true;
     } catch (err) {
-      console.error("Login error in auth context:", err);
-      setError(err.message || "Login failed");
+      // Check if this is an invalid credentials error
+      if (isInvalidCredentialsError(err)) {
+        // For invalid credentials errors, just set the error without additional logging
+        setError(err.message);
+
+        // Only log this once if it's not already being handled by the service
+        if (!authService.getInvalidCredentialsFlag()) {
+          console.log("Login failed: Invalid credentials");
+        }
+      } else {
+        // For other errors, log normally
+        console.error("Login error in auth context:", err);
+        setError(err.message || "Login failed");
+      }
+
       throw err;
     }
   };

@@ -110,8 +110,8 @@ const SleepScreen = () => {
   };
 
   const updateTotalHours = (nap, night) => {
-    const napValue = Number.parseFloat(nap) || 0;
-    const nightValue = Number.parseFloat(night) || 0;
+    const napValue = nap === "" ? 0 : Number.parseFloat(nap) || 0;
+    const nightValue = night === "" ? 0 : Number.parseFloat(night) || 0;
     setCustomTotalHours(napValue + nightValue);
   };
 
@@ -255,8 +255,8 @@ const SleepScreen = () => {
           isDefaultData: true,
         };
 
-        setNapHours("0");
-        setNightHours("0");
+        setNapHours("");
+        setNightHours("");
         setNotes("");
         setSelectedRecord(defaultRecord);
         setCurrentDate(today);
@@ -378,8 +378,8 @@ const SleepScreen = () => {
   const resetForm = () => {
     const today = new Date().toISOString().split("T")[0];
 
-    setNapHours("0");
-    setNightHours("0");
+    setNapHours("");
+    setNightHours("");
     setNotes("");
     setSelectedRecord({
       id: null,

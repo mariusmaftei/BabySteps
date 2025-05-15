@@ -17,7 +17,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../context/theme-context";
 import { useAuth } from "../../context/auth-context";
-import * as authService from "../../services/auth-service";
 
 export default function RegisterScreen({ navigation }) {
   const { theme } = useTheme();
@@ -87,6 +86,7 @@ export default function RegisterScreen({ navigation }) {
     } else if (!text.includes("@") || !text.includes(".")) {
       setEmailError("Please enter a valid email address");
     } else {
+      // Clear any existing errors, including "already exists" errors
       setEmailError("");
     }
   };
@@ -118,6 +118,15 @@ export default function RegisterScreen({ navigation }) {
     } else {
       setConfirmPasswordError("");
     }
+  };
+
+  // Check if an error is a duplicate email error
+  const isDuplicateEmailError = (error) => {
+    return (
+      error &&
+      (error.code === "EMAIL_EXISTS" ||
+        (error.message && error.message.includes("User already exists")))
+    );
   };
 
   // Handle registration
@@ -160,11 +169,20 @@ export default function RegisterScreen({ navigation }) {
       // Navigation will be handled by the useEffect that watches isAuthenticated
       console.log("Registration successful, auth state updated");
     } catch (error) {
-      console.error("Registration error in component:", error);
-      const errorMessage =
-        error.message ||
-        "Registration failed. Please check your information and try again.";
-      Alert.alert("Registration Failed", errorMessage);
+      // Check if the error is about existing user
+      if (isDuplicateEmailError(error)) {
+        // For duplicate email errors, just set the error without logging
+        setEmailError(
+          "This email is already registered. Please use a different email or try logging in."
+        );
+      } else {
+        // Only log non-duplicate email errors
+        console.error("Registration error in component:", error);
+        const errorMessage =
+          error.message ||
+          "Registration failed. Please check your information and try again.";
+        Alert.alert("Registration Failed", errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -182,7 +200,7 @@ export default function RegisterScreen({ navigation }) {
           <View style={styles.logoContainer}>
             <Image
               source={{
-                uri: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/kinderlogov2-bGxtc5GX85SpziDN07BmGByXkLqrh0.png",
+                uri: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/baby-steps-auth-logo-eVQKKLuZHwO00WJyxyU73aNjHpQ2Zx.png",
               }}
               style={styles.logo}
               resizeMode="contain"
@@ -433,7 +451,7 @@ const styles = StyleSheet.create({
     height: 150,
   },
   logo: {
-    width: 250,
+    width: 200,
     height: 150,
   },
   formContainer: {

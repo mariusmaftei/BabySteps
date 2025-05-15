@@ -27,6 +27,7 @@ export default function LoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [loginError, setLoginError] = useState("");
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -51,6 +52,8 @@ export default function LoginScreen({ navigation }) {
   // Validate email
   const validateEmail = (text) => {
     setEmail(text);
+    setLoginError(""); // Clear login error when user types
+
     if (text.trim() === "") {
       setEmailError("Email is required");
     } else if (!text.includes("@") || !text.includes(".")) {
@@ -63,6 +66,8 @@ export default function LoginScreen({ navigation }) {
   // Validate password
   const validatePassword = (text) => {
     setPassword(text);
+    setLoginError(""); // Clear login error when user types
+
     if (text.trim() === "") {
       setPasswordError("Password is required");
     } else if (text.length < 6) {
@@ -72,8 +77,21 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  // Check if the error is an invalid credentials error
+  const isInvalidCredentialsError = (error) => {
+    return (
+      error.message &&
+      (error.message.includes("Invalid credentials") ||
+        error.message.includes("Invalid email") ||
+        error.message.includes("Invalid password"))
+    );
+  };
+
   // Handle login
   const handleLogin = async () => {
+    // Clear previous login error
+    setLoginError("");
+
     // Validate inputs
     validateEmail(email);
     validatePassword(password);
@@ -93,11 +111,18 @@ export default function LoginScreen({ navigation }) {
       await login(email, password);
       // Login successful - navigation will be handled by the auth state change
     } catch (error) {
-      console.error("Login failed:", error);
-      Alert.alert(
-        "Login Failed",
-        error.message || "Please check your credentials and try again."
-      );
+      // Handle invalid credentials error
+      if (isInvalidCredentialsError(error)) {
+        setLoginError("Invalid email or password. Please try again.");
+        console.log("Login failed in component: Invalid credentials");
+      } else {
+        // For other errors, show an alert
+        Alert.alert(
+          "Login Failed",
+          error.message || "An unexpected error occurred. Please try again."
+        );
+        console.error("Login failed in component:", error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -115,11 +140,10 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.logoContainer}>
             <Image
               source={{
-                uri: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/kinderlogov2-bGxtc5GX85SpziDN07BmGByXkLqrh0.png",
+                uri: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/baby-steps-auth-logo-eVQKKLuZHwO00WJyxyU73aNjHpQ2Zx.png",
               }}
               style={styles.logo}
               resizeMode="contain"
-              defaultSource={require("../../assets/images/default.jpg")}
             />
           </View>
 
@@ -140,6 +164,15 @@ export default function LoginScreen({ navigation }) {
               Sign in to continue tracking your child's growth
             </Text>
 
+            {/* Show login error message if present */}
+            {loginError ? (
+              <View style={styles.loginErrorContainer}>
+                <Text style={[styles.loginErrorText, { color: theme.danger }]}>
+                  {loginError}
+                </Text>
+              </View>
+            ) : null}
+
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
                 Email
@@ -148,7 +181,10 @@ export default function LoginScreen({ navigation }) {
                 style={[
                   styles.inputWrapper,
                   {
-                    borderColor: emailError ? theme.danger : theme.borderLight,
+                    borderColor:
+                      emailError || loginError
+                        ? theme.danger
+                        : theme.borderLight,
                     backgroundColor: theme.backgroundSecondary,
                   },
                 ]}
@@ -184,9 +220,10 @@ export default function LoginScreen({ navigation }) {
                 style={[
                   styles.inputWrapper,
                   {
-                    borderColor: passwordError
-                      ? theme.danger
-                      : theme.borderLight,
+                    borderColor:
+                      passwordError || loginError
+                        ? theme.danger
+                        : theme.borderLight,
                     backgroundColor: theme.backgroundSecondary,
                   },
                 ]}
@@ -280,7 +317,7 @@ const styles = StyleSheet.create({
     height: 150,
   },
   logo: {
-    width: 250,
+    width: 200,
     height: 150,
   },
   formContainer: {
@@ -301,6 +338,18 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     marginBottom: 24,
+    textAlign: "center",
+  },
+  loginErrorContainer: {
+    backgroundColor: "rgba(255, 0, 0, 0.05)",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 0, 0, 0.2)",
+  },
+  loginErrorText: {
+    fontSize: 14,
     textAlign: "center",
   },
   inputContainer: {
