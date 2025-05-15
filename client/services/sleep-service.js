@@ -67,8 +67,22 @@ export const getTodaySleepData = async (childId) => {
     return response.data ? createSleepRecord(response.data) : null;
   } catch (error) {
     if (error.response && error.response.status === 404) {
-      console.log("No sleep record found for today");
-      return null;
+      console.log("No sleep record found for today, creating default record");
+
+      // Create a default record for today
+      const today = new Date().toISOString().split("T")[0];
+
+      return {
+        id: null,
+        childId: childId,
+        napHours: 0,
+        nightHours: 0,
+        date: today,
+        notes: "",
+        totalHours: "0",
+        isDefaultData: true,
+        sleepProgress: 0,
+      };
     }
     console.error("Error fetching today's sleep data:", error);
     if (error.response) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,8 +10,9 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
+  RefreshControl,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useChildActivity } from "../../../context/child-activity-context";
 import { useTheme } from "../../../context/theme-context";
 import CustomButton from "../../../components/UI/Button/Button";
@@ -35,6 +36,7 @@ const SleepScreen = () => {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [napHours, setNapHours] = useState("");
   const [nightHours, setNightHours] = useState("");
@@ -50,6 +52,7 @@ const SleepScreen = () => {
   const [isFirstRecord, setIsFirstRecord] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [savedRecord, setSavedRecord] = useState(null);
+  const [isDefaultData, setIsDefaultData] = useState(false);
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -129,14 +132,17 @@ const SleepScreen = () => {
 
   const sunnyColor = "#FF9500";
 
-  useEffect(() => {
-    if (!currentChildId) {
-      setLoading(false);
-      return;
-    }
-
-    loadSleepData();
-  }, [currentChildId]);
+  // Refresh data when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (currentChildId) {
+        loadSleepData();
+      }
+      return () => {
+        // Cleanup if needed
+      };
+    }, [currentChildId])
+  );
 
   useEffect(() => {
     calculateSleepPercentage();
@@ -156,6 +162,7 @@ const SleepScreen = () => {
         savedRecord.nightHours.toString()
       );
       setIsEditMode(false);
+      setIsDefaultData(false);
 
       if (savedRecord.sleepProgress !== undefined) {
         setSleepPercentage(savedRecord.sleepProgress);
@@ -190,6 +197,13 @@ const SleepScreen = () => {
     }
   }, [navigation, notificationsEnabled, theme, currentChild]);
 
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadSleepData().finally(() => {
+      setRefreshing(false);
+    });
+  };
+
   const loadSleepData = async () => {
     setLoading(true);
     try {
@@ -206,6 +220,7 @@ const SleepScreen = () => {
           savedRecord.nightHours.toString()
         );
         setIsEditMode(false);
+        setIsDefaultData(false);
 
         if (savedRecord.sleepProgress !== undefined) {
           setSleepPercentage(savedRecord.sleepProgress);
@@ -237,15 +252,17 @@ const SleepScreen = () => {
           isBeforeNoon: false,
           targetDate: today,
           sleepProgress: 0,
+          isDefaultData: true,
         };
 
-        setNapHours("");
-        setNightHours("");
+        setNapHours("0");
+        setNightHours("0");
         setNotes("");
         setSelectedRecord(defaultRecord);
         setCurrentDate(today);
         updateTotalHours("0", "0");
         setIsEditMode(true);
+        setIsDefaultData(true);
 
         setLoading(false);
         return;
@@ -268,7 +285,8 @@ const SleepScreen = () => {
             todayData.nightHours.toString()
           );
           setShowingYesterdayData(false);
-          setIsEditMode(false);
+          setIsEditMode(todayData.isDefaultData || false);
+          setIsDefaultData(todayData.isDefaultData || false);
 
           if (todayData.sleepProgress !== undefined) {
             setSleepPercentage(todayData.sleepProgress);
@@ -280,7 +298,8 @@ const SleepScreen = () => {
           return;
         }
       } catch (error) {
-        console.log("No today's sleep data found, trying current data");
+        console.log("Error getting today's sleep data:", error);
+        // Continue to try other methods to get data
       }
 
       // If no today's data, try to get current data
@@ -306,6 +325,7 @@ const SleepScreen = () => {
             );
             setShowingYesterdayData(currentData.isBeforeNoon);
             setIsEditMode(!currentData.id || currentData.isDefaultData);
+            setIsDefaultData(currentData.isDefaultData || false);
 
             if (currentData.sleepProgress !== undefined) {
               setSleepPercentage(currentData.sleepProgress);
@@ -335,6 +355,7 @@ const SleepScreen = () => {
               mostRecent.nightHours.toString()
             );
             setIsEditMode(false);
+            setIsDefaultData(false);
 
             if (mostRecent.sleepProgress !== undefined) {
               setSleepPercentage(mostRecent.sleepProgress);
@@ -357,8 +378,8 @@ const SleepScreen = () => {
   const resetForm = () => {
     const today = new Date().toISOString().split("T")[0];
 
-    setNapHours("");
-    setNightHours("");
+    setNapHours("0");
+    setNightHours("0");
     setNotes("");
     setSelectedRecord({
       id: null,
@@ -369,11 +390,13 @@ const SleepScreen = () => {
       notes: "",
       totalHours: "0",
       sleepProgress: 0,
+      isDefaultData: true,
     });
     setCurrentDate(today);
     updateTotalHours("0", "0");
     setIsEditMode(true);
     setSleepPercentage(0);
+    setIsDefaultData(true);
   };
 
   const handleSelectSleepRecord = (record) => {
@@ -384,6 +407,7 @@ const SleepScreen = () => {
     setCurrentDate(record.date);
     updateTotalHours(record.napHours.toString(), record.nightHours.toString());
     setIsEditMode(false);
+    setIsDefaultData(record.isDefaultData || false);
 
     if (record.sleepProgress !== undefined) {
       setSleepPercentage(record.sleepProgress);
@@ -487,6 +511,7 @@ const SleepScreen = () => {
           result.nightHours.toString()
         );
         setIsEditMode(false);
+        setIsDefaultData(false);
 
         if (result.sleepProgress !== undefined) {
           setSleepPercentage(result.sleepProgress);
@@ -560,7 +585,17 @@ const SleepScreen = () => {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[theme.primary]}
+              tintColor={theme.primary}
+            />
+          }
+        >
           <ChildInfoCard
             childData={currentChild}
             customIcon={
@@ -620,6 +655,25 @@ const SleepScreen = () => {
               <Text style={[styles.bannerText, { color: theme.text }]}>
                 This is your first sleep record for this child. Enter the sleep
                 hours and save to start tracking.
+              </Text>
+            </View>
+          )}
+
+          {isDefaultData && !isFirstRecord && (
+            <View
+              style={[
+                styles.infoBanner,
+                { backgroundColor: `${theme.info}20` },
+              ]}
+            >
+              <Ionicons
+                name="information-circle"
+                size={18}
+                color={theme.info}
+                style={styles.bannerIcon}
+              />
+              <Text style={[styles.bannerText, { color: theme.text }]}>
+                This is a new day! Enter today's sleep data to start tracking.
               </Text>
             </View>
           )}

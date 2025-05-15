@@ -312,9 +312,20 @@ export const getTodaySleep = async (req, res) => {
     });
 
     if (!sleepRecord) {
-      return res
-        .status(404)
-        .json({ message: "No sleep record found for today" });
+      // Instead of returning a 404 error, return an empty default record
+      const defaultRecord = {
+        id: null,
+        childId,
+        napHours: 0,
+        nightHours: 0,
+        date: today.toISOString().split("T")[0],
+        notes: "",
+        totalHours: 0,
+        sleepProgress: 0,
+        isDefaultData: true,
+      };
+
+      return res.status(200).json(defaultRecord);
     }
 
     return res.status(200).json(sleepRecord);
@@ -365,11 +376,22 @@ export const getCurrentSleepData = async (req, res) => {
     });
 
     if (!sleepRecord) {
-      return res.status(404).json({
-        message: "No sleep record found for the target date",
+      // Instead of returning a 404 error, return a default record
+      const defaultRecord = {
+        id: null,
+        childId,
+        napHours: 0,
+        nightHours: 0,
+        date: formattedDate,
+        notes: "",
+        totalHours: 0,
+        sleepProgress: 0,
+        isDefaultData: true,
         targetDate: formattedDate,
         isBeforeNoon: currentHour < 12,
-      });
+      };
+
+      return res.status(200).json(defaultRecord);
     }
 
     return res.status(200).json({
