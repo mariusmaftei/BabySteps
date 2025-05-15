@@ -122,6 +122,27 @@ export const getSleepDataByDateRange = async (childId, startDate, endDate) => {
   }
 };
 
+export const getSleepDataByMonth = async (childId, year, month) => {
+  try {
+    await ensureToken();
+
+    // Create date range for the specified month
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 0); // Last day of the month
+
+    console.log(
+      `Fetching sleep data for child ID: ${childId} for ${year}-${month + 1}`
+    );
+    return await getSleepDataByDateRange(childId, startDate, endDate);
+  } catch (error) {
+    console.error(
+      `Error fetching sleep data for month ${month + 1}/${year}:`,
+      error
+    );
+    return [];
+  }
+};
+
 export const getWeeklySleepData = async (childId) => {
   const endDate = new Date();
   const startDate = new Date();
@@ -153,9 +174,7 @@ export const formatDateForPeriod = (date, period) => {
       .toLocaleDateString("en-US", { weekday: "short" })
       .substring(0, 3);
   } else if (period === "month") {
-    return new Date(date)
-      .toLocaleDateString("en-US", { day: "2-digit", month: "short" })
-      .substring(0, 5);
+    return new Date(date).toLocaleDateString("en-US", { day: "2-digit" });
   } else if (period === "year") {
     return new Date(date)
       .toLocaleDateString("en-US", { month: "short" })

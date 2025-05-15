@@ -1,10 +1,13 @@
-import React, { useCallback } from "react";
+"use client";
+
+import { useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { LineChart } from "react-native-chart-kit";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,7 +24,69 @@ const SleepChartComponent = ({
   categoryColor,
   timePeriod,
   getChartConfig,
+  onMonthChange, // New prop for handling month changes
 }) => {
+  // State to track the current month
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+
+  // Array of month names
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  // Function to handle month navigation
+  const navigateMonth = (direction) => {
+    let newMonth = currentMonth;
+    let newYear = currentYear;
+
+    if (direction === "next") {
+      if (currentMonth === 11) {
+        newMonth = 0;
+        newYear = currentYear + 1;
+      } else {
+        newMonth = currentMonth + 1;
+      }
+    } else {
+      if (currentMonth === 0) {
+        newMonth = 11;
+        newYear = currentYear - 1;
+      } else {
+        newMonth = currentMonth - 1;
+      }
+    }
+
+    setCurrentMonth(newMonth);
+    setCurrentYear(newYear);
+
+    // Call the parent component's handler if provided
+    if (onMonthChange) {
+      const startDate = new Date(newYear, newMonth, 1);
+      const endDate = new Date(newYear, newMonth + 1, 0); // Last day of the month
+      onMonthChange(startDate, endDate);
+    }
+  };
+
+  // Reset to current month when switching to/from month view
+  useEffect(() => {
+    if (timePeriod === "month") {
+      const now = new Date();
+      setCurrentMonth(now.getMonth());
+      setCurrentYear(now.getFullYear());
+    }
+  }, [timePeriod]);
+
   const renderCustomSleepChart = useCallback(() => {
     if (isLoading) {
       return (
@@ -58,7 +123,31 @@ const SleepChartComponent = ({
     const chartWidth = Math.min(screenWidth - 40, 500);
     const isSmallScreen = screenWidth < 350;
 
-    const chartConfig = getChartConfig(categoryColor);
+    // Create a modified chart config for month view
+    let finalChartConfig;
+    if (timePeriod === "month") {
+      // For month view, create a config with no labels
+      finalChartConfig = {
+        ...getChartConfig(categoryColor),
+        // Override label functions to return empty strings
+        propsForLabels: {
+          fontSize: 0, // Make labels invisible
+        },
+        propsForDots: {
+          r: "2", // Smaller dots for month view
+          strokeWidth: "1",
+          stroke: categoryColor,
+        },
+        // Remove all labels
+        formatYLabel: () => "",
+        formatXLabel: () => "",
+        // Keep the legend
+        legend: ["Sleep Progress (%)"],
+      };
+    } else {
+      // For week view, use the normal config
+      finalChartConfig = getChartConfig(categoryColor);
+    }
 
     return (
       <ScrollView
@@ -71,19 +160,64 @@ const SleepChartComponent = ({
             data={chartData}
             width={chartWidth}
             height={isSmallScreen ? 220 : 260}
-            chartConfig={chartConfig}
+            chartConfig={finalChartConfig}
             style={styles.chart}
             withInnerLines={false}
             withOuterLines={false}
-            withHorizontalLabels={true}
-            withVerticalLabels={true}
+            withHorizontalLabels={timePeriod !== "month"}
+            withVerticalLabels={timePeriod !== "month"}
+            withDots={true}
             fromZero={true}
             bezier={true}
+            getDotColor={() => categoryColor}
+            // Make sure the legend is always shown
+            withLegend={true}
+            legendStyle={{
+              color: theme.text,
+              marginBottom: 8,
+            }}
           />
         </View>
       </ScrollView>
     );
-  }, [isLoading, error, chartData, theme, categoryColor, getChartConfig]);
+  }, [
+    isLoading,
+    error,
+    chartData,
+    theme,
+    categoryColor,
+    getChartConfig,
+    timePeriod,
+  ]);
+
+  // Month navigation controls
+  const renderMonthNavigation = () => {
+    if (timePeriod !== "month") return null;
+
+    return (
+      <View style={styles.monthNavigationContainer}>
+        <TouchableOpacity
+          style={styles.monthNavigationButton}
+          onPress={() => navigateMonth("prev")}
+        >
+          <Ionicons name="chevron-back" size={24} color={categoryColor} />
+        </TouchableOpacity>
+
+        <View style={styles.monthDisplay}>
+          <Text style={[styles.monthText, { color: theme.text }]}>
+            {monthNames[currentMonth]} {currentYear}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.monthNavigationButton}
+          onPress={() => navigateMonth("next")}
+        >
+          <Ionicons name="chevron-forward" size={24} color={categoryColor} />
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const renderDailySleepSummary = useCallback(() => {
     if (!processedData) return null;
@@ -96,6 +230,7 @@ const SleepChartComponent = ({
       totalSleepHours,
       sleepProgress,
     } = processedData;
+    const sunnyColor = "#FF9500"; // Same color as in SleepScreen.js
 
     return (
       <View
@@ -105,7 +240,7 @@ const SleepChartComponent = ({
         ]}
       >
         <Text style={[styles.dailySleepTitle, { color: theme.text }]}>
-          Daily Sleep Summary
+          {timePeriod === "week" ? "Weekly" : "Monthly"} Sleep Summary
         </Text>
 
         {labels.map((label, i) => {
@@ -125,26 +260,62 @@ const SleepChartComponent = ({
                 i === labels.length - 1 && { borderBottomWidth: 0 },
               ]}
             >
+              {/* Day column (left) */}
               <View style={styles.dayColumn}>
                 <Text style={[styles.dayText, { color: theme.text }]}>
                   {label}
                 </Text>
               </View>
 
+              {/* Sleep type column (middle) */}
+              <View style={styles.sleepTypeColumn}>
+                <View style={styles.sleepTypeRow}>
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      { backgroundColor: `${sunnyColor}20` },
+                    ]}
+                  >
+                    <Ionicons name="sunny" size={16} color={sunnyColor} />
+                  </View>
+                  <Text
+                    style={[
+                      styles.sleepTypeText,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    {nap} hrs
+                  </Text>
+                </View>
+
+                <View style={styles.sleepTypeRow}>
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      { backgroundColor: `${theme.info}20` },
+                    ]}
+                  >
+                    <Ionicons name="moon" size={16} color={theme.info} />
+                  </View>
+                  <Text
+                    style={[
+                      styles.sleepTypeText,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    {night} hrs
+                  </Text>
+                </View>
+              </View>
+
+              {/* Total hours column (right) */}
               <View style={styles.hoursColumn}>
                 <Text style={[styles.hoursText, { color: theme.text }]}>
                   {total} hrs
                 </Text>
               </View>
 
-              <View style={styles.hoursColumn}>
-                <Text
-                  style={[styles.hoursText, { color: theme.textSecondary }]}
-                >
-                  {nap} nap / {night} night
-                </Text>
-              </View>
-
+              {/* Progress column (far right) */}
               <View style={styles.progressColumn}>
                 <View style={styles.progressBarContainer}>
                   <View style={styles.centerLine} />
@@ -182,10 +353,11 @@ const SleepChartComponent = ({
         })}
       </View>
     );
-  }, [processedData, theme]);
+  }, [processedData, theme, timePeriod]);
 
   return (
     <>
+      {renderMonthNavigation()}
       {renderCustomSleepChart()}
 
       {processedData && (
@@ -317,20 +489,42 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(0,0,0,0.05)",
   },
   dayColumn: {
-    width: 50,
+    width: 40,
   },
   dayText: {
     fontSize: 14,
     fontWeight: "500",
   },
   hoursColumn: {
-    width: 80,
+    width: 60,
+    alignItems: "center",
   },
   hoursText: {
     fontSize: 14,
+    fontWeight: "500",
+  },
+  sleepTypeColumn: {
+    width: 90,
+  },
+  sleepTypeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  sleepTypeText: {
+    fontSize: 13,
+    marginLeft: 4,
+  },
+  iconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
   progressColumn: {
     flex: 1,
+    maxWidth: 100,
   },
   progressBarContainer: {
     height: 8,
@@ -365,6 +559,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     textAlign: "right",
+  },
+  // Month navigation styles
+  monthNavigationContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  monthNavigationButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  monthDisplay: {
+    paddingHorizontal: 16,
+    alignItems: "center",
+    minWidth: 150,
+  },
+  monthText: {
+    fontSize: 18,
+    fontWeight: "600",
   },
 });
 

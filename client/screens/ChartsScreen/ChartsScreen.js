@@ -6,11 +6,11 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { Dimensions } from "react-native";
 
 import { useTheme } from "../../context/theme-context";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,6 +19,7 @@ import {
   getWeeklySleepData,
   getMonthlySleepData,
   getYearlySleepData,
+  getSleepDataByMonth,
   formatDateForPeriod,
   aggregateSleepDataByMonth,
 } from "../../services/sleep-service";
@@ -31,7 +32,6 @@ import {
 import {
   getWeeklyFeedingData,
   getMonthlyFeedingData,
-  getFeedingDataByDateRange,
 } from "../../services/feeding-service";
 
 // Import chart components
@@ -60,6 +60,11 @@ export default function ChartsScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [timePeriod, setTimePeriod] = useState("week"); // 'week', 'month', or 'year'
+
+  // State for month navigation
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
   const [sleepChartData, setSleepChartData] = useState({
     labels: [],
     datasets: [
@@ -109,7 +114,7 @@ export default function ChartsScreen({ navigation }) {
         timePeriod === "week"
           ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
           : timePeriod === "month"
-          ? ["1", "4", "7", "10", "13", "16", "19", "22", "25", "28"]
+          ? Array.from({ length: 31 }, (_, i) => (i + 1).toString())
           : [
               "Jan",
               "Feb",
@@ -130,7 +135,7 @@ export default function ChartsScreen({ navigation }) {
             timePeriod === "week"
               ? [0, 0, 0, 0, 0, 0, 0]
               : timePeriod === "month"
-              ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              ? Array(31).fill(0)
               : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           color: (opacity = 1) => `rgba(90, 135, 255, ${opacity})`,
           strokeWidth: 2,
@@ -148,7 +153,7 @@ export default function ChartsScreen({ navigation }) {
         timePeriod === "week"
           ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
           : timePeriod === "month"
-          ? ["1", "4", "7", "10", "13", "16", "19", "22", "25", "28"]
+          ? Array.from({ length: 31 }, (_, i) => (i + 1).toString())
           : [
               "Jan",
               "Feb",
@@ -169,7 +174,7 @@ export default function ChartsScreen({ navigation }) {
             timePeriod === "week"
               ? [0, 0, 0, 0, 0, 0, 0]
               : timePeriod === "month"
-              ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              ? Array(31).fill(0)
               : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           color: (opacity = 1) => `rgba(255, 45, 85, ${opacity})`,
         },
@@ -186,7 +191,7 @@ export default function ChartsScreen({ navigation }) {
         timePeriod === "week"
           ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
           : timePeriod === "month"
-          ? ["1", "4", "7", "10", "13", "16", "19", "22", "25", "28"]
+          ? Array.from({ length: 31 }, (_, i) => (i + 1).toString())
           : [
               "Jan",
               "Feb",
@@ -207,7 +212,7 @@ export default function ChartsScreen({ navigation }) {
             timePeriod === "week"
               ? [0, 0, 0, 0, 0, 0, 0]
               : timePeriod === "month"
-              ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              ? Array(31).fill(0)
               : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
         },
@@ -216,7 +221,7 @@ export default function ChartsScreen({ navigation }) {
             timePeriod === "week"
               ? [0, 0, 0, 0, 0, 0, 0]
               : timePeriod === "month"
-              ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              ? Array(31).fill(0)
               : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           color: (opacity = 1) => `rgba(90, 200, 250, ${opacity})`,
         },
@@ -225,7 +230,7 @@ export default function ChartsScreen({ navigation }) {
             timePeriod === "week"
               ? [0, 0, 0, 0, 0, 0, 0]
               : timePeriod === "month"
-              ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              ? Array(31).fill(0)
               : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           color: (opacity = 1) => `rgba(88, 86, 214, ${opacity})`,
         },
@@ -235,6 +240,40 @@ export default function ChartsScreen({ navigation }) {
       type: "bar",
     };
   }, [timePeriod]);
+
+  // Handle month change from the SleepChartComponent
+  const handleMonthChange = async (startDate, endDate) => {
+    if (noChildren || activeTab !== "Sleep") return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log(
+        `Fetching sleep data for month: ${
+          startDate.getMonth() + 1
+        }/${startDate.getFullYear()}`
+      );
+      const data = await getSleepDataByMonth(
+        currentChild.id,
+        startDate.getFullYear(),
+        startDate.getMonth()
+      );
+      console.log(
+        `Sleep data fetched for month: ${data ? data.length : 0} records`
+      );
+      setSleepData(data || []);
+      setSelectedMonth(startDate.getMonth());
+      setSelectedYear(startDate.getFullYear());
+    } catch (err) {
+      console.error(`Error fetching sleep data for month:`, err);
+      setError(
+        `Failed to load sleep data for the selected month. Please try again.`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Function to fetch data based on selected time period and active tab
   const fetchData = async () => {
@@ -253,7 +292,16 @@ export default function ChartsScreen({ navigation }) {
         if (timePeriod === "week") {
           data = await getWeeklySleepData(currentChild.id);
         } else if (timePeriod === "month") {
-          data = await getMonthlySleepData(currentChild.id);
+          // If in month view, fetch data for the selected month
+          if (selectedMonth !== undefined && selectedYear !== undefined) {
+            data = await getSleepDataByMonth(
+              currentChild.id,
+              selectedYear,
+              selectedMonth
+            );
+          } else {
+            data = await getMonthlySleepData(currentChild.id);
+          }
         } else if (timePeriod === "year") {
           const yearData = await getYearlySleepData(currentChild.id);
           data = aggregateSleepDataByMonth(yearData);
@@ -334,6 +382,13 @@ export default function ChartsScreen({ navigation }) {
     if (timePeriod === "year") {
       setTimePeriod("month");
     }
+
+    // Reset to current month when switching to month view
+    if (timePeriod === "month") {
+      const now = new Date();
+      setSelectedMonth(now.getMonth());
+      setSelectedYear(now.getFullYear());
+    }
   }, [timePeriod]);
 
   // Process sleep data for the chart based on time period
@@ -390,106 +445,74 @@ export default function ChartsScreen({ navigation }) {
         return record ? Number(record.nightHours) || 0 : 0;
       });
     } else if (timePeriod === "month") {
-      // Get the last 30 days
-      const today = new Date();
-      // We'll show every 3rd day to avoid overcrowding
-      for (let i = 29; i >= 0; i -= 3) {
-        const date = new Date();
-        date.setDate(today.getDate() - i);
+      // Get all days in the selected month
+      const daysInMonth = new Date(
+        selectedYear,
+        selectedMonth + 1,
+        0
+      ).getDate();
+
+      for (let i = 1; i <= daysInMonth; i++) {
+        const date = new Date(selectedYear, selectedMonth, i);
         const dateStr = date.toISOString().split("T")[0];
         dates.push(dateStr);
-        labels.push(formatDateForPeriod(dateStr, "month"));
+        labels.push(i.toString()); // Just show the day number
       }
 
-      // Map the dates to sleep progress data (average of 3 days)
-      sleepHours = dates.map((date, index) => {
-        // For each label, find the average of 3 days
-        let total = 0;
-        let count = 0;
-
-        for (let i = 0; i < 3; i++) {
-          const checkDate = new Date(date);
-          checkDate.setDate(checkDate.getDate() + i);
-          const checkDateStr = checkDate.toISOString().split("T")[0];
-
-          const record = sleepData.find(
-            (item) => item && item.date === checkDateStr
-          );
-          if (record && record.sleepProgress !== undefined) {
-            total += Number(record.sleepProgress);
-            count++;
-          }
-        }
-
-        return count > 0 ? Math.round(total / count) : 0;
+      // Map the dates to sleep progress data
+      sleepHours = dates.map((date) => {
+        const record = sleepData.find((item) => {
+          // Convert item.date to a date object if it's a string
+          const itemDate =
+            typeof item.date === "string"
+              ? item.date
+              : item.date.toISOString().split("T")[0];
+          return item && itemDate === date;
+        });
+        return record && record.sleepProgress !== undefined
+          ? Number(record.sleepProgress)
+          : 0;
       });
 
-      // Similar for total sleep hours
-      totalSleepHours = dates.map((date, index) => {
-        let total = 0;
-        let count = 0;
-
-        for (let i = 0; i < 3; i++) {
-          const checkDate = new Date(date);
-          checkDate.setDate(checkDate.getDate() + i);
-          const checkDateStr = checkDate.toISOString().split("T")[0];
-
-          const record = sleepData.find(
-            (item) => item && item.date === checkDateStr
-          );
-          if (record) {
-            const nap = Number(record.napHours) || 0;
-            const night = Number(record.nightHours) || 0;
-            total += nap + night;
-            count++;
-          }
+      // Map the dates to total sleep hours
+      totalSleepHours = dates.map((date) => {
+        const record = sleepData.find((item) => {
+          const itemDate =
+            typeof item.date === "string"
+              ? item.date
+              : item.date.toISOString().split("T")[0];
+          return item && itemDate === date;
+        });
+        if (record) {
+          const nap = Number(record.napHours) || 0;
+          const night = Number(record.nightHours) || 0;
+          return nap + night;
         }
-
-        return count > 0 ? Math.round((total / count) * 10) / 10 : 0;
+        return 0;
       });
 
-      // Similar for nap hours
-      napHours = dates.map((date, index) => {
-        let total = 0;
-        let count = 0;
-
-        for (let i = 0; i < 3; i++) {
-          const checkDate = new Date(date);
-          checkDate.setDate(checkDate.getDate() + i);
-          const checkDateStr = checkDate.toISOString().split("T")[0];
-
-          const record = sleepData.find(
-            (item) => item && item.date === checkDateStr
-          );
-          if (record) {
-            total += Number(record.napHours) || 0;
-            count++;
-          }
-        }
-
-        return count > 0 ? Math.round((total / count) * 10) / 10 : 0;
+      // Map the dates to nap hours
+      napHours = dates.map((date) => {
+        const record = sleepData.find((item) => {
+          const itemDate =
+            typeof item.date === "string"
+              ? item.date
+              : item.date.toISOString().split("T")[0];
+          return item && itemDate === date;
+        });
+        return record ? Number(record.napHours) || 0 : 0;
       });
 
-      // Similar for night hours
-      nightHours = dates.map((date, index) => {
-        let total = 0;
-        let count = 0;
-
-        for (let i = 0; i < 3; i++) {
-          const checkDate = new Date(date);
-          checkDate.setDate(checkDate.getDate() + i);
-          const checkDateStr = checkDate.toISOString().split("T")[0];
-
-          const record = sleepData.find(
-            (item) => item && item.date === checkDateStr
-          );
-          if (record) {
-            total += Number(record.nightHours) || 0;
-            count++;
-          }
-        }
-
-        return count > 0 ? Math.round((total / count) * 10) / 10 : 0;
+      // Map the dates to night hours
+      nightHours = dates.map((date) => {
+        const record = sleepData.find((item) => {
+          const itemDate =
+            typeof item.date === "string"
+              ? item.date
+              : item.date.toISOString().split("T")[0];
+          return item && itemDate === date;
+        });
+        return record ? Number(record.nightHours) || 0 : 0;
       });
     } else if (timePeriod === "year") {
       // For yearly view, we use the aggregated monthly data
@@ -639,7 +662,7 @@ export default function ChartsScreen({ navigation }) {
       averageTotalSleepHours: Math.round(avgTotalSleepHours * 10) / 10,
       trendText,
     };
-  }, [sleepData, timePeriod]);
+  }, [sleepData, timePeriod, selectedMonth, selectedYear]);
 
   // Add processedDiaperData similar to processedSleepData
   const processedDiaperData = useMemo(() => {
@@ -1182,29 +1205,37 @@ export default function ChartsScreen({ navigation }) {
 
   // Chart configuration
   const getChartConfig = useCallback(() => {
-    return (color) => {
+    return (color, timePeriod = "week") => {
       return {
+        backgroundColor: theme.cardBackground,
         backgroundGradientFrom: theme.cardBackground,
         backgroundGradientTo: theme.cardBackground,
+        decimalPlaces: 1,
         color: (opacity = 1) => `rgba(${hexToRgb(color)}, ${opacity})`,
-        strokeWidth: 3,
-        barPercentage: 0.5,
-        useShadowColorFromDataset: false,
-        decimalPlaces: 0, // Show only integers
         labelColor: (opacity = 1) =>
           `rgba(${hexToRgb(theme.text)}, ${opacity})`,
         style: {
           borderRadius: 16,
         },
         propsForDots: {
-          r: "5",
+          r: "4",
           strokeWidth: "2",
           stroke: theme.cardBackground,
         },
         propsForBackgroundLines: {
-          strokeDasharray: "", // solid background lines
           strokeWidth: 1,
-          stroke: `${theme.text}15`, // very light grid lines
+          stroke: `${theme.text}15`,
+          strokeDasharray: "5, 5",
+        },
+        // Simplify labels for month view
+        formatYLabel: (value) => (timePeriod === "month" ? "" : value),
+        formatXLabel: (value) => {
+          if (timePeriod === "month") {
+            // For month view, only show every 5th day
+            const day = Number.parseInt(value, 10);
+            return day % 5 === 0 ? day.toString() : "";
+          }
+          return value;
         },
       };
     };
@@ -1332,6 +1363,22 @@ export default function ChartsScreen({ navigation }) {
   const getTimePeriodLabelTextValue = () => {
     if (timePeriod === "week") {
       return "Last 7 days";
+    } else if (timePeriod === "month") {
+      const monthNames = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+      return `${monthNames[selectedMonth]} ${selectedYear}`;
     } else {
       return "Last 30 days";
     }
@@ -1529,6 +1576,9 @@ export default function ChartsScreen({ navigation }) {
             categoryColor={categoryColors.Sleep}
             timePeriod={timePeriod}
             getChartConfig={getChartConfig()}
+            onMonthChange={handleMonthChange}
+            currentMonth={selectedMonth}
+            currentYear={selectedYear}
           />
         );
       case "Diaper":
@@ -1542,7 +1592,7 @@ export default function ChartsScreen({ navigation }) {
             categoryColor={categoryColors.Diaper}
             timePeriod={timePeriod}
             getChartConfig={getChartConfig()}
-            rawData={diaperData} // Add this line to pass the raw data
+            rawData={diaperData}
           />
         );
       case "Feeding":
