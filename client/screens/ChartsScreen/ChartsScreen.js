@@ -8,9 +8,7 @@ import {
   ScrollView,
   Dimensions,
   TouchableOpacity,
-  ActivityIndicator,
 } from "react-native";
-import { BarChart, LineChart } from "react-native-chart-kit";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -30,322 +28,19 @@ import {
   getYearlyDiaperData,
   aggregateDiaperDataByMonth,
 } from "../../services/diaper-service";
+import {
+  getWeeklyFeedingData,
+  getMonthlyFeedingData,
+  getFeedingDataByDateRange,
+} from "../../services/feeding-service";
+
+// Import chart components
+import SleepChartComponent from "../../components/Charts/SleepChartComponent";
+import DiaperChartComponent from "../../components/Charts/DiaperChartComponent";
+import FeedingChartComponent from "../../components/Charts/FeedingChartComponent";
+import GrowthChartComponent from "../../components/Charts/GrowthChartComponent";
 
 const screenWidth = Dimensions.get("window").width;
-
-// Add this to the styles object
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  headerContainer: {
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  headerText: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  subHeaderText: {
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  tabsContainer: {
-    paddingVertical: 16,
-  },
-  tab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    borderRadius: 20,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  timePeriodTabsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 16,
-    marginBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
-    paddingTop: 16,
-  },
-  timePeriodTabNew: {
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-    alignItems: "center",
-    minWidth: 80,
-  },
-  timePeriodTabTextNew: {
-    fontSize: 15,
-  },
-  chartContainer: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.05)",
-  },
-  chartHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginLeft: 8,
-    flex: 1,
-  },
-  refreshButton: {
-    padding: 8,
-  },
-  chartWrapper: {
-    position: "relative",
-    overflow: "hidden",
-    borderRadius: 16,
-  },
-  chart: {
-    marginVertical: 12,
-    borderRadius: 16,
-    paddingRight: 16,
-  },
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 16,
-    marginBottom: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-  },
-  statItem: {
-    alignItems: "center",
-  },
-  statLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  insightText: {
-    fontSize: 14,
-    lineHeight: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-  },
-  noChildContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  noChildIcon: {
-    marginBottom: 20,
-  },
-  noChildTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  noChildSubtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 30,
-  },
-  addChildButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  addChildButtonIcon: {
-    marginRight: 8,
-  },
-  addChildButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  loadingContainer: {
-    height: 220,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 14,
-  },
-  errorContainer: {
-    height: 220,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorText: {
-    marginTop: 10,
-    fontSize: 14,
-    textAlign: "center",
-  },
-  chartScrollContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    minWidth: "100%",
-  },
-  valueLabelsContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "flex-start",
-    alignItems: "flex-start",
-    zIndex: 10,
-  },
-  valueLabel: {
-    position: "absolute",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    transform: [{ translateX: -12 }],
-  },
-  valueLabelText: {
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  zeroLine: {
-    position: "absolute",
-    height: 1,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    top: "50%", // Position in the middle of the chart
-    left: 40, // Account for y-axis labels
-  },
-  dailySleepContainer: {
-    marginTop: 20,
-    backgroundColor: "rgba(0,0,0,0.02)",
-    borderRadius: 12,
-    padding: 16,
-  },
-  dailySleepTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  dailySleepRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
-  },
-  dayColumn: {
-    width: 50,
-  },
-  dayText: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  hoursColumn: {
-    width: 80,
-  },
-  hoursText: {
-    fontSize: 14,
-  },
-  progressColumn: {
-    flex: 1,
-  },
-  progressBar: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "rgba(0,0,0,0.05)",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 4,
-  },
-  progressText: {
-    fontSize: 12,
-    marginTop: 4,
-    textAlign: "right",
-  },
-  customChartContainer: {
-    height: 280,
-    marginVertical: 16,
-    paddingTop: 20,
-    paddingBottom: 30,
-  },
-  legendContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 12,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 12,
-  },
-  progressBarContainer: {
-    height: 8,
-    backgroundColor: "rgba(0,0,0,0.05)",
-    borderRadius: 4,
-    overflow: "hidden",
-    position: "relative",
-  },
-  centerLine: {
-    position: "absolute",
-    width: 2,
-    height: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.2)",
-    left: "50%",
-    marginLeft: -1,
-  },
-  negativeProgressFill: {
-    position: "absolute",
-    height: "100%",
-    right: "50%",
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
-  },
-  positiveProgressFill: {
-    position: "absolute",
-    height: "100%",
-    left: "50%",
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
-  },
-});
 
 // Helper function to safely reduce an array
 const safeReduce = (array, callback, initialValue) => {
@@ -361,6 +56,7 @@ export default function ChartsScreen({ navigation }) {
   const [activeTab, setActiveTab] = useState("Sleep");
   const [sleepData, setSleepData] = useState([]);
   const [diaperData, setDiaperData] = useState([]);
+  const [feedingData, setFeedingData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [timePeriod, setTimePeriod] = useState("week"); // 'week', 'month', or 'year'
@@ -388,6 +84,19 @@ export default function ChartsScreen({ navigation }) {
     ],
     legend: ["Diaper changes per day"],
     unit: "changes",
+    type: "bar",
+  });
+
+  const [feedingChartData, setFeedingChartData] = useState({
+    labels: [],
+    datasets: [
+      {
+        data: [0],
+        color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
+      },
+    ],
+    legend: ["Feeding amount per day"],
+    unit: "",
     type: "bar",
   });
 
@@ -471,51 +180,118 @@ export default function ChartsScreen({ navigation }) {
     };
   }, [timePeriod]);
 
-  // Function to fetch sleep data based on selected time period
-  const fetchSleepData = async () => {
+  const defaultFeedingChartData = useMemo(() => {
+    return {
+      labels:
+        timePeriod === "week"
+          ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+          : timePeriod === "month"
+          ? ["1", "4", "7", "10", "13", "16", "19", "22", "25", "28"]
+          : [
+              "Jan",
+              "Feb",
+              "Mar",
+              "Apr",
+              "May",
+              "Jun",
+              "Jul",
+              "Aug",
+              "Sep",
+              "Oct",
+              "Nov",
+              "Dec",
+            ],
+      datasets: [
+        {
+          data:
+            timePeriod === "week"
+              ? [0, 0, 0, 0, 0, 0, 0]
+              : timePeriod === "month"
+              ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
+        },
+        {
+          data:
+            timePeriod === "week"
+              ? [0, 0, 0, 0, 0, 0, 0]
+              : timePeriod === "month"
+              ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          color: (opacity = 1) => `rgba(90, 200, 250, ${opacity})`,
+        },
+        {
+          data:
+            timePeriod === "week"
+              ? [0, 0, 0, 0, 0, 0, 0]
+              : timePeriod === "month"
+              ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          color: (opacity = 1) => `rgba(88, 86, 214, ${opacity})`,
+        },
+      ],
+      legend: ["Breast (min)", "Bottle (ml)", "Solid (g)"],
+      unit: "",
+      type: "bar",
+    };
+  }, [timePeriod]);
+
+  // Function to fetch data based on selected time period and active tab
+  const fetchData = async () => {
     if (noChildren) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      if (activeTab === "Sleep" || activeTab === "Diaper") {
-        console.log(
-          `Fetching ${timePeriod} ${activeTab.toLowerCase()} data for charts...`
-        );
-        let data;
+      console.log(
+        `Fetching ${timePeriod} ${activeTab.toLowerCase()} data for charts...`
+      );
+      let data;
 
-        if (activeTab === "Sleep") {
-          if (timePeriod === "week") {
-            data = await getWeeklySleepData(currentChild.id);
-          } else if (timePeriod === "month") {
-            data = await getMonthlySleepData(currentChild.id);
-          } else if (timePeriod === "year") {
-            const yearData = await getYearlySleepData(currentChild.id);
-            data = aggregateSleepDataByMonth(yearData);
-          }
-          console.log(
-            `${timePeriod} sleep data fetched for charts:`,
-            data ? data.length : 0,
-            "records"
-          );
-          setSleepData(data || []);
-        } else if (activeTab === "Diaper") {
-          if (timePeriod === "week") {
-            data = await getWeeklyDiaperData(currentChild.id);
-          } else if (timePeriod === "month") {
-            data = await getMonthlyDiaperData(currentChild.id);
-          } else if (timePeriod === "year") {
-            const yearData = await getYearlyDiaperData(currentChild.id);
-            data = aggregateDiaperDataByMonth(yearData);
-          }
-          console.log(
-            `${timePeriod} diaper data fetched for charts:`,
-            data ? data.length : 0,
-            "records"
-          );
-          setDiaperData(data || []);
+      if (activeTab === "Sleep") {
+        if (timePeriod === "week") {
+          data = await getWeeklySleepData(currentChild.id);
+        } else if (timePeriod === "month") {
+          data = await getMonthlySleepData(currentChild.id);
+        } else if (timePeriod === "year") {
+          const yearData = await getYearlySleepData(currentChild.id);
+          data = aggregateSleepDataByMonth(yearData);
         }
+        console.log(
+          `${timePeriod} sleep data fetched for charts:`,
+          data ? data.length : 0,
+          "records"
+        );
+        setSleepData(data || []);
+      } else if (activeTab === "Diaper") {
+        if (timePeriod === "week") {
+          data = await getWeeklyDiaperData(currentChild.id);
+        } else if (timePeriod === "month") {
+          data = await getMonthlyDiaperData(currentChild.id);
+        } else if (timePeriod === "year") {
+          const yearData = await getYearlyDiaperData(currentChild.id);
+          data = aggregateDiaperDataByMonth(yearData);
+        }
+        console.log(
+          `${timePeriod} diaper data fetched for charts:`,
+          data ? data.length : 0,
+          "records"
+        );
+        setDiaperData(data || []);
+      } else if (activeTab === "Feeding") {
+        // Fetch feeding data
+        if (timePeriod === "week") {
+          data = await getWeeklyFeedingData(currentChild.id);
+        } else if (timePeriod === "month") {
+          data = await getMonthlyFeedingData(currentChild.id);
+        }
+        console.log(
+          `${timePeriod} feeding data fetched for charts:`,
+          data ? data.length : 0,
+          "records"
+        );
+        setFeedingData(data || []);
       }
     } catch (err) {
       console.error(
@@ -530,26 +306,26 @@ export default function ChartsScreen({ navigation }) {
     }
   };
 
-  // Fetch sleep data when the component mounts, when the current child changes, or when time period changes
+  // Fetch data when the component mounts, when the current child changes, or when time period changes
   useEffect(() => {
-    fetchSleepData();
+    fetchData();
   }, [currentChild, noChildren, timePeriod, activeTab]);
 
   // Add a focus effect to refresh data when the screen comes into focus
-  const fetchSleepDataRef = useMemo(
-    () => fetchSleepData,
+  const fetchDataRef = useMemo(
+    () => fetchData,
     [currentChild, noChildren, timePeriod, activeTab]
   );
 
   useFocusEffect(
     useCallback(() => {
       console.log("ChartsScreen focused, refreshing data...");
-      fetchSleepDataRef();
+      fetchDataRef();
       return () => {
         // This runs when the screen is unfocused
         console.log("ChartsScreen unfocused");
       };
-    }, [fetchSleepDataRef])
+    }, [fetchDataRef])
   );
 
   // Add this useEffect after the other useEffects
@@ -1004,6 +780,319 @@ export default function ChartsScreen({ navigation }) {
     };
   }, [diaperData, timePeriod]);
 
+  // Process feeding data for the chart
+  const processedFeedingData = useMemo(() => {
+    if (!feedingData || !Array.isArray(feedingData) || feedingData.length === 0)
+      return null;
+
+    const dates = [];
+    const labels = [];
+    const breastFeedingData = [];
+    const bottleFeedingData = [];
+    const solidFoodData = [];
+    const dailyFeedings = [];
+
+    if (timePeriod === "week") {
+      // Get the last 7 days (including today)
+      const today = new Date();
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(today.getDate() - i);
+        const dateStr = date.toISOString().split("T")[0];
+        dates.push(dateStr);
+        labels.push(formatDateForPeriod(dateStr, "week"));
+      }
+
+      // Process feeding data by type for each day
+      dates.forEach((date, index) => {
+        const dayFeedings = feedingData.filter(
+          (item) => item && item.date === date
+        );
+
+        // Get breast feeding duration total
+        const breastFeedings = dayFeedings.filter(
+          (item) => item && item.type === "breast"
+        );
+        const breastDuration = safeReduce(
+          breastFeedings,
+          (sum, item) => sum + (Number(item.duration) || 0),
+          0
+        );
+        breastFeedingData.push(breastDuration);
+
+        // Get bottle feeding amount total
+        const bottleFeedings = dayFeedings.filter(
+          (item) => item && item.type === "bottle"
+        );
+        const bottleAmount = safeReduce(
+          bottleFeedings,
+          (sum, item) => sum + (Number(item.amount) || 0),
+          0
+        );
+        bottleFeedingData.push(bottleAmount);
+
+        // Get solid food amount total
+        const solidFeedings = dayFeedings.filter(
+          (item) => item && item.type === "solid"
+        );
+        const solidAmount = safeReduce(
+          solidFeedings,
+          (sum, item) => sum + (Number(item.amount) || 0),
+          0
+        );
+        solidFoodData.push(solidAmount);
+
+        // Store daily feedings for the summary
+        dailyFeedings.push({
+          date,
+          label: labels[index],
+          feedings: dayFeedings,
+          breastDuration,
+          bottleAmount,
+          solidAmount,
+          totalCount: dayFeedings.length,
+        });
+      });
+    } else if (timePeriod === "month") {
+      // Get the last 30 days, showing every 3rd day
+      const today = new Date();
+      for (let i = 29; i >= 0; i -= 3) {
+        const date = new Date();
+        date.setDate(today.getDate() - i);
+        const dateStr = date.toISOString().split("T")[0];
+        dates.push(dateStr);
+        labels.push(formatDateForPeriod(dateStr, "month"));
+      }
+
+      // Process feeding data for each 3-day period
+      dates.forEach((date, index) => {
+        let periodFeedings = [];
+        let totalBreastDuration = 0;
+        let totalBottleAmount = 0;
+        let totalSolidAmount = 0;
+
+        // Collect data for 3 days
+        for (let i = 0; i < 3; i++) {
+          const checkDate = new Date(date);
+          checkDate.setDate(checkDate.getDate() + i);
+          const checkDateStr = checkDate.toISOString().split("T")[0];
+
+          const dayFeedings = feedingData.filter(
+            (item) => item && item.date === checkDateStr
+          );
+          periodFeedings = [...periodFeedings, ...dayFeedings];
+
+          // Calculate breast feeding duration
+          const breastFeedings = dayFeedings.filter(
+            (item) => item && item.type === "breast"
+          );
+          totalBreastDuration += safeReduce(
+            breastFeedings,
+            (sum, item) => sum + (Number(item.duration) || 0),
+            0
+          );
+
+          // Calculate bottle feeding amount
+          const bottleFeedings = dayFeedings.filter(
+            (item) => item && item.type === "bottle"
+          );
+          totalBottleAmount += safeReduce(
+            bottleFeedings,
+            (sum, item) => sum + (Number(item.amount) || 0),
+            0
+          );
+
+          // Calculate solid food amount
+          const solidFeedings = dayFeedings.filter(
+            (item) => item && item.type === "solid"
+          );
+          totalSolidAmount += safeReduce(
+            solidFeedings,
+            (sum, item) => sum + (Number(item.amount) || 0),
+            0
+          );
+        }
+
+        // Calculate daily averages
+        const avgBreastDuration = Math.round(totalBreastDuration / 3);
+        const avgBottleAmount = Math.round(totalBottleAmount / 3);
+        const avgSolidAmount = Math.round(totalSolidAmount / 3);
+
+        breastFeedingData.push(avgBreastDuration);
+        bottleFeedingData.push(avgBottleAmount);
+        solidFoodData.push(avgSolidAmount);
+
+        // Store period data for the summary
+        dailyFeedings.push({
+          date,
+          label: labels[index],
+          feedings: periodFeedings,
+          breastDuration: avgBreastDuration,
+          bottleAmount: avgBottleAmount,
+          solidAmount: avgSolidAmount,
+          totalCount: Math.round(periodFeedings.length / 3),
+        });
+      });
+    }
+
+    // Calculate averages
+    const avgBreastDuration =
+      breastFeedingData.length > 0
+        ? Math.round(
+            safeReduce(
+              breastFeedingData,
+              (sum, duration) => sum + duration,
+              0
+            ) / breastFeedingData.filter((d) => d > 0).length || 1
+          )
+        : 0;
+
+    const avgBottleAmount =
+      bottleFeedingData.length > 0
+        ? Math.round(
+            safeReduce(bottleFeedingData, (sum, amount) => sum + amount, 0) /
+              (bottleFeedingData.filter((a) => a > 0).length || 1)
+          )
+        : 0;
+
+    const avgSolidAmount =
+      solidFoodData.length > 0
+        ? Math.round(
+            safeReduce(solidFoodData, (sum, amount) => sum + amount, 0) /
+              (solidFoodData.filter((a) => a > 0).length || 1)
+          )
+        : 0;
+
+    // Calculate feeding counts by type
+    const breastCount = feedingData.filter(
+      (item) => item && item.type === "breast"
+    ).length;
+    const bottleCount = feedingData.filter(
+      (item) => item && item.type === "bottle"
+    ).length;
+    const solidCount = feedingData.filter(
+      (item) => item && item.type === "solid"
+    ).length;
+    const totalCount = feedingData.length;
+
+    // Calculate percentages
+    const breastPercentage =
+      totalCount > 0 ? Math.round((breastCount / totalCount) * 100) : 0;
+    const bottlePercentage =
+      totalCount > 0 ? Math.round((bottleCount / totalCount) * 100) : 0;
+    const solidPercentage =
+      totalCount > 0 ? Math.round((solidCount / totalCount) * 100) : 0;
+
+    // Calculate trend
+    let breastTrend = 0;
+    let bottleTrend = 0;
+    let solidTrend = 0;
+
+    if (breastFeedingData.length > 0) {
+      const halfIndex = Math.floor(breastFeedingData.length / 2);
+      const recentBreast = breastFeedingData
+        .slice(halfIndex)
+        .filter((d) => d > 0);
+      const previousBreast = breastFeedingData
+        .slice(0, halfIndex)
+        .filter((d) => d > 0);
+
+      const recentAvg =
+        recentBreast.length > 0
+          ? safeReduce(recentBreast, (sum, d) => sum + d, 0) /
+            recentBreast.length
+          : 0;
+      const previousAvg =
+        previousBreast.length > 0
+          ? safeReduce(previousBreast, (sum, d) => sum + d, 0) /
+            previousBreast.length
+          : 0;
+
+      if (previousAvg > 0) {
+        breastTrend = Math.round(
+          ((recentAvg - previousAvg) / previousAvg) * 100
+        );
+      }
+    }
+
+    if (bottleFeedingData.length > 0) {
+      const halfIndex = Math.floor(bottleFeedingData.length / 2);
+      const recentBottle = bottleFeedingData
+        .slice(halfIndex)
+        .filter((a) => a > 0);
+      const previousBottle = bottleFeedingData
+        .slice(0, halfIndex)
+        .filter((a) => a > 0);
+
+      const recentAvg =
+        recentBottle.length > 0
+          ? safeReduce(recentBottle, (sum, a) => sum + a, 0) /
+            recentBottle.length
+          : 0;
+      const previousAvg =
+        previousBottle.length > 0
+          ? safeReduce(previousBottle, (sum, a) => sum + a, 0) /
+            previousBottle.length
+          : 0;
+
+      if (previousAvg > 0) {
+        bottleTrend = Math.round(
+          ((recentAvg - previousAvg) / previousAvg) * 100
+        );
+      }
+    }
+
+    if (solidFoodData.length > 0) {
+      const halfIndex = Math.floor(solidFoodData.length / 2);
+      const recentSolid = solidFoodData.slice(halfIndex).filter((a) => a > 0);
+      const previousSolid = solidFoodData
+        .slice(0, halfIndex)
+        .filter((a) => a > 0);
+
+      const recentAvg =
+        recentSolid.length > 0
+          ? safeReduce(recentSolid, (sum, a) => sum + a, 0) / recentSolid.length
+          : 0;
+      const previousAvg =
+        previousSolid.length > 0
+          ? safeReduce(previousSolid, (sum, a) => sum + a, 0) /
+            previousSolid.length
+          : 0;
+
+      if (previousAvg > 0) {
+        solidTrend = Math.round(
+          ((recentAvg - previousAvg) / previousAvg) * 100
+        );
+      }
+    }
+
+    // Format trend text
+    const formatTrendText = (trend) => {
+      return trend > 0 ? `+${trend}%` : trend < 0 ? `${trend}%` : "Stable";
+    };
+
+    return {
+      labels,
+      breastFeedingData,
+      bottleFeedingData,
+      solidFoodData,
+      dailyFeedings,
+      avgBreastDuration,
+      avgBottleAmount,
+      avgSolidAmount,
+      breastCount,
+      bottleCount,
+      solidCount,
+      totalCount,
+      breastPercentage,
+      bottlePercentage,
+      solidPercentage,
+      breastTrendText: formatTrendText(breastTrend),
+      bottleTrendText: formatTrendText(bottleTrend),
+      solidTrendText: formatTrendText(solidTrend),
+    };
+  }, [feedingData, timePeriod]);
+
   // In the useEffect that updates sleepChartData, modify to use sleepProgress
   useEffect(() => {
     if (processedSleepData) {
@@ -1057,43 +1146,39 @@ export default function ChartsScreen({ navigation }) {
     }
   }, [processedDiaperData, defaultDiaperChartData]);
 
-  // If there are no children, show a message to add a child
-  if (noChildren) {
-    return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.background }]}
-      >
-        <View style={styles.noChildContainer}>
-          <Ionicons
-            name="bar-chart"
-            size={60}
-            color={theme.primary}
-            style={styles.noChildIcon}
-          />
-          <Text style={[styles.noChildTitle, { color: theme.text }]}>
-            No Data to Chart
-          </Text>
-          <Text
-            style={[styles.noChildSubtitle, { color: theme.textSecondary }]}
-          >
-            Add a child in the settings to view charts and analytics
-          </Text>
-          <TouchableOpacity
-            style={[styles.addChildButton, { backgroundColor: theme.primary }]}
-            onPress={() => navigation.navigate("Settings")}
-          >
-            <Ionicons
-              name="add-circle"
-              size={20}
-              color="#FFFFFF"
-              style={styles.addChildButtonIcon}
-            />
-            <Text style={styles.addChildButtonText}>Add Child</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Add useEffect for feedingChartData
+  useEffect(() => {
+    if (processedFeedingData) {
+      setFeedingChartData({
+        labels: processedFeedingData.labels,
+        datasets: [
+          {
+            data: processedFeedingData.breastFeedingData,
+            color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
+          },
+          {
+            data: processedFeedingData.bottleFeedingData,
+            color: (opacity = 1) => `rgba(90, 200, 250, ${opacity})`,
+          },
+          {
+            data: processedFeedingData.solidFoodData,
+            color: (opacity = 1) => `rgba(88, 86, 214, ${opacity})`,
+          },
+        ],
+        legend: ["Breast (min)", "Bottle (ml)", "Solid (g)"],
+        unit: "",
+        type: "bar",
+      });
+    } else {
+      setFeedingChartData({
+        labels: defaultFeedingChartData.labels,
+        datasets: defaultFeedingChartData.datasets,
+        legend: defaultFeedingChartData.legend,
+        unit: defaultFeedingChartData.unit,
+        type: defaultFeedingChartData.type,
+      });
+    }
+  }, [processedFeedingData, defaultFeedingChartData]);
 
   // Chart configuration
   const getChartConfig = useCallback(() => {
@@ -1160,17 +1245,27 @@ export default function ChartsScreen({ navigation }) {
       type: "bar",
     };
 
-    // Rest of the code remains the same
     const feedingData = {
-      labels: ["Breakfast", "Lunch", "Snack", "Dinner"],
-      datasets: [
-        {
-          data: [180, 220, 120, 190],
-          color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
-        },
-      ],
-      legend: ["Feeding amount (ml)"],
-      unit: "ml",
+      labels: feedingChartData.labels || [],
+      datasets:
+        feedingChartData.datasets && feedingChartData.datasets.length > 0
+          ? feedingChartData.datasets
+          : [
+              {
+                data: [0],
+                color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
+              },
+              {
+                data: [0],
+                color: (opacity = 1) => `rgba(90, 200, 250, ${opacity})`,
+              },
+              {
+                data: [0],
+                color: (opacity = 1) => `rgba(88, 86, 214, ${opacity})`,
+              },
+            ],
+      legend: ["Breast (min)", "Bottle (ml)", "Solid (g)"],
+      unit: "",
       type: "bar",
     };
 
@@ -1194,7 +1289,7 @@ export default function ChartsScreen({ navigation }) {
       Diaper: diaperData,
       Growth: growthData,
     };
-  }, [sleepChartData, diaperChartData]);
+  }, [sleepChartData, diaperChartData, feedingChartData]);
 
   // Custom colors for each category
   const categoryColors = useMemo(
@@ -1244,7 +1339,7 @@ export default function ChartsScreen({ navigation }) {
 
   // Add a refresh button
   const handleRefresh = () => {
-    fetchSleepData();
+    fetchData();
   };
 
   const renderTabsMemoized = useCallback(() => {
@@ -1299,7 +1394,12 @@ export default function ChartsScreen({ navigation }) {
 
   const renderTimePeriodTabsMemoized = useCallback(
     (activeTab, categoryColors, theme, timePeriod, setTimePeriod) => {
-      if (activeTab !== "Sleep" && activeTab !== "Diaper") return null;
+      if (
+        activeTab !== "Sleep" &&
+        activeTab !== "Diaper" &&
+        activeTab !== "Feeding"
+      )
+        return null;
 
       return (
         <View style={styles.timePeriodTabsContainer}>
@@ -1377,268 +1477,104 @@ export default function ChartsScreen({ navigation }) {
     renderTimePeriodTabsMemoized,
   ]);
 
-  const renderCustomSleepChartMemoized = useCallback(() => {
-    if (isLoading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={categoryColors.Sleep} />
-          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-            Loading sleep data...
-          </Text>
-        </View>
-      );
-    }
-
-    if (error) {
-      return (
-        <View style={styles.errorContainer}>
+  // If there are no children, show a message to add a child
+  if (noChildren) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <View style={styles.noChildContainer}>
           <Ionicons
-            name="alert-circle"
-            size={40}
-            color={categoryColors.Sleep}
+            name="bar-chart"
+            size={60}
+            color={theme.primary}
+            style={styles.noChildIcon}
           />
-          <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
-        </View>
-      );
-    }
-
-    const chartData = data.Sleep;
-    const color = categoryColors.Sleep;
-
-    // Ensure chartData has valid datasets
-    if (!chartData || !chartData.datasets || !chartData.datasets.length) {
-      return (
-        <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: theme.text }]}>
-            No chart data available
+          <Text style={[styles.noChildTitle, { color: theme.text }]}>
+            No Data to Chart
           </Text>
-        </View>
-      );
-    }
-
-    // Calculate responsive width based on screen size
-    const chartWidth = Math.min(screenWidth - 40, 500);
-    const isSmallScreen = screenWidth < 350;
-
-    const chartConfig = getChartConfig()(color);
-
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chartScrollContainer}
-      >
-        <View style={styles.chartWrapper}>
-          <LineChart
-            data={chartData}
-            width={chartWidth}
-            height={isSmallScreen ? 220 : 260}
-            chartConfig={chartConfig}
-            style={styles.chart}
-            withInnerLines={false}
-            withOuterLines={false}
-            withHorizontalLabels={true}
-            withVerticalLabels={true}
-            fromZero={true}
-            bezier={true}
-          />
-        </View>
-      </ScrollView>
-    );
-  }, [
-    isLoading,
-    error,
-    data,
-    categoryColors,
-    theme,
-    screenWidth,
-    getChartConfig,
-  ]);
-
-  // Replace the renderCustomSleepChart function with this new implementation that creates an area chart
-  const renderCustomSleepChart = renderCustomSleepChartMemoized;
-
-  const renderDailySleepSummaryMemoized = useCallback(() => {
-    if (!processedSleepData) return null;
-
-    const {
-      labels,
-      dates,
-      napHours,
-      nightHours,
-      totalSleepHours,
-      sleepProgress,
-    } = processedSleepData;
-
-    return (
-      <View
-        style={[
-          styles.dailySleepContainer,
-          { backgroundColor: `${theme.cardBackground}80` },
-        ]}
-      >
-        <Text style={[styles.dailySleepTitle, { color: theme.text }]}>
-          Daily Sleep Summary
-        </Text>
-
-        {labels.map((label, i) => {
-          const nap = napHours[i];
-          const night = nightHours[i];
-          const total = totalSleepHours[i];
-          const progress = sleepProgress[i];
-          const isPositive = progress >= 0;
-          const progressColor = isPositive ? "#2ecc71" : "#e74c3c";
-
-          return (
-            <View
-              key={`day-${i}`}
-              style={[
-                styles.dailySleepRow,
-                { borderBottomColor: `${theme.text}10` },
-                i === labels.length - 1 && { borderBottomWidth: 0 },
-              ]}
-            >
-              <View style={styles.dayColumn}>
-                <Text style={[styles.dayText, { color: theme.text }]}>
-                  {label}
-                </Text>
-              </View>
-
-              <View style={styles.hoursColumn}>
-                <Text style={[styles.hoursText, { color: theme.text }]}>
-                  {total} hrs
-                </Text>
-              </View>
-
-              <View style={styles.hoursColumn}>
-                <Text
-                  style={[styles.hoursText, { color: theme.textSecondary }]}
-                >
-                  {nap} nap / {night} night
-                </Text>
-              </View>
-
-              <View style={styles.progressColumn}>
-                <View style={styles.progressBarContainer}>
-                  <View style={styles.centerLine} />
-
-                  {progress < 0 && (
-                    <View
-                      style={[
-                        styles.negativeProgressFill,
-                        {
-                          width: `${Math.min(Math.abs(progress), 100) / 2}%`,
-                          backgroundColor: "#e74c3c",
-                        },
-                      ]}
-                    />
-                  )}
-
-                  {progress > 0 && (
-                    <View
-                      style={[
-                        styles.positiveProgressFill,
-                        {
-                          width: `${Math.min(progress, 100) / 2}%`,
-                          backgroundColor: "#2ecc71",
-                        },
-                      ]}
-                    />
-                  )}
-                </View>
-                <Text style={[styles.progressText, { color: progressColor }]}>
-                  {isPositive ? `+${progress}%` : `${progress}%`}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    );
-  }, [processedSleepData, theme]);
-
-  // Render daily sleep summary table
-  const renderDailySleepSummary = renderDailySleepSummaryMemoized;
-
-  const renderDiaperChartMemoized = useCallback(() => {
-    if (isLoading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={categoryColors.Diaper} />
-          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-            Loading diaper data...
+          <Text
+            style={[styles.noChildSubtitle, { color: theme.textSecondary }]}
+          >
+            Add a child in the settings to view charts and analytics
           </Text>
+          <TouchableOpacity
+            style={[styles.addChildButton, { backgroundColor: theme.primary }]}
+            onPress={() => navigation.navigate("Settings")}
+          >
+            <Ionicons
+              name="add-circle"
+              size={20}
+              color="#FFFFFF"
+              style={styles.addChildButtonIcon}
+            />
+            <Text style={styles.addChildButtonText}>Add Child</Text>
+          </TouchableOpacity>
         </View>
-      );
-    }
-
-    if (error) {
-      return (
-        <View style={styles.errorContainer}>
-          <Ionicons
-            name="alert-circle"
-            size={40}
-            color={categoryColors.Diaper}
-          />
-          <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
-        </View>
-      );
-    }
-
-    const chartData = data.Diaper;
-    const color = categoryColors.Diaper;
-
-    // Ensure chartData has valid datasets
-    if (!chartData || !chartData.datasets || !chartData.datasets.length) {
-      return (
-        <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: theme.text }]}>
-            No chart data available
-          </Text>
-        </View>
-      );
-    }
-
-    // Calculate responsive width based on screen size
-    const chartWidth = Math.min(screenWidth - 40, 500);
-    const isSmallScreen = screenWidth < 350;
-
-    const chartConfig = getChartConfig()(color);
-
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chartScrollContainer}
-      >
-        <View style={styles.chartWrapper}>
-          <BarChart
-            data={chartData}
-            width={chartWidth}
-            height={isSmallScreen ? 220 : 260}
-            chartConfig={chartConfig}
-            style={styles.chart}
-            withInnerLines={false}
-            withOuterLines={false}
-            withHorizontalLabels={true}
-            withVerticalLabels={true}
-            fromZero={true}
-          />
-        </View>
-      </ScrollView>
+      </SafeAreaView>
     );
-  }, [
-    isLoading,
-    error,
-    data,
-    categoryColors,
-    theme,
-    screenWidth,
-    getChartConfig,
-  ]);
+  }
 
-  // Add renderDiaperChart similar to renderSleepChart
-  const renderDiaperChart = renderDiaperChartMemoized;
+  // Render the appropriate component based on the active tab
+  const renderActiveTabContent = () => {
+    switch (activeTab) {
+      case "Sleep":
+        return (
+          <SleepChartComponent
+            isLoading={isLoading}
+            error={error}
+            chartData={data.Sleep}
+            processedData={processedSleepData}
+            theme={theme}
+            categoryColor={categoryColors.Sleep}
+            timePeriod={timePeriod}
+            getChartConfig={getChartConfig()}
+          />
+        );
+      case "Diaper":
+        return (
+          <DiaperChartComponent
+            isLoading={isLoading}
+            error={error}
+            chartData={data.Diaper}
+            processedData={processedDiaperData}
+            theme={theme}
+            categoryColor={categoryColors.Diaper}
+            timePeriod={timePeriod}
+            getChartConfig={getChartConfig()}
+            rawData={diaperData} // Add this line to pass the raw data
+          />
+        );
+      case "Feeding":
+        return (
+          <FeedingChartComponent
+            isLoading={isLoading}
+            error={error}
+            chartData={data.Feeding}
+            processedData={processedFeedingData}
+            theme={theme}
+            categoryColor={categoryColors.Feeding}
+            timePeriod={timePeriod}
+            getChartConfig={getChartConfig()}
+          />
+        );
+      case "Growth":
+        return (
+          <GrowthChartComponent
+            isLoading={isLoading}
+            error={error}
+            chartData={data.Growth}
+            processedData={{}}
+            theme={theme}
+            categoryColor={categoryColors.Growth}
+            timePeriod={timePeriod}
+            getChartConfig={getChartConfig()}
+          />
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <SafeAreaView
@@ -1674,9 +1610,10 @@ export default function ChartsScreen({ navigation }) {
             />
             <Text style={[styles.chartTitle, { color: theme.text }]}>
               {activeTab}{" "}
-              {activeTab === "Sleep" || activeTab === "Diaper"
-                ? `(${getTimePeriodLabelTextValue()})`
-                : ""}
+              {(activeTab === "Sleep" ||
+                activeTab === "Diaper" ||
+                activeTab === "Feeding") &&
+                `(${getTimePeriodLabelTextValue()})`}
             </Text>
             <TouchableOpacity
               style={styles.refreshButton}
@@ -1686,104 +1623,125 @@ export default function ChartsScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {activeTab === "Sleep" && renderCustomSleepChart()}
-          {activeTab === "Diaper" && renderDiaperChart()}
-
-          {activeTab === "Sleep" && processedSleepData && (
-            <View>
-              <View
-                style={[styles.statsContainer, { borderColor: theme.border }]}
-              >
-                <View style={styles.statItem}>
-                  <Text
-                    style={[styles.statLabel, { color: theme.textSecondary }]}
-                  >
-                    Average Sleep
-                  </Text>
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    {processedSleepData.averageTotalSleepHours} hrs
-                  </Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text
-                    style={[styles.statLabel, { color: theme.textSecondary }]}
-                  >
-                    Average Progress
-                  </Text>
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    {processedSleepData.averageSleepProgress}%
-                  </Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text
-                    style={[styles.statLabel, { color: theme.textSecondary }]}
-                  >
-                    Trend
-                  </Text>
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    {processedSleepData.trendText}
-                  </Text>
-                </View>
-              </View>
-              <Text
-                style={[
-                  styles.insightText,
-                  { color: theme.textSecondary, borderColor: theme.border },
-                ]}
-              >
-                {processedSleepData.trendText.includes("+")
-                  ? "Your baby is sleeping better than before! Keep up the good work!"
-                  : processedSleepData.trendText.includes("-")
-                  ? "Your baby is sleeping a little less than before. Try to establish a consistent bedtime routine."
-                  : "Your baby's sleep pattern is stable. Consistency is key!"}
-              </Text>
-            </View>
-          )}
-
-          {activeTab === "Sleep" && renderDailySleepSummary()}
-
-          {activeTab === "Diaper" && processedDiaperData && (
-            <View>
-              <View
-                style={[styles.statsContainer, { borderColor: theme.border }]}
-              >
-                <View style={styles.statItem}>
-                  <Text
-                    style={[styles.statLabel, { color: theme.textSecondary }]}
-                  >
-                    Average Changes
-                  </Text>
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    {processedDiaperData.averageChanges}
-                  </Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text
-                    style={[styles.statLabel, { color: theme.textSecondary }]}
-                  >
-                    Trend
-                  </Text>
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    {processedDiaperData.trendText}
-                  </Text>
-                </View>
-              </View>
-              <Text
-                style={[
-                  styles.insightText,
-                  { color: theme.textSecondary, borderColor: theme.border },
-                ]}
-              >
-                {processedDiaperData.trendText.includes("+")
-                  ? "Your baby's diaper changes are increasing. Make sure to keep them dry and comfortable!"
-                  : processedDiaperData.trendText.includes("-")
-                  ? "Your baby's diaper changes are decreasing. This could be a sign of dehydration, so consult your pediatrician."
-                  : "Your baby's diaper change pattern is stable. Keep up the good work!"}
-              </Text>
-            </View>
-          )}
+          {renderActiveTabContent()}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  headerContainer: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  headerText: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  subHeaderText: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  tabsContainer: {
+    paddingVertical: 16,
+  },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 20,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  timePeriodTabsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginTop: 16,
+    marginBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.05)",
+    paddingTop: 16,
+  },
+  timePeriodTabNew: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    alignItems: "center",
+    minWidth: 80,
+  },
+  timePeriodTabTextNew: {
+    fontSize: 15,
+  },
+  chartContainer: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
+  chartHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  chartTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginLeft: 8,
+    flex: 1,
+  },
+  refreshButton: {
+    padding: 8,
+  },
+  noChildContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  noChildIcon: {
+    marginBottom: 20,
+  },
+  noChildTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  noChildSubtitle: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 30,
+  },
+  addChildButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  addChildButtonIcon: {
+    marginRight: 8,
+  },
+  addChildButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+});

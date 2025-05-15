@@ -138,27 +138,45 @@ export const getDiaperDataByDateRange = async (childId, startDate, endDate) => {
 };
 
 export const getWeeklyDiaperData = async (childId) => {
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 7);
+  try {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
 
-  return await getDiaperDataByDateRange(childId, startDate, endDate);
+    console.log(`Fetching weekly diaper data for child ID: ${childId}`);
+    return await getDiaperDataByDateRange(childId, startDate, endDate);
+  } catch (error) {
+    console.error("Error fetching weekly diaper data:", error);
+    return [];
+  }
 };
 
 export const getMonthlyDiaperData = async (childId) => {
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30); // Get last 30 days
+  try {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30); // Get last 30 days
 
-  return await getDiaperDataByDateRange(childId, startDate, endDate);
+    console.log(`Fetching monthly diaper data for child ID: ${childId}`);
+    return await getDiaperDataByDateRange(childId, startDate, endDate);
+  } catch (error) {
+    console.error("Error fetching monthly diaper data:", error);
+    return [];
+  }
 };
 
 export const getYearlyDiaperData = async (childId) => {
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setFullYear(startDate.getFullYear() - 1); // Get last 365 days
+  try {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setFullYear(startDate.getFullYear() - 1); // Get last 365 days
 
-  return await getDiaperDataByDateRange(childId, startDate, endDate);
+    console.log(`Fetching yearly diaper data for child ID: ${childId}`);
+    return await getDiaperDataByDateRange(childId, startDate, endDate);
+  } catch (error) {
+    console.error("Error fetching yearly diaper data:", error);
+    return [];
+  }
 };
 
 // Add this function to aggregate diaper data by month for yearly view

@@ -1,5 +1,6 @@
 import Diaper from "../models/Diaper.js";
 import Child from "../models/Child.js";
+import { Op } from "sequelize";
 
 // Get all diaper changes for a specific child
 export const getDiaperChanges = async (req, res) => {
@@ -201,6 +202,65 @@ export const deleteDiaperChange = async (req, res) => {
     res.status(200).json({ message: "Diaper change deleted successfully" });
   } catch (error) {
     console.error("Error deleting diaper change:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get diaper changes by date range
+export const getDiaperChangesByDateRange = async (req, res) => {
+  try {
+    const { childId } = req.params;
+    const { startDate, endDate } = req.query;
+    const userId = req.user.id;
+
+    // Verify the child belongs to the authenticated user
+    const child = await Child.findOne({
+      where: {
+        id: childId,
+        userId,
+      },
+    });
+
+    if (!child) {
+      return res.status(404).json({ message: "Child not found" });
+    }
+
+    // Validate date parameters
+    if (!startDate || !endDate) {
+      return res
+        .status(400)
+        .json({ message: "Start date and end date are required" });
+    }
+
+    // Parse dates
+    const parsedStartDate = new Date(startDate);
+    const parsedEndDate = new Date(endDate);
+
+    // Set end date to end of day
+    parsedEndDate.setHours(23, 59, 59, 999);
+
+    if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
+      return res.status(400).json({ message: "Invalid date format" });
+    }
+
+    // Get diaper changes within the date range
+    const diaperChanges = await Diaper.findAll({
+      where: {
+        childId,
+        date: {
+          [Op.between]: [parsedStartDate, parsedEndDate],
+        },
+      },
+      order: [["date", "ASC"]],
+    });
+
+    console.log(
+      `Found ${diaperChanges.length} diaper changes between ${startDate} and ${endDate}`
+    );
+
+    res.status(200).json(diaperChanges);
+  } catch (error) {
+    console.error("Error fetching diaper changes by date range:", error);
     res.status(500).json({ error: error.message });
   }
 };

@@ -5,6 +5,7 @@ import {
   createDiaperChange,
   updateDiaperChange,
   deleteDiaperChange,
+  getDiaperChangesByDateRange,
 } from "../controllers/DiaperController.js";
 import { protect } from "../middleware/auth.js";
 
@@ -15,6 +16,9 @@ diaperRoute.use(protect);
 
 // Get all diaper changes for a specific child
 diaperRoute.get("/child/:childId", getDiaperChanges);
+
+// Get diaper changes by date range
+diaperRoute.get("/child/:childId/date-range", getDiaperChangesByDateRange);
 
 // Get a specific diaper change by ID
 diaperRoute.get("/child/:childId/:id", getDiaperChangeById);

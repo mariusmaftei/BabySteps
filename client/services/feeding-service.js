@@ -184,18 +184,64 @@ export const getFeedingDataByDateRange = async (
   }
 };
 
+// Function to get weekly feeding data (last 7 days)
 export const getWeeklyFeedingData = async (childId) => {
   try {
+    console.log(`Getting weekly feeding data for child ID: ${childId}`);
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 7);
 
+    console.log(
+      `Fetching feeding data from ${startDate.toISOString().split("T")[0]} to ${
+        endDate.toISOString().split("T")[0]
+      }`
+    );
+
     const result = await getFeedingDataByDateRange(childId, startDate, endDate);
+    console.log(
+      `Retrieved ${result ? result.length : 0} feeding records for the week`
+    );
 
     // If the API call fails, return an empty array instead of throwing an error
     return result || [];
   } catch (error) {
-    console.log("Error in getWeeklyFeedingData:", error.message || error);
+    console.error("Error in getWeeklyFeedingData:", error.message || error);
+    if (error.response) {
+      console.error("Error response status:", error.response.status);
+      console.error("Error response data:", error.response.data);
+    }
+    return [];
+  }
+};
+
+// Function to get monthly feeding data (last 30 days)
+export const getMonthlyFeedingData = async (childId) => {
+  try {
+    console.log(`Getting monthly feeding data for child ID: ${childId}`);
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+
+    console.log(
+      `Fetching feeding data from ${startDate.toISOString().split("T")[0]} to ${
+        endDate.toISOString().split("T")[0]
+      }`
+    );
+
+    const result = await getFeedingDataByDateRange(childId, startDate, endDate);
+    console.log(
+      `Retrieved ${result ? result.length : 0} feeding records for the month`
+    );
+
+    // If the API call fails, return an empty array instead of throwing an error
+    return result || [];
+  } catch (error) {
+    console.error("Error in getMonthlyFeedingData:", error.message || error);
+    if (error.response) {
+      console.error("Error response status:", error.response.status);
+      console.error("Error response data:", error.response.data);
+    }
     return [];
   }
 };
@@ -345,7 +391,7 @@ export const saveSolidFoodData = async (feedingData) => {
       type: "solid",
       startTime: null, // Explicitly set to null for solid food
       endTime: null, // Explicitly set to null for solid food
-      duration: 0, // Explicitly set to null for solid food
+      duration: 0, // Explicitly set to 0 for solid food
       side: null, // Explicitly set to null for solid food
       amount: feedingData.amount,
       unit: feedingData.unit || "g",
