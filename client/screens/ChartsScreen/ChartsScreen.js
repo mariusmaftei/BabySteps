@@ -32,6 +32,8 @@ import {
 import {
   getWeeklyFeedingData,
   getMonthlyFeedingData,
+  getFeedingDataByMonth,
+  formatDateForPeriod as formatFeedingDateForPeriod,
 } from "../../services/feeding-service";
 
 // Import chart components
@@ -242,7 +244,7 @@ export default function ChartsScreen({ navigation }) {
   }, [timePeriod]);
 
   // Handle month change from the SleepChartComponent
-  const handleMonthChange = async (startDate, endDate) => {
+  const handleSleepMonthChange = async (startDate, endDate) => {
     if (noChildren || activeTab !== "Sleep") return;
 
     setIsLoading(true);
@@ -269,6 +271,40 @@ export default function ChartsScreen({ navigation }) {
       console.error(`Error fetching sleep data for month:`, err);
       setError(
         `Failed to load sleep data for the selected month. Please try again.`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle month change from the FeedingChartComponent
+  const handleFeedingMonthChange = async (startDate, endDate) => {
+    if (noChildren || activeTab !== "Feeding") return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log(
+        `Fetching feeding data for month: ${
+          startDate.getMonth() + 1
+        }/${startDate.getFullYear()}`
+      );
+      const data = await getFeedingDataByMonth(
+        currentChild.id,
+        startDate.getFullYear(),
+        startDate.getMonth()
+      );
+      console.log(
+        `Feeding data fetched for month: ${data ? data.length : 0} records`
+      );
+      setFeedingData(data || []);
+      setSelectedMonth(startDate.getMonth());
+      setSelectedYear(startDate.getFullYear());
+    } catch (err) {
+      console.error(`Error fetching feeding data for month:`, err);
+      setError(
+        `Failed to load feeding data for the selected month. Please try again.`
       );
     } finally {
       setIsLoading(false);
@@ -331,8 +367,28 @@ export default function ChartsScreen({ navigation }) {
         // Fetch feeding data
         if (timePeriod === "week") {
           data = await getWeeklyFeedingData(currentChild.id);
+          // Add debug logging
+          console.log("Weekly feeding data dates:");
+          if (data && data.length > 0) {
+            const dates = [...new Set(data.map((item) => item.date))].sort();
+            dates.forEach((date) => {
+              const count = data.filter((item) => item.date === date).length;
+              console.log(`${date}: ${count} records`);
+            });
+          } else {
+            console.log("No feeding data found for this week");
+          }
         } else if (timePeriod === "month") {
-          data = await getMonthlyFeedingData(currentChild.id);
+          // If in month view, fetch data for the selected month
+          if (selectedMonth !== undefined && selectedYear !== undefined) {
+            data = await getFeedingDataByMonth(
+              currentChild.id,
+              selectedYear,
+              selectedMonth
+            );
+          } else {
+            data = await getMonthlyFeedingData(currentChild.id);
+          }
         }
         console.log(
           `${timePeriod} feeding data fetched for charts:`,
@@ -823,7 +879,7 @@ export default function ChartsScreen({ navigation }) {
         date.setDate(today.getDate() - i);
         const dateStr = date.toISOString().split("T")[0];
         dates.push(dateStr);
-        labels.push(formatDateForPeriod(dateStr, "week"));
+        labels.push(formatFeedingDateForPeriod(dateStr, "week"));
       }
 
       // Process feeding data by type for each day
@@ -877,83 +933,73 @@ export default function ChartsScreen({ navigation }) {
         });
       });
     } else if (timePeriod === "month") {
-      // Get the last 30 days, showing every 3rd day
-      const today = new Date();
-      for (let i = 29; i >= 0; i -= 3) {
-        const date = new Date();
-        date.setDate(today.getDate() - i);
+      // Get all days in the selected month
+      const daysInMonth = new Date(
+        selectedYear,
+        selectedMonth + 1,
+        0
+      ).getDate();
+
+      for (let i = 1; i <= daysInMonth; i++) {
+        const date = new Date(selectedYear, selectedMonth, i);
         const dateStr = date.toISOString().split("T")[0];
         dates.push(dateStr);
-        labels.push(formatDateForPeriod(dateStr, "month"));
+        labels.push(i.toString()); // Just show the day number
       }
 
-      // Process feeding data for each 3-day period
+      // Process feeding data by type for each day
       dates.forEach((date, index) => {
-        let periodFeedings = [];
-        let totalBreastDuration = 0;
-        let totalBottleAmount = 0;
-        let totalSolidAmount = 0;
+        const dayFeedings = feedingData.filter((item) => {
+          // Convert item.date to a date object if it's a string
+          const itemDate =
+            typeof item.date === "string"
+              ? item.date
+              : item.date.toISOString().split("T")[0];
+          return item && itemDate === date;
+        });
 
-        // Collect data for 3 days
-        for (let i = 0; i < 3; i++) {
-          const checkDate = new Date(date);
-          checkDate.setDate(checkDate.getDate() + i);
-          const checkDateStr = checkDate.toISOString().split("T")[0];
+        // Get breast feeding duration total
+        const breastFeedings = dayFeedings.filter(
+          (item) => item && item.type === "breast"
+        );
+        const breastDuration = safeReduce(
+          breastFeedings,
+          (sum, item) => sum + (Number(item.duration) || 0),
+          0
+        );
+        breastFeedingData.push(breastDuration);
 
-          const dayFeedings = feedingData.filter(
-            (item) => item && item.date === checkDateStr
-          );
-          periodFeedings = [...periodFeedings, ...dayFeedings];
+        // Get bottle feeding amount total
+        const bottleFeedings = dayFeedings.filter(
+          (item) => item && item.type === "bottle"
+        );
+        const bottleAmount = safeReduce(
+          bottleFeedings,
+          (sum, item) => sum + (Number(item.amount) || 0),
+          0
+        );
+        bottleFeedingData.push(bottleAmount);
 
-          // Calculate breast feeding duration
-          const breastFeedings = dayFeedings.filter(
-            (item) => item && item.type === "breast"
-          );
-          totalBreastDuration += safeReduce(
-            breastFeedings,
-            (sum, item) => sum + (Number(item.duration) || 0),
-            0
-          );
+        // Get solid food amount total
+        const solidFeedings = dayFeedings.filter(
+          (item) => item && item.type === "solid"
+        );
+        const solidAmount = safeReduce(
+          solidFeedings,
+          (sum, item) => sum + (Number(item.amount) || 0),
+          0
+        );
+        solidFoodData.push(solidAmount);
 
-          // Calculate bottle feeding amount
-          const bottleFeedings = dayFeedings.filter(
-            (item) => item && item.type === "bottle"
-          );
-          totalBottleAmount += safeReduce(
-            bottleFeedings,
-            (sum, item) => sum + (Number(item.amount) || 0),
-            0
-          );
-
-          // Calculate solid food amount
-          const solidFeedings = dayFeedings.filter(
-            (item) => item && item.type === "solid"
-          );
-          totalSolidAmount += safeReduce(
-            solidFeedings,
-            (sum, item) => sum + (Number(item.amount) || 0),
-            0
-          );
-        }
-
-        // Calculate daily averages
-        const avgBreastDuration = Math.round(totalBreastDuration / 3);
-        const avgBottleAmount = Math.round(totalBottleAmount / 3);
-        const avgSolidAmount = Math.round(totalSolidAmount / 3);
-
-        breastFeedingData.push(avgBreastDuration);
-        bottleFeedingData.push(avgBottleAmount);
-        solidFoodData.push(avgSolidAmount);
-
-        // Store period data for the summary
+        // Store daily feedings for the summary
         dailyFeedings.push({
           date,
           label: labels[index],
-          feedings: periodFeedings,
-          breastDuration: avgBreastDuration,
-          bottleAmount: avgBottleAmount,
-          solidAmount: avgSolidAmount,
-          totalCount: Math.round(periodFeedings.length / 3),
+          feedings: dayFeedings,
+          breastDuration,
+          bottleAmount,
+          solidAmount,
+          totalCount: dayFeedings.length,
         });
       });
     }
@@ -1114,7 +1160,7 @@ export default function ChartsScreen({ navigation }) {
       bottleTrendText: formatTrendText(bottleTrend),
       solidTrendText: formatTrendText(solidTrend),
     };
-  }, [feedingData, timePeriod]);
+  }, [feedingData, timePeriod, selectedMonth, selectedYear]);
 
   // In the useEffect that updates sleepChartData, modify to use sleepProgress
   useEffect(() => {
@@ -1576,7 +1622,7 @@ export default function ChartsScreen({ navigation }) {
             categoryColor={categoryColors.Sleep}
             timePeriod={timePeriod}
             getChartConfig={getChartConfig()}
-            onMonthChange={handleMonthChange}
+            onMonthChange={handleSleepMonthChange}
             currentMonth={selectedMonth}
             currentYear={selectedYear}
           />
@@ -1606,6 +1652,7 @@ export default function ChartsScreen({ navigation }) {
             categoryColor={categoryColors.Feeding}
             timePeriod={timePeriod}
             getChartConfig={getChartConfig()}
+            onMonthChange={handleFeedingMonthChange}
           />
         );
       case "Growth":

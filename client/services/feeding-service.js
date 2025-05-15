@@ -184,13 +184,26 @@ export const getFeedingDataByDateRange = async (
   }
 };
 
-// Function to get weekly feeding data (last 7 days)
+// Update the getWeeklyFeedingData function to match the week calculation in ChartsScreen
+// Replace the current implementation:
+// With this improved version:
 export const getWeeklyFeedingData = async (childId) => {
   try {
     console.log(`Getting weekly feeding data for child ID: ${childId}`);
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 7);
+
+    // Get the current week (Sunday to Saturday)
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
+    // Calculate the date for Sunday (start of week)
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - currentDay);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Calculate the date for Saturday (end of week)
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    endDate.setHours(23, 59, 59, 999);
 
     console.log(
       `Fetching feeding data from ${startDate.toISOString().split("T")[0]} to ${
@@ -238,6 +251,46 @@ export const getMonthlyFeedingData = async (childId) => {
     return result || [];
   } catch (error) {
     console.error("Error in getMonthlyFeedingData:", error.message || error);
+    if (error.response) {
+      console.error("Error response status:", error.response.status);
+      console.error("Error response data:", error.response.data);
+    }
+    return [];
+  }
+};
+
+// Function to get feeding data for a specific month
+export const getFeedingDataByMonth = async (childId, year, month) => {
+  try {
+    console.log(
+      `Getting feeding data for child ID: ${childId} for ${month + 1}/${year}`
+    );
+
+    // Create start date (1st day of month)
+    const startDate = new Date(year, month, 1);
+
+    // Create end date (last day of month)
+    const endDate = new Date(year, month + 1, 0);
+
+    console.log(
+      `Fetching feeding data from ${startDate.toISOString().split("T")[0]} to ${
+        endDate.toISOString().split("T")[0]
+      }`
+    );
+
+    const result = await getFeedingDataByDateRange(childId, startDate, endDate);
+    console.log(
+      `Retrieved ${result ? result.length : 0} feeding records for ${
+        month + 1
+      }/${year}`
+    );
+
+    return result || [];
+  } catch (error) {
+    console.error(
+      `Error in getFeedingDataByMonth for ${month + 1}/${year}:`,
+      error.message || error
+    );
     if (error.response) {
       console.error("Error response status:", error.response.status);
       console.error("Error response data:", error.response.data);
@@ -451,6 +504,60 @@ export const deleteFeedingData = async (feedingId) => {
     }
     throw error;
   }
+};
+
+// Helper function to format date for display in charts
+export const formatDateForPeriod = (dateString, period) => {
+  const date = new Date(dateString);
+
+  if (period === "week") {
+    return date.toLocaleDateString("en-US", { weekday: "short" });
+  } else if (period === "month") {
+    return date.getDate().toString();
+  } else {
+    return date.toLocaleDateString("en-US", { month: "short" });
+  }
+};
+
+// Also add a debug function to help troubleshoot date issues
+export const debugFeedingData = (feedingData) => {
+  if (!feedingData || feedingData.length === 0) {
+    console.log("No feeding data to debug");
+    return;
+  }
+
+  console.log("=== FEEDING DATA DEBUG ===");
+  console.log(`Total records: ${feedingData.length}`);
+
+  // Group by date
+  const dateGroups = {};
+  feedingData.forEach((item) => {
+    const date = item.date;
+    if (!dateGroups[date]) {
+      dateGroups[date] = [];
+    }
+    dateGroups[date].push(item);
+  });
+
+  // Log summary by date
+  console.log("Records by date:");
+  Object.keys(dateGroups)
+    .sort()
+    .forEach((date) => {
+      const items = dateGroups[date];
+      console.log(`${date}: ${items.length} records`);
+
+      // Count by type
+      const breastCount = items.filter((i) => i.type === "breast").length;
+      const bottleCount = items.filter((i) => i.type === "bottle").length;
+      const solidCount = items.filter((i) => i.type === "solid").length;
+
+      console.log(
+        `  - Breast: ${breastCount}, Bottle: ${bottleCount}, Solid: ${solidCount}`
+      );
+    });
+
+  console.log("=== END DEBUG ===");
 };
 
 // Local storage functions kept for reference but not used
