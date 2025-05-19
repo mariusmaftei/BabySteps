@@ -124,7 +124,31 @@ export const getDiaperDataByDateRange = async (childId, startDate, endDate) => {
       `/diaper/child/${childId}/date-range?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
     );
     console.log("Diaper data by date range response:", response.data);
-    return response.data;
+
+    // Process the data to extract day from timestamp
+    const processedData = response.data.map((record) => {
+      // Extract the day from the timestamp (format: "2025-05-19 13:27:34")
+      let day = null;
+      if (record.timestamp) {
+        if (record.timestamp.includes("T")) {
+          day = record.timestamp.split("T")[0].split("-")[2];
+        } else if (record.timestamp.includes(" ")) {
+          day = record.timestamp.split(" ")[0].split("-")[2];
+        } else if (record.timestamp.includes("-")) {
+          day = record.timestamp.split("-")[2];
+        }
+
+        // Remove leading zeros if any
+        day = day ? Number.parseInt(day, 10).toString() : null;
+      }
+
+      return {
+        ...record,
+        day,
+      };
+    });
+
+    return processedData;
   } catch (error) {
     console.error("Error fetching diaper data by date range:", error);
     if (error.response) {
@@ -206,4 +230,26 @@ export const aggregateDiaperDataByMonth = (diaperData) => {
       count: item.count,
     }))
     .sort((a, b) => new Date(a.date) - new Date(b.date));
+};
+
+// Add a function to get diaper data by month
+export const getDiaperDataByMonth = async (childId, year, month) => {
+  try {
+    await ensureToken();
+
+    // Create date range for the specified month
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 0); // Last day of month
+
+    console.log(
+      `Fetching diaper data for child ID: ${childId} for ${month + 1}/${year}`
+    );
+    return await getDiaperDataByDateRange(childId, startDate, endDate);
+  } catch (error) {
+    console.error(
+      `Error fetching diaper data for month ${month + 1}/${year}:`,
+      error
+    );
+    return [];
+  }
 };

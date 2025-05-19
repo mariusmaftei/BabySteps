@@ -143,7 +143,7 @@ export default function ChartsScreen({ navigation }) {
     () => ({
       Sleep: "#5A87FF",
       Feeding: "#FF9500",
-      Diaper: "#FF2D55",
+      Diaper: "#33b2e8",
       Growth: "#4CD964",
     }),
     []
