@@ -26,7 +26,7 @@ const GrowthChartComponent = ({
   getChartConfig,
 }) => {
   // State to track which metric is selected for detailed view
-  const [selectedMetric, setSelectedMetric] = useState("all"); // "all", "weight", "height", "head"
+  const [selectedMetric, setSelectedMetric] = useState("weight"); // "weight", "height", "head"
 
   // Generate sample growth data for demonstration
   const sampleGrowthData = useMemo(() => {
@@ -50,18 +50,18 @@ const GrowthChartComponent = ({
     };
   }, []);
 
-  // Professional color palette
+  // Professional color palette - matching GrowthScreen.js
   const chartColors = useMemo(() => {
     return {
-      weight: "#2E7D32", // Green
-      height: "#1565C0", // Blue
-      head: "#E65100", // Orange
-      weightLight: "rgba(46, 125, 50, 0.15)", // Light green for backgrounds
-      heightLight: "rgba(21, 101, 192, 0.15)", // Light blue for backgrounds
-      headLight: "rgba(230, 81, 0, 0.15)", // Light orange for backgrounds
-      weightMedium: "rgba(46, 125, 50, 0.3)", // Medium green for borders
-      heightMedium: "rgba(21, 101, 192, 0.3)", // Medium blue for borders
-      headMedium: "rgba(230, 81, 0, 0.3)", // Medium orange for borders
+      weight: "#5a87ff", // Blue for weight
+      height: "#ff9500", // Orange for height
+      head: "#ff2d55", // Red for head circumference
+      weightLight: "rgba(90, 135, 255, 0.15)", // Light blue for backgrounds
+      heightLight: "rgba(255, 149, 0, 0.15)", // Light orange for backgrounds
+      headLight: "rgba(255, 45, 85, 0.15)", // Light red for backgrounds
+      weightMedium: "rgba(90, 135, 255, 0.3)", // Medium blue for borders
+      heightMedium: "rgba(255, 149, 0, 0.3)", // Medium orange for borders
+      headMedium: "rgba(255, 45, 85, 0.3)", // Medium red for borders
       text: theme.text,
       background: theme.cardBackground,
     };
@@ -89,48 +89,26 @@ const GrowthChartComponent = ({
           ? chartColors.headMedium
           : chartColors.head;
       } else {
-        // For "all", use a mix or default to category color
+        // Default to weight if somehow no valid metric is selected
         return type === "light"
-          ? chartColors.heightLight
+          ? chartColors.weightLight
           : type === "medium"
-          ? chartColors.heightMedium
-          : categoryColor;
+          ? chartColors.weightMedium
+          : chartColors.weight;
       }
     },
-    [selectedMetric, chartColors, categoryColor]
+    [selectedMetric, chartColors]
   );
 
   // Create chart data based on selected metric
   const getChartDataForMetric = useCallback(() => {
-    if (selectedMetric === "all") {
+    if (selectedMetric === "weight") {
       return {
         labels: sampleGrowthData.labels,
         datasets: [
           {
             data: sampleGrowthData.weight,
-            color: (opacity = 1) => `rgba(46, 125, 50, ${opacity})`, // Weight
-            strokeWidth: 3,
-          },
-          {
-            data: sampleGrowthData.height.map((h) => h / 10), // Scale height to fit
-            color: (opacity = 1) => `rgba(21, 101, 192, ${opacity})`, // Height
-            strokeWidth: 3,
-          },
-          {
-            data: sampleGrowthData.headCircumference.map((hc) => hc / 10), // Scale head to fit
-            color: (opacity = 1) => `rgba(230, 81, 0, ${opacity})`, // Head
-            strokeWidth: 3,
-          },
-        ],
-        legend: ["Weight (kg)", "Height (cm/10)", "Head (cm/10)"],
-      };
-    } else if (selectedMetric === "weight") {
-      return {
-        labels: sampleGrowthData.labels,
-        datasets: [
-          {
-            data: sampleGrowthData.weight,
-            color: (opacity = 1) => `rgba(46, 125, 50, ${opacity})`,
+            color: (opacity = 1) => `rgba(90, 135, 255, ${opacity})`, // Blue for weight
             strokeWidth: 3,
           },
         ],
@@ -142,7 +120,7 @@ const GrowthChartComponent = ({
         datasets: [
           {
             data: sampleGrowthData.height,
-            color: (opacity = 1) => `rgba(21, 101, 192, ${opacity})`,
+            color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`, // Orange for height
             strokeWidth: 3,
           },
         ],
@@ -154,7 +132,7 @@ const GrowthChartComponent = ({
         datasets: [
           {
             data: sampleGrowthData.headCircumference,
-            color: (opacity = 1) => `rgba(230, 81, 0, ${opacity})`,
+            color: (opacity = 1) => `rgba(255, 45, 85, ${opacity})`, // Red for head
             strokeWidth: 3,
           },
         ],
@@ -209,6 +187,20 @@ const GrowthChartComponent = ({
     return `${r}, ${g}, ${b}`;
   };
 
+  // Get icon name based on metric - matching GrowthScreen.js
+  const getMetricIcon = useCallback((metric) => {
+    switch (metric) {
+      case "weight":
+        return "scale-outline"; // Scale icon for weight
+      case "height":
+        return "resize-outline"; // Resize icon for height
+      case "head":
+        return "ellipse-outline"; // Circle icon for head circumference
+      default:
+        return "scale-outline";
+    }
+  }, []);
+
   // Render metric selector tabs
   const renderMetricSelector = useCallback(() => {
     return (
@@ -221,30 +213,6 @@ const GrowthChartComponent = ({
         <TouchableOpacity
           style={[
             styles.metricTab,
-            selectedMetric === "all" && {
-              backgroundColor: getMetricColor("light"),
-              borderBottomWidth: 3,
-              borderBottomColor: categoryColor,
-            },
-          ]}
-          onPress={() => setSelectedMetric("all")}
-        >
-          <Text
-            style={[
-              styles.metricTabText,
-              {
-                color:
-                  selectedMetric === "all" ? theme.text : theme.textSecondary,
-              },
-            ]}
-          >
-            All Metrics
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.metricTab,
             selectedMetric === "weight" && {
               backgroundColor: chartColors.weightLight,
               borderBottomWidth: 3,
@@ -253,19 +221,30 @@ const GrowthChartComponent = ({
           ]}
           onPress={() => setSelectedMetric("weight")}
         >
-          <Text
-            style={[
-              styles.metricTabText,
-              {
-                color:
-                  selectedMetric === "weight"
-                    ? chartColors.weight
-                    : theme.textSecondary,
-              },
-            ]}
-          >
-            Weight
-          </Text>
+          <View style={styles.metricTabContent}>
+            <Ionicons
+              name={getMetricIcon("weight")}
+              size={18}
+              color={
+                selectedMetric === "weight"
+                  ? chartColors.weight
+                  : theme.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.metricTabText,
+                {
+                  color:
+                    selectedMetric === "weight"
+                      ? chartColors.weight
+                      : theme.textSecondary,
+                },
+              ]}
+            >
+              Weight
+            </Text>
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -279,19 +258,30 @@ const GrowthChartComponent = ({
           ]}
           onPress={() => setSelectedMetric("height")}
         >
-          <Text
-            style={[
-              styles.metricTabText,
-              {
-                color:
-                  selectedMetric === "height"
-                    ? chartColors.height
-                    : theme.textSecondary,
-              },
-            ]}
-          >
-            Height
-          </Text>
+          <View style={styles.metricTabContent}>
+            <Ionicons
+              name={getMetricIcon("height")}
+              size={18}
+              color={
+                selectedMetric === "height"
+                  ? chartColors.height
+                  : theme.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.metricTabText,
+                {
+                  color:
+                    selectedMetric === "height"
+                      ? chartColors.height
+                      : theme.textSecondary,
+                },
+              ]}
+            >
+              Height
+            </Text>
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -305,23 +295,34 @@ const GrowthChartComponent = ({
           ]}
           onPress={() => setSelectedMetric("head")}
         >
-          <Text
-            style={[
-              styles.metricTabText,
-              {
-                color:
-                  selectedMetric === "head"
-                    ? chartColors.head
-                    : theme.textSecondary,
-              },
-            ]}
-          >
-            Head
-          </Text>
+          <View style={styles.metricTabContent}>
+            <Ionicons
+              name={getMetricIcon("head")}
+              size={18}
+              color={
+                selectedMetric === "head"
+                  ? chartColors.head
+                  : theme.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.metricTabText,
+                {
+                  color:
+                    selectedMetric === "head"
+                      ? chartColors.head
+                      : theme.textSecondary,
+                },
+              ]}
+            >
+              Head
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
     );
-  }, [selectedMetric, theme, categoryColor, chartColors, getMetricColor]);
+  }, [selectedMetric, theme, chartColors, getMetricColor, getMetricIcon]);
 
   // Render the enhanced growth chart
   const renderEnhancedGrowthChart = useCallback(() => {
@@ -396,32 +397,28 @@ const GrowthChartComponent = ({
                 return Number.parseFloat(value).toFixed(1);
               }}
               renderDotContent={({ x, y, index, indexData }) => {
-                // Only show dot content for the selected metric or if all metrics are selected
-                if (selectedMetric !== "all") {
-                  return (
-                    <View
-                      key={index}
+                return (
+                  <View
+                    key={index}
+                    style={[
+                      styles.dataPointLabel,
+                      {
+                        top: y - 24,
+                        left: x - 20,
+                        backgroundColor: `${getMetricColor()}20`,
+                      },
+                    ]}
+                  >
+                    <Text
                       style={[
-                        styles.dataPointLabel,
-                        {
-                          top: y - 24,
-                          left: x - 20,
-                          backgroundColor: `${getMetricColor()}20`,
-                        },
+                        styles.dataPointText,
+                        { color: getMetricColor() },
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.dataPointText,
-                          { color: getMetricColor() },
-                        ]}
-                      >
-                        {indexData}
-                      </Text>
-                    </View>
-                  );
-                }
-                return null;
+                      {indexData}
+                    </Text>
+                  </View>
+                );
               }}
             />
           </View>
@@ -439,452 +436,90 @@ const GrowthChartComponent = ({
     selectedMetric,
   ]);
 
-  // Render enhanced legend
-  const renderEnhancedLegend = useCallback(() => {
-    // Only show relevant legend items based on selected metric
-    const legendItems = [];
-
-    if (selectedMetric === "all" || selectedMetric === "weight") {
-      legendItems.push({
-        color: chartColors.weight,
-        label: "Weight (kg)",
-        value: sampleGrowthData.weight[sampleGrowthData.weight.length - 1],
-      });
-    }
-
-    if (selectedMetric === "all" || selectedMetric === "height") {
-      legendItems.push({
-        color: chartColors.height,
-        label: "Height (cm)",
-        value: sampleGrowthData.height[sampleGrowthData.height.length - 1],
-      });
-    }
-
-    if (selectedMetric === "all" || selectedMetric === "head") {
-      legendItems.push({
-        color: chartColors.head,
-        label: "Head Circ. (cm)",
-        value:
-          sampleGrowthData.headCircumference[
-            sampleGrowthData.headCircumference.length - 1
-          ],
-      });
-    }
-
-    return (
-      <View
-        style={[
-          styles.enhancedLegendContainer,
-          { borderBottomColor: getMetricColor("medium") },
-        ]}
-      >
-        {legendItems.map((item, index) => (
-          <View key={index} style={styles.enhancedLegendItem}>
-            <View
-              style={[styles.legendColorBox, { backgroundColor: item.color }]}
-            />
-            <Text style={[styles.legendLabel, { color: theme.textSecondary }]}>
-              {item.label}
-            </Text>
-            <Text style={[styles.legendValue, { color: theme.text }]}>
-              {item.value}
-            </Text>
-          </View>
-        ))}
-      </View>
-    );
-  }, [selectedMetric, chartColors, sampleGrowthData, theme, getMetricColor]);
-
-  // Render growth details based on selected metric
-  const renderGrowthDetails = useCallback(() => {
-    // Get the appropriate data based on selected metric
-    let title, data, color, percentiles, unit;
-
-    if (selectedMetric === "weight") {
-      title = "Weight Growth";
-      data = sampleGrowthData.weight;
-      color = chartColors.weight;
-      percentiles = sampleGrowthData.weightPercentile;
-      unit = "kg";
-    } else if (selectedMetric === "height") {
-      title = "Height Growth";
-      data = sampleGrowthData.height;
-      color = chartColors.height;
-      percentiles = sampleGrowthData.heightPercentile;
-      unit = "cm";
-    } else if (selectedMetric === "head") {
-      title = "Head Circumference";
-      data = sampleGrowthData.headCircumference;
-      color = chartColors.head;
-      percentiles = sampleGrowthData.headPercentile;
-      unit = "cm";
-    } else {
-      // For "all" metrics, show a summary
-      return renderGrowthSummary();
-    }
-
-    // Calculate growth rate
-    const firstValue = data[0];
-    const lastValue = data[data.length - 1];
-    const growthAmount = lastValue - firstValue;
-    const growthPercent = ((growthAmount / firstValue) * 100).toFixed(1);
-    const monthlyGrowth = (growthAmount / (data.length - 1)).toFixed(2);
-
-    // Get current percentile
-    const currentPercentile = percentiles[percentiles.length - 1];
-
-    const lightColor =
-      color === chartColors.weight
-        ? chartColors.weightLight
-        : color === chartColors.height
-        ? chartColors.heightLight
-        : chartColors.headLight;
-
-    return (
-      <View
-        style={[
-          styles.growthDetailsContainer,
-          { borderColor: color, backgroundColor: lightColor },
-        ]}
-      >
-        <Text style={[styles.growthDetailsTitle, { color }]}>{title}</Text>
-
-        <View style={styles.growthDetailsRow}>
-          <View style={styles.growthDetailItem}>
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Starting
-            </Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>
-              {firstValue} {unit}
-            </Text>
-          </View>
-
-          <View style={styles.growthDetailItem}>
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Current
-            </Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>
-              {lastValue} {unit}
-            </Text>
-          </View>
-
-          <View style={styles.growthDetailItem}>
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Growth
-            </Text>
-            <Text style={[styles.detailValue, { color }]}>
-              +{growthAmount.toFixed(1)} {unit}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.growthDetailsRow}>
-          <View style={styles.growthDetailItem}>
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Monthly
-            </Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>
-              +{monthlyGrowth} {unit}
-            </Text>
-          </View>
-
-          <View style={styles.growthDetailItem}>
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Percentile
-            </Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>
-              {currentPercentile}th
-            </Text>
-          </View>
-
-          <View style={styles.growthDetailItem}>
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Total %
-            </Text>
-            <Text style={[styles.detailValue, { color }]}>
-              +{growthPercent}%
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.percentileBarContainer}>
-          <Text
-            style={[styles.percentileLabel, { color: theme.textSecondary }]}
-          >
-            Percentile Range
-          </Text>
-          <View
-            style={[styles.percentileBar, { backgroundColor: `${color}20` }]}
-          >
-            <View
-              style={[
-                styles.percentileFill,
-                {
-                  width: `${currentPercentile}%`,
-                  backgroundColor: color,
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.percentileMarker,
-                {
-                  left: `${currentPercentile}%`,
-                  backgroundColor: color,
-                },
-              ]}
-            />
-          </View>
-          <View style={styles.percentileLabelsContainer}>
-            <Text
-              style={[
-                styles.percentileRangeLabel,
-                { color: theme.textSecondary },
-              ]}
-            >
-              0%
-            </Text>
-            <Text
-              style={[
-                styles.percentileRangeLabel,
-                { color: theme.textSecondary },
-              ]}
-            >
-              50%
-            </Text>
-            <Text
-              style={[
-                styles.percentileRangeLabel,
-                { color: theme.textSecondary },
-              ]}
-            >
-              100%
-            </Text>
-          </View>
-        </View>
-      </View>
-    );
-  }, [
-    selectedMetric,
-    sampleGrowthData,
-    chartColors,
-    theme,
-    renderGrowthSummary,
-  ]);
-
-  // Render growth summary for "all" metrics view
-  const renderGrowthSummary = useCallback(() => {
-    const {
-      weight,
-      height,
-      headCircumference,
-      weightPercentile,
-      heightPercentile,
-      headPercentile,
-    } = sampleGrowthData;
-
-    // Calculate overall growth percentages
-    const weightGrowth = (
-      ((weight[weight.length - 1] - weight[0]) / weight[0]) *
-      100
-    ).toFixed(1);
-    const heightGrowth = (
-      ((height[height.length - 1] - height[0]) / height[0]) *
-      100
-    ).toFixed(1);
-    const headGrowth = (
-      ((headCircumference[headCircumference.length - 1] -
-        headCircumference[0]) /
-        headCircumference[0]) *
-      100
-    ).toFixed(1);
-
-    return (
-      <View style={styles.growthSummaryContainer}>
-        <Text style={[styles.growthSummaryTitle, { color: theme.text }]}>
-          Growth Summary
-        </Text>
-
-        <View style={styles.growthSummaryRow}>
-          <View
-            style={[
-              styles.growthSummaryCard,
-              {
-                borderColor: chartColors.weight,
-                backgroundColor: chartColors.weightLight,
-              },
-            ]}
-          >
-            <View style={styles.summaryCardHeader}>
-              <Ionicons
-                name="scale-outline"
-                size={18}
-                color={chartColors.weight}
-              />
-              <Text
-                style={[styles.summaryCardTitle, { color: chartColors.weight }]}
-              >
-                Weight
-              </Text>
-            </View>
-            <Text style={[styles.summaryCardValue, { color: theme.text }]}>
-              {weight[weight.length - 1]} kg
-            </Text>
-            <View style={styles.summaryCardFooter}>
-              <Text
-                style={[
-                  styles.summaryCardGrowth,
-                  { color: chartColors.weight },
-                ]}
-              >
-                +{weightGrowth}%
-              </Text>
-              <Text
-                style={[
-                  styles.summaryCardPercentile,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {weightPercentile[weightPercentile.length - 1]}th percentile
-              </Text>
-            </View>
-          </View>
-
-          <View
-            style={[
-              styles.growthSummaryCard,
-              {
-                borderColor: chartColors.height,
-                backgroundColor: chartColors.heightLight,
-              },
-            ]}
-          >
-            <View style={styles.summaryCardHeader}>
-              <Ionicons
-                name="resize-outline"
-                size={18}
-                color={chartColors.height}
-              />
-              <Text
-                style={[styles.summaryCardTitle, { color: chartColors.height }]}
-              >
-                Height
-              </Text>
-            </View>
-            <Text style={[styles.summaryCardValue, { color: theme.text }]}>
-              {height[height.length - 1]} cm
-            </Text>
-            <View style={styles.summaryCardFooter}>
-              <Text
-                style={[
-                  styles.summaryCardGrowth,
-                  { color: chartColors.height },
-                ]}
-              >
-                +{heightGrowth}%
-              </Text>
-              <Text
-                style={[
-                  styles.summaryCardPercentile,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {heightPercentile[heightPercentile.length - 1]}th percentile
-              </Text>
-            </View>
-          </View>
-
-          <View
-            style={[
-              styles.growthSummaryCard,
-              {
-                borderColor: chartColors.head,
-                backgroundColor: chartColors.headLight,
-              },
-            ]}
-          >
-            <View style={styles.summaryCardHeader}>
-              <Ionicons
-                name="ellipse-outline"
-                size={18}
-                color={chartColors.head}
-              />
-              <Text
-                style={[styles.summaryCardTitle, { color: chartColors.head }]}
-              >
-                Head
-              </Text>
-            </View>
-            <Text style={[styles.summaryCardValue, { color: theme.text }]}>
-              {headCircumference[headCircumference.length - 1]} cm
-            </Text>
-            <View style={styles.summaryCardFooter}>
-              <Text
-                style={[styles.summaryCardGrowth, { color: chartColors.head }]}
-              >
-                +{headGrowth}%
-              </Text>
-              <Text
-                style={[
-                  styles.summaryCardPercentile,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {headPercentile[headPercentile.length - 1]}th percentile
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View
-          style={[
-            styles.growthInsightContainer,
-            { backgroundColor: chartColors.heightLight },
-          ]}
-        >
-          <Ionicons
-            name="information-circle-outline"
-            size={20}
-            color={categoryColor}
-            style={styles.insightIcon}
-          />
-          <Text
-            style={[styles.growthInsightText, { color: theme.textSecondary }]}
-          >
-            Your baby is growing at a healthy rate across all measurements. All
-            metrics are within normal percentile ranges, which indicates
-            consistent and proportional development.
-          </Text>
-        </View>
-      </View>
-    );
-  }, [sampleGrowthData, theme, chartColors, categoryColor]);
-
-  // Render growth history table
-  const renderGrowthHistory = useCallback(() => {
-    // Only show history for the selected metric
-    if (selectedMetric === "all") return null;
-
-    let data, label, unit, color, lightColor;
+  // Render current value and percentile
+  const renderCurrentValue = useCallback(() => {
+    let data, label, unit, color, percentile;
 
     if (selectedMetric === "weight") {
       data = sampleGrowthData.weight;
       label = "Weight";
       unit = "kg";
       color = chartColors.weight;
-      lightColor = chartColors.weightLight;
+      percentile =
+        sampleGrowthData.weightPercentile[
+          sampleGrowthData.weightPercentile.length - 1
+        ];
     } else if (selectedMetric === "height") {
       data = sampleGrowthData.height;
       label = "Height";
       unit = "cm";
       color = chartColors.height;
-      lightColor = chartColors.heightLight;
+      percentile =
+        sampleGrowthData.heightPercentile[
+          sampleGrowthData.heightPercentile.length - 1
+        ];
     } else if (selectedMetric === "head") {
       data = sampleGrowthData.headCircumference;
-      label = "Head Circ.";
+      label = "Head Circumference";
       unit = "cm";
       color = chartColors.head;
-      lightColor = chartColors.headLight;
+      percentile =
+        sampleGrowthData.headPercentile[
+          sampleGrowthData.headPercentile.length - 1
+        ];
+    }
+
+    const currentValue = data[data.length - 1];
+
+    return (
+      <View
+        style={[
+          styles.currentValueContainer,
+          { backgroundColor: `${color}15` },
+        ]}
+      >
+        <View style={styles.currentValueHeader}>
+          <Ionicons
+            name={getMetricIcon(selectedMetric)}
+            size={24}
+            color={color}
+          />
+          <Text style={[styles.currentValueTitle, { color }]}>{label}</Text>
+        </View>
+        <Text style={[styles.currentValueNumber, { color: theme.text }]}>
+          {currentValue} {unit}
+        </Text>
+        <Text
+          style={[
+            styles.currentValuePercentile,
+            { color: theme.textSecondary },
+          ]}
+        >
+          {percentile}th percentile
+        </Text>
+      </View>
+    );
+  }, [selectedMetric, sampleGrowthData, theme, chartColors, getMetricIcon]);
+
+  // Render growth records list
+  const renderGrowthRecords = useCallback(() => {
+    let data, label, unit, color;
+
+    if (selectedMetric === "weight") {
+      data = sampleGrowthData.weight;
+      label = "Weight";
+      unit = "kg";
+      color = chartColors.weight;
+    } else if (selectedMetric === "height") {
+      data = sampleGrowthData.height;
+      label = "Height";
+      unit = "cm";
+      color = chartColors.height;
+    } else if (selectedMetric === "head") {
+      data = sampleGrowthData.headCircumference;
+      label = "Head Circumference";
+      unit = "cm";
+      color = chartColors.head;
     }
 
     // Format dates for display
@@ -898,44 +533,22 @@ const GrowthChartComponent = ({
     };
 
     return (
-      <View style={[styles.historyContainer, { backgroundColor: lightColor }]}>
-        <Text style={[styles.historyTitle, { color: color }]}>
-          {label} History
-        </Text>
+      <View style={styles.recordsContainer}>
+        <View
+          style={[styles.recordsHeader, { borderBottomColor: `${color}30` }]}
+        >
+          <Ionicons
+            name={getMetricIcon(selectedMetric)}
+            size={20}
+            color={color}
+          />
+          <Text style={[styles.recordsTitle, { color }]}>{label} Records</Text>
+        </View>
 
-        <View style={styles.historyTable}>
-          <View
-            style={[
-              styles.historyHeaderRow,
-              { borderBottomColor: `${color}40` },
-            ]}
-          >
-            <Text
-              style={[
-                styles.historyHeaderCell,
-                { color: theme.textSecondary, flex: 2 },
-              ]}
-            >
-              Date
-            </Text>
-            <Text
-              style={[
-                styles.historyHeaderCell,
-                { color: theme.textSecondary, flex: 1 },
-              ]}
-            >
-              {label}
-            </Text>
-            <Text
-              style={[
-                styles.historyHeaderCell,
-                { color: theme.textSecondary, flex: 1 },
-              ]}
-            >
-              Change
-            </Text>
-          </View>
-
+        <ScrollView
+          style={styles.recordsList}
+          showsVerticalScrollIndicator={false}
+        >
           {sampleGrowthData.dates.map((date, index) => {
             // Calculate change from previous measurement
             const currentValue = data[index];
@@ -947,55 +560,74 @@ const GrowthChartComponent = ({
                 : change > 0
                 ? `+${change.toFixed(1)}`
                 : change.toFixed(1);
+            const changeColor =
+              index === 0
+                ? theme.textSecondary
+                : change > 0
+                ? color
+                : "#E53935";
 
             return (
               <View
                 key={index}
                 style={[
-                  styles.historyRow,
-                  { borderBottomColor: `${color}20` },
+                  styles.recordItem,
+                  { borderBottomColor: `${color}15` },
                   index === sampleGrowthData.dates.length - 1 && {
                     borderBottomWidth: 0,
                   },
                 ]}
               >
-                <Text
-                  style={[styles.historyCell, { color: theme.text, flex: 2 }]}
-                >
-                  {formatDate(date)}
-                </Text>
-                <Text
-                  style={[styles.historyCell, { color: theme.text, flex: 1 }]}
-                >
-                  {currentValue} {unit}
-                </Text>
-                <Text
-                  style={[
-                    styles.historyCell,
-                    {
-                      color: index === 0 ? theme.textSecondary : color,
-                      flex: 1,
-                      fontWeight: index === 0 ? "normal" : "bold",
-                    },
-                  ]}
-                >
-                  {changeText}
-                </Text>
+                <View style={styles.recordMain}>
+                  <Text
+                    style={[styles.recordDate, { color: theme.textSecondary }]}
+                  >
+                    {formatDate(date)}
+                  </Text>
+                  <View style={styles.recordValueContainer}>
+                    <Text style={[styles.recordValue, { color: theme.text }]}>
+                      {currentValue} {unit}
+                    </Text>
+                    <Text style={[styles.recordChange, { color: changeColor }]}>
+                      {changeText !== "-" && changeText}
+                    </Text>
+                  </View>
+                </View>
+
+                {index > 0 && (
+                  <View style={styles.recordDetails}>
+                    <View
+                      style={[
+                        styles.recordIndicator,
+                        { backgroundColor: color },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.recordDetailText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      {change > 0 ? "Increased" : "Decreased"} by{" "}
+                      {Math.abs(change).toFixed(1)} {unit} since last
+                      measurement
+                    </Text>
+                  </View>
+                )}
               </View>
             );
           })}
-        </View>
+        </ScrollView>
       </View>
     );
-  }, [selectedMetric, sampleGrowthData, theme, chartColors]);
+  }, [selectedMetric, sampleGrowthData, theme, chartColors, getMetricIcon]);
 
   return (
     <>
       {renderMetricSelector()}
       {renderEnhancedGrowthChart()}
-      {renderEnhancedLegend()}
-      {renderGrowthDetails()}
-      {renderGrowthHistory()}
+      {renderCurrentValue()}
+      {renderGrowthRecords()}
 
       <Text
         style={[
@@ -1042,9 +674,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  metricTabContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   metricTabText: {
     fontSize: 13,
     fontWeight: "600",
+    marginLeft: 4,
   },
   enhancedChartContainer: {
     marginBottom: 16,
@@ -1084,191 +722,100 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "bold",
   },
-  enhancedLegendContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  enhancedLegendItem: {
-    flexDirection: "column",
-    alignItems: "center",
-  },
-  legendColorBox: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    marginBottom: 4,
-  },
-  legendLabel: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  legendValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  growthDetailsContainer: {
-    marginBottom: 20,
+  currentValueContainer: {
+    marginBottom: 16,
     padding: 16,
     borderRadius: 12,
-    borderLeftWidth: 4,
-  },
-  growthDetailsTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-  growthDetailsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  growthDetailItem: {
-    flex: 1,
     alignItems: "center",
   },
-  detailLabel: {
-    fontSize: 12,
-    marginBottom: 4,
+  currentValueHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
   },
-  detailValue: {
+  currentValueTitle: {
     fontSize: 16,
     fontWeight: "bold",
+    marginLeft: 8,
   },
-  percentileBarContainer: {
+  currentValueNumber: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  currentValuePercentile: {
+    fontSize: 14,
+  },
+  recordsContainer: {
+    marginBottom: 20,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "white",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  recordsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  recordsTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginLeft: 8,
+  },
+  recordsList: {
+    maxHeight: 300,
+  },
+  recordItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  recordMain: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  recordDate: {
+    fontSize: 14,
+  },
+  recordValueContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  recordValue: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginRight: 8,
+  },
+  recordChange: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  recordDetails: {
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 8,
   },
-  percentileLabel: {
-    fontSize: 12,
-    marginBottom: 6,
-  },
-  percentileBar: {
-    height: 12,
-    borderRadius: 6,
-    overflow: "hidden",
-    position: "relative",
-  },
-  percentileFill: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    height: "100%",
-    borderTopLeftRadius: 6,
-    borderBottomLeftRadius: 6,
-  },
-  percentileMarker: {
-    position: "absolute",
-    width: 4,
-    height: 16,
-    top: -2,
-    marginLeft: -2,
-    borderRadius: 2,
-  },
-  percentileLabelsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  percentileRangeLabel: {
-    fontSize: 10,
-  },
-  growthSummaryContainer: {
-    marginBottom: 20,
-  },
-  growthSummaryTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-  growthSummaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  growthSummaryCard: {
-    flex: 1,
-    marginHorizontal: 4,
-    padding: 12,
-    borderRadius: 12,
-    borderLeftWidth: 3,
-  },
-  summaryCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  summaryCardTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    marginLeft: 4,
-  },
-  summaryCardValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  summaryCardFooter: {
-    flexDirection: "column",
-  },
-  summaryCardGrowth: {
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  summaryCardPercentile: {
-    fontSize: 10,
-  },
-  growthInsightContainer: {
-    flexDirection: "row",
-    borderRadius: 12,
-    padding: 12,
-  },
-  insightIcon: {
+  recordIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     marginRight: 8,
-    marginTop: 2,
   },
-  growthInsightText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  historyContainer: {
-    marginBottom: 20,
-    padding: 16,
-    borderRadius: 12,
-  },
-  historyTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-  historyTable: {
-    width: "100%",
-  },
-  historyHeaderRow: {
-    flexDirection: "row",
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    marginBottom: 8,
-  },
-  historyHeaderCell: {
+  recordDetailText: {
     fontSize: 12,
-    fontWeight: "bold",
-  },
-  historyRow: {
-    flexDirection: "row",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-  },
-  historyCell: {
-    fontSize: 13,
   },
   insightText: {
     fontSize: 14,
     lineHeight: 20,
     paddingTop: 16,
     borderTopWidth: 1,
+    textAlign: "center",
   },
 });
 

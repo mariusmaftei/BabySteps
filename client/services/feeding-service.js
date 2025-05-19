@@ -19,6 +19,39 @@ const createFeedingRecord = (data) => {
   };
 };
 
+// Helper function to extract day from timestamp
+export const getDayFromTimestamp = (timestamp) => {
+  if (!timestamp) return null;
+
+  try {
+    // For ISO format: "2025-05-19T10:05:54.000Z"
+    if (timestamp.includes("T")) {
+      return timestamp.split("T")[0].split("-")[2];
+    }
+
+    // For database format: "2025-05-19 10:05:54"
+    if (timestamp.includes(" ")) {
+      return timestamp.split(" ")[0].split("-")[2];
+    }
+
+    // For date only: "2025-05-19"
+    if (timestamp.includes("-")) {
+      return timestamp.split("-")[2];
+    }
+
+    // If all else fails, try to parse as Date
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) {
+      return date.getDate().toString();
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error parsing timestamp:", timestamp, error);
+    return null;
+  }
+};
+
 export const formatDate = (dateString) => {
   const date = new Date(dateString);
   return date.toLocaleDateString("en-US", {
@@ -51,7 +84,20 @@ export const getChildFeedingData = async (childId) => {
       console.log("API Response Status:", response.status);
       if (response.data && response.data.data) {
         console.log("Feeding data response:", response.data);
-        return response.data.data.map((item) => createFeedingRecord(item));
+        const records = response.data.data.map((item) =>
+          createFeedingRecord(item)
+        );
+
+        // Debug the timestamps
+        records.forEach((record) => {
+          console.log(
+            `Record ID: ${record.id}, Timestamp: ${
+              record.timestamp
+            }, Day: ${getDayFromTimestamp(record.timestamp)}`
+          );
+        });
+
+        return records;
       }
     } else {
       console.error("Unexpected response status:", response.status);
@@ -84,7 +130,20 @@ export const getTodayFeedingData = async (childId) => {
       console.log("API Response Status:", response.status);
       if (response.data && response.data.data) {
         console.log("Today's feeding data response:", response.data);
-        return response.data.data.map((item) => createFeedingRecord(item));
+        const records = response.data.data.map((item) =>
+          createFeedingRecord(item)
+        );
+
+        // Debug the timestamps
+        records.forEach((record) => {
+          console.log(
+            `Today's record ID: ${record.id}, Timestamp: ${
+              record.timestamp
+            }, Day: ${getDayFromTimestamp(record.timestamp)}`
+          );
+        });
+
+        return records;
       }
 
       return [];
@@ -170,7 +229,20 @@ export const getFeedingDataByDateRange = async (
     console.log("API Response Status:", response.status);
     if (response.data && response.data.data) {
       console.log("Feeding data by date range response:", response.data);
-      return response.data.data.map((item) => createFeedingRecord(item));
+      const records = response.data.data.map((item) =>
+        createFeedingRecord(item)
+      );
+
+      // Debug the timestamps
+      records.forEach((record) => {
+        console.log(
+          `Date range record ID: ${record.id}, Timestamp: ${
+            record.timestamp
+          }, Day: ${getDayFromTimestamp(record.timestamp)}`
+        );
+      });
+
+      return records;
     }
 
     return [];
@@ -185,8 +257,6 @@ export const getFeedingDataByDateRange = async (
 };
 
 // Update the getWeeklyFeedingData function to match the week calculation in ChartsScreen
-// Replace the current implementation:
-// With this improved version:
 export const getWeeklyFeedingData = async (childId) => {
   try {
     console.log(`Getting weekly feeding data for child ID: ${childId}`);
@@ -215,6 +285,18 @@ export const getWeeklyFeedingData = async (childId) => {
     console.log(
       `Retrieved ${result ? result.length : 0} feeding records for the week`
     );
+
+    // Debug the data
+    if (result && result.length > 0) {
+      console.log("Weekly feeding data sample:");
+      result.slice(0, 3).forEach((record) => {
+        console.log(
+          `Record ID: ${record.id}, Timestamp: ${
+            record.timestamp
+          }, Day: ${getDayFromTimestamp(record.timestamp)}`
+        );
+      });
+    }
 
     // If the API call fails, return an empty array instead of throwing an error
     return result || [];
@@ -246,6 +328,18 @@ export const getMonthlyFeedingData = async (childId) => {
     console.log(
       `Retrieved ${result ? result.length : 0} feeding records for the month`
     );
+
+    // Debug the data
+    if (result && result.length > 0) {
+      console.log("Monthly feeding data sample:");
+      result.slice(0, 3).forEach((record) => {
+        console.log(
+          `Record ID: ${record.id}, Timestamp: ${
+            record.timestamp
+          }, Day: ${getDayFromTimestamp(record.timestamp)}`
+        );
+      });
+    }
 
     // If the API call fails, return an empty array instead of throwing an error
     return result || [];
@@ -285,6 +379,18 @@ export const getFeedingDataByMonth = async (childId, year, month) => {
       }/${year}`
     );
 
+    // Debug the data
+    if (result && result.length > 0) {
+      console.log(`Feeding data for ${month + 1}/${year} sample:`);
+      result.slice(0, 3).forEach((record) => {
+        console.log(
+          `Record ID: ${record.id}, Timestamp: ${
+            record.timestamp
+          }, Day: ${getDayFromTimestamp(record.timestamp)}`
+        );
+      });
+    }
+
     return result || [];
   } catch (error) {
     console.error(
@@ -297,6 +403,89 @@ export const getFeedingDataByMonth = async (childId, year, month) => {
     }
     return [];
   }
+};
+
+// Helper function to format date for display in charts
+export const formatDateForPeriod = (dateString, period) => {
+  // For timestamp format, extract the day directly
+  if (
+    typeof dateString === "string" &&
+    (dateString.includes("T") || dateString.includes(" "))
+  ) {
+    const day = getDayFromTimestamp(dateString);
+
+    if (period === "week") {
+      // For weekly view, we need the day name
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", { weekday: "short" });
+    } else if (period === "month") {
+      // For monthly view, just return the day number
+      return day;
+    }
+  }
+
+  // Fallback to the original implementation
+  const date = new Date(dateString);
+
+  if (period === "week") {
+    return date.toLocaleDateString("en-US", { weekday: "short" });
+  } else if (period === "month") {
+    return date.getDate().toString();
+  } else {
+    return date.toLocaleDateString("en-US", { month: "short" });
+  }
+};
+
+// Also add a debug function to help troubleshoot date issues
+export const debugFeedingData = (feedingData) => {
+  if (!feedingData || feedingData.length === 0) {
+    console.log("No feeding data to debug");
+    return;
+  }
+
+  console.log("=== FEEDING DATA DEBUG ===");
+  console.log(`Total records: ${feedingData.length}`);
+
+  // Group by date based on timestamp
+  const dateGroups = {};
+  feedingData.forEach((item) => {
+    // Use timestamp to get the day
+    const day = getDayFromTimestamp(item.timestamp);
+    const dateKey = day || item.date;
+
+    if (!dateGroups[dateKey]) {
+      dateGroups[dateKey] = [];
+    }
+    dateGroups[dateKey].push(item);
+  });
+
+  // Log summary by date
+  console.log("Records by date:");
+  Object.keys(dateGroups)
+    .sort()
+    .forEach((date) => {
+      const items = dateGroups[date];
+      console.log(`${date}: ${items.length} records`);
+
+      // Count by type
+      const breastCount = items.filter((i) => i.type === "breast").length;
+      const bottleCount = items.filter((i) => i.type === "bottle").length;
+      const solidCount = items.filter((i) => i.type === "solid").length;
+
+      console.log(
+        `  - Breast: ${breastCount}, Bottle: ${bottleCount}, Solid: ${solidCount}`
+      );
+
+      // Log a sample timestamp
+      if (items.length > 0) {
+        console.log(`  - Sample timestamp: ${items[0].timestamp}`);
+        console.log(
+          `  - Extracted day: ${getDayFromTimestamp(items[0].timestamp)}`
+        );
+      }
+    });
+
+  console.log("=== END DEBUG ===");
 };
 
 export const getFeedingSummary = async (childId, date) => {
@@ -444,7 +633,7 @@ export const saveSolidFoodData = async (feedingData) => {
       type: "solid",
       startTime: null, // Explicitly set to null for solid food
       endTime: null, // Explicitly set to null for solid food
-      duration: 0, // Explicitly set to 0 for solid food
+      duration: 0, // Explicitly set to null for solid food
       side: null, // Explicitly set to null for solid food
       amount: feedingData.amount,
       unit: feedingData.unit || "g",
@@ -504,60 +693,6 @@ export const deleteFeedingData = async (feedingId) => {
     }
     throw error;
   }
-};
-
-// Helper function to format date for display in charts
-export const formatDateForPeriod = (dateString, period) => {
-  const date = new Date(dateString);
-
-  if (period === "week") {
-    return date.toLocaleDateString("en-US", { weekday: "short" });
-  } else if (period === "month") {
-    return date.getDate().toString();
-  } else {
-    return date.toLocaleDateString("en-US", { month: "short" });
-  }
-};
-
-// Also add a debug function to help troubleshoot date issues
-export const debugFeedingData = (feedingData) => {
-  if (!feedingData || feedingData.length === 0) {
-    console.log("No feeding data to debug");
-    return;
-  }
-
-  console.log("=== FEEDING DATA DEBUG ===");
-  console.log(`Total records: ${feedingData.length}`);
-
-  // Group by date
-  const dateGroups = {};
-  feedingData.forEach((item) => {
-    const date = item.date;
-    if (!dateGroups[date]) {
-      dateGroups[date] = [];
-    }
-    dateGroups[date].push(item);
-  });
-
-  // Log summary by date
-  console.log("Records by date:");
-  Object.keys(dateGroups)
-    .sort()
-    .forEach((date) => {
-      const items = dateGroups[date];
-      console.log(`${date}: ${items.length} records`);
-
-      // Count by type
-      const breastCount = items.filter((i) => i.type === "breast").length;
-      const bottleCount = items.filter((i) => i.type === "bottle").length;
-      const solidCount = items.filter((i) => i.type === "solid").length;
-
-      console.log(
-        `  - Breast: ${breastCount}, Bottle: ${bottleCount}, Solid: ${solidCount}`
-      );
-    });
-
-  console.log("=== END DEBUG ===");
 };
 
 // Local storage functions kept for reference but not used

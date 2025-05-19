@@ -1,18 +1,47 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Dimensions } from "react-native";
+import { PieChart } from "react-native-chart-kit";
 
 const screenWidth = Dimensions.get("window").width;
+
+// Helper function to extract day from ISO timestamp
+const getDayFromTimestamp = (timestamp) => {
+  if (!timestamp) return null;
+
+  try {
+    // Handle different timestamp formats
+    let day;
+
+    // Format: "2025-05-19T08:24:11.000Z" (ISO format)
+    if (timestamp.includes("T")) {
+      day = timestamp.split("T")[0].split("-")[2];
+    }
+    // Format: "2025-05-19 08:24:11" (database format)
+    else if (timestamp.includes(" ")) {
+      day = timestamp.split(" ")[0].split("-")[2];
+    }
+    // Format: "2025-05-19" (date only)
+    else if (timestamp.includes("-")) {
+      day = timestamp.split("-")[2];
+    }
+
+    // Remove leading zeros if any
+    return day ? Number.parseInt(day, 10).toString() : null;
+  } catch (error) {
+    console.error("Error parsing timestamp:", error);
+    return null;
+  }
+};
 
 const FeedingChartComponent = ({
   isLoading,
@@ -34,6 +63,29 @@ const FeedingChartComponent = ({
   const [selectedYear, setSelectedYear] = useState(
     currentYear || new Date().getFullYear()
   );
+
+  // Debug the processed data when it changes
+  useEffect(() => {
+    if (processedData) {
+      console.log("DEBUG: Processed feeding data received:", processedData);
+
+      if (processedData.dailyFeedings) {
+        console.log(
+          "Daily feedings count:",
+          processedData.dailyFeedings.length
+        );
+        processedData.dailyFeedings.forEach((day, index) => {
+          console.log(
+            `Day ${index}: day=${day.day}, breastDuration=${day.breastDuration}, bottleAmount=${day.bottleAmount}, solidAmount=${day.solidAmount}`
+          );
+        });
+      }
+
+      if (processedData.rawData) {
+        console.log("Raw data sample:", processedData.rawData.slice(0, 3));
+      }
+    }
+  }, [processedData]);
 
   // Handle month navigation
   const handlePreviousMonth = () => {
@@ -74,7 +126,7 @@ const FeedingChartComponent = ({
     }
   };
 
-  // Month selector component
+  // Month selector component - Always render this for month view
   const renderMonthSelector = () => {
     if (timePeriod !== "month") return null;
 
@@ -116,7 +168,197 @@ const FeedingChartComponent = ({
     );
   };
 
+  // Update the renderDailyFeedingSummary function to only show days with data
+  const renderDailyFeedingSummary = useCallback(() => {
+    if (!processedData || !processedData.dailyFeedings) return null;
+
+    // We're already getting filtered data from ChartsScreen, so we can use it directly
+    const daysWithData = processedData.dailyFeedings.filter(
+      (day) =>
+        day.breastDuration > 0 || day.bottleAmount > 0 || day.solidAmount > 0
+    );
+
+    // If no days with data, show a message
+    if (daysWithData.length === 0) {
+      return (
+        <View
+          style={[
+            styles.dailyFeedingContainer,
+            { backgroundColor: `${theme.cardBackground}80` },
+          ]}
+        >
+          <Text style={[styles.dailyFeedingTitle, { color: theme.text }]}>
+            {timePeriod === "week" ? "Weekly" : "Monthly"} Feeding Summary
+          </Text>
+          <View style={styles.noDataContainer}>
+            <Ionicons
+              name="information-circle-outline"
+              size={24}
+              color={theme.textSecondary}
+            />
+            <Text style={[styles.noDataText, { color: theme.textSecondary }]}>
+              No feeding data recorded for this {timePeriod}.
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View
+        style={[
+          styles.dailyFeedingContainer,
+          { backgroundColor: `${theme.cardBackground}80` },
+        ]}
+      >
+        <Text style={[styles.dailyFeedingTitle, { color: theme.text }]}>
+          {timePeriod === "week" ? "Weekly" : "Monthly"} Feeding Summary
+        </Text>
+
+        {/* Legend row */}
+        <View
+          style={[styles.legendRow, { borderBottomColor: `${theme.text}20` }]}
+        >
+          <View style={styles.dayColumn}>
+            <Text
+              style={[
+                styles.legendText,
+                { color: theme.text, fontWeight: "600" },
+              ]}
+            >
+              Day
+            </Text>
+          </View>
+          <View style={styles.feedingTypeColumn}>
+            <Text
+              style={[
+                styles.legendText,
+                { color: theme.text, fontWeight: "600" },
+              ]}
+            >
+              Breast Feeding
+            </Text>
+          </View>
+          <View style={styles.feedingTypeColumn}>
+            <Text
+              style={[
+                styles.legendText,
+                { color: theme.text, fontWeight: "600" },
+              ]}
+            >
+              Bottle Feeding
+            </Text>
+          </View>
+          <View style={styles.feedingTypeColumn}>
+            <Text
+              style={[
+                styles.legendText,
+                { color: theme.text, fontWeight: "600" },
+              ]}
+            >
+              Solid Food
+            </Text>
+          </View>
+        </View>
+
+        {/* Data rows - only for days with data */}
+        {daysWithData.map((day, i) => (
+          <View
+            key={`feeding-day-${i}`}
+            style={[
+              styles.dailyFeedingRow,
+              { borderBottomColor: `${theme.text}10` },
+              i === daysWithData.length - 1 && { borderBottomWidth: 0 },
+            ]}
+          >
+            <View style={styles.dayColumn}>
+              <Text style={[styles.dayText, { color: theme.text }]}>
+                {day.day}
+              </Text>
+            </View>
+
+            <View style={styles.feedingTypeColumn}>
+              <View
+                style={[
+                  styles.feedingTypeIndicator,
+                  { backgroundColor: "#FF9500" },
+                ]}
+              />
+              <Text style={[styles.feedingTypeText, { color: theme.text }]}>
+                {day.breastDuration} min
+              </Text>
+            </View>
+
+            <View style={styles.feedingTypeColumn}>
+              <View
+                style={[
+                  styles.feedingTypeIndicator,
+                  { backgroundColor: "#5AC8FA" },
+                ]}
+              />
+              <Text style={[styles.feedingTypeText, { color: theme.text }]}>
+                {day.bottleAmount} ml
+              </Text>
+            </View>
+
+            <View style={styles.feedingTypeColumn}>
+              <View
+                style={[
+                  styles.feedingTypeIndicator,
+                  { backgroundColor: "#4CD964" },
+                ]}
+              />
+              <Text style={[styles.feedingTypeText, { color: theme.text }]}>
+                {day.solidAmount} g
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }, [processedData, theme, timePeriod]);
+
+  // Update the renderFeedingChart function to always show month selector in month view
   const renderFeedingChart = useCallback(() => {
+    // Always show month selector in month view, even when loading or no data
+    if (timePeriod === "month") {
+      return (
+        <View style={styles.customChartContainer}>
+          {renderMonthSelector()}
+
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={categoryColor} />
+              <Text
+                style={[styles.loadingText, { color: theme.textSecondary }]}
+              >
+                Loading feeding data...
+              </Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={40} color={categoryColor} />
+              <Text style={[styles.errorText, { color: theme.text }]}>
+                {error}
+              </Text>
+            </View>
+          ) : !processedData ||
+            !processedData.dailyFeedings ||
+            processedData.dailyFeedings.length === 0 ? (
+            <View style={styles.errorContainer}>
+              <Text style={[styles.errorText, { color: theme.text }]}>
+                No feeding data recorded for {getMonthName(selectedMonth)}{" "}
+                {selectedYear}.
+              </Text>
+            </View>
+          ) : (
+            renderPieChart()
+          )}
+        </View>
+      );
+    }
+
+    // For week view, use the original logic
     if (isLoading) {
       return (
         <View style={styles.loadingContainer}>
@@ -137,238 +379,25 @@ const FeedingChartComponent = ({
       );
     }
 
-    // Ensure chartData has valid datasets
-    if (!chartData || !chartData.datasets || !chartData.datasets.length) {
+    // Ensure we have processed data
+    if (
+      !processedData ||
+      !processedData.dailyFeedings ||
+      processedData.dailyFeedings.length === 0
+    ) {
       return (
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: theme.text }]}>
-            No chart data available
+            No feeding data recorded for this week.
           </Text>
         </View>
       );
     }
 
-    // Calculate responsive width based on screen size
-    const chartWidth = Math.min(screenWidth - 40, 500);
-    const isSmallScreen = screenWidth < 350;
-
-    // Render monthly view (single candle with total values)
-    if (timePeriod === "month" && processedData) {
-      // Calculate monthly totals
-      const totalBreastDuration = processedData.breastFeedingData.reduce(
-        (sum, val) => sum + val,
-        0
-      );
-      const totalBottleAmount = processedData.bottleFeedingData.reduce(
-        (sum, val) => sum + val,
-        0
-      );
-      const totalSolidAmount = processedData.solidFoodData.reduce(
-        (sum, val) => sum + val,
-        0
-      );
-
-      // Find the maximum value for scaling
-      const maxValue = Math.max(
-        totalBreastDuration,
-        totalBottleAmount,
-        totalSolidAmount
-      );
-
-      // Calculate heights (as percentage of max height)
-      const maxHeight = 200;
-      const breastHeight =
-        maxValue > 0 ? (totalBreastDuration / maxValue) * maxHeight : 0;
-      const bottleHeight =
-        maxValue > 0 ? (totalBottleAmount / maxValue) * maxHeight : 0;
-      const solidHeight =
-        maxValue > 0 ? (totalSolidAmount / maxValue) * maxHeight : 0;
-
-      return (
-        <View style={styles.customChartContainer}>
-          {renderMonthSelector()}
-
-          <View style={styles.legendContainer}>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendColor, { backgroundColor: "#FF9500" }]}
-              />
-              <Text style={[styles.legendText, { color: theme.text }]}>
-                Breast (min)
-              </Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendColor, { backgroundColor: "#5AC8FA" }]}
-              />
-              <Text style={[styles.legendText, { color: theme.text }]}>
-                Bottle (ml)
-              </Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendColor, { backgroundColor: "#4CD964" }]}
-              />
-              <Text style={[styles.legendText, { color: theme.text }]}>
-                Solid (g)
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.monthlyCandleWrapper}>
-            <View style={styles.monthlyCandleBody}>
-              <View style={styles.monthlyCandleLines}>
-                {totalBreastDuration > 0 && (
-                  <View
-                    style={[
-                      styles.monthlyCandleLine,
-                      {
-                        backgroundColor: "#FF9500",
-                        height: breastHeight,
-                      },
-                    ]}
-                  />
-                )}
-                {totalBottleAmount > 0 && (
-                  <View
-                    style={[
-                      styles.monthlyCandleLine,
-                      {
-                        backgroundColor: "#5AC8FA",
-                        height: bottleHeight,
-                      },
-                    ]}
-                  />
-                )}
-                {totalSolidAmount > 0 && (
-                  <View
-                    style={[
-                      styles.monthlyCandleLine,
-                      {
-                        backgroundColor: "#4CD964",
-                        height: solidHeight,
-                      },
-                    ]}
-                  />
-                )}
-              </View>
-            </View>
-          </View>
-        </View>
-      );
-    }
-
-    // Weekly view (clean candles without numbers)
-    return (
-      <View style={styles.customChartContainer}>
-        <View style={styles.legendContainer}>
-          <View style={styles.legendItem}>
-            <View
-              style={[styles.legendColor, { backgroundColor: "#FF9500" }]}
-            />
-            <Text style={[styles.legendText, { color: theme.text }]}>
-              Breast (min)
-            </Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View
-              style={[styles.legendColor, { backgroundColor: "#5AC8FA" }]}
-            />
-            <Text style={[styles.legendText, { color: theme.text }]}>
-              Bottle (ml)
-            </Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View
-              style={[styles.legendColor, { backgroundColor: "#4CD964" }]}
-            />
-            <Text style={[styles.legendText, { color: theme.text }]}>
-              Solid (g)
-            </Text>
-          </View>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chartScrollContainer}
-        >
-          <View style={styles.candleChartContainer}>
-            {processedData &&
-              processedData.labels &&
-              processedData.labels.map((label, index) => {
-                // Get values for each type
-                const breastValue = processedData.breastFeedingData[index] || 0;
-                const bottleValue = processedData.bottleFeedingData[index] || 0;
-                const solidValue = processedData.solidFoodData[index] || 0;
-
-                // Calculate max value for scaling
-                const maxValue = Math.max(breastValue, bottleValue, solidValue);
-
-                // Calculate heights (as percentage of max height)
-                const maxHeight = 120;
-                const breastHeight =
-                  maxValue > 0 ? (breastValue / maxValue) * maxHeight : 0;
-                const bottleHeight =
-                  maxValue > 0 ? (bottleValue / maxValue) * maxHeight : 0;
-                const solidHeight =
-                  maxValue > 0 ? (solidValue / maxValue) * maxHeight : 0;
-
-                return (
-                  <View key={`candle-${index}`} style={styles.candleContainer}>
-                    {/* Removed the values display as requested */}
-                    <View style={styles.candleBody}>
-                      <View style={styles.candleLines}>
-                        {breastValue > 0 && (
-                          <View
-                            style={[
-                              styles.candleLine,
-                              {
-                                backgroundColor: "#FF9500",
-                                height: breastHeight,
-                              },
-                            ]}
-                          />
-                        )}
-                        {bottleValue > 0 && (
-                          <View
-                            style={[
-                              styles.candleLine,
-                              {
-                                backgroundColor: "#5AC8FA",
-                                height: bottleHeight,
-                              },
-                            ]}
-                          />
-                        )}
-                        {solidValue > 0 && (
-                          <View
-                            style={[
-                              styles.candleLine,
-                              {
-                                backgroundColor: "#4CD964",
-                                height: solidHeight,
-                              },
-                            ]}
-                          />
-                        )}
-                      </View>
-                    </View>
-
-                    <Text style={[styles.candleLabel, { color: theme.text }]}>
-                      {label}
-                    </Text>
-                  </View>
-                );
-              })}
-          </View>
-        </ScrollView>
-      </View>
-    );
+    return renderPieChart();
   }, [
     isLoading,
     error,
-    chartData,
     processedData,
     theme,
     categoryColor,
@@ -377,8 +406,117 @@ const FeedingChartComponent = ({
     selectedYear,
   ]);
 
+  // Helper function to get month name
+  const getMonthName = (monthIndex) => {
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    return monthNames[monthIndex];
+  };
+
+  // Extract pie chart rendering to a separate function
+  const renderPieChart = useCallback(() => {
+    // Calculate total values for pie chart
+    const totalBreastDuration = processedData.breastFeedingData.reduce(
+      (sum, val) => sum + val,
+      0
+    );
+    const totalBottleAmount = processedData.bottleFeedingData.reduce(
+      (sum, val) => sum + val,
+      0
+    );
+    const totalSolidAmount = processedData.solidFoodData.reduce(
+      (sum, val) => sum + val,
+      0
+    );
+
+    // Check if there's any data
+    const hasData =
+      totalBreastDuration > 0 || totalBottleAmount > 0 || totalSolidAmount > 0;
+
+    if (!hasData) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: theme.text }]}>
+            No feeding data recorded for this {timePeriod}.
+          </Text>
+        </View>
+      );
+    }
+
+    // Create pie chart data with transparent legend text to hide it
+    const pieChartData = [
+      {
+        name: "Breast",
+        value: totalBreastDuration,
+        color: "#FF9500",
+        legendFontColor: "transparent", // Hide legend text
+        legendFontSize: 0,
+      },
+      {
+        name: "Bottle",
+        value: totalBottleAmount,
+        color: "#5AC8FA",
+        legendFontColor: "transparent", // Hide legend text
+        legendFontSize: 0,
+      },
+      {
+        name: "Solid",
+        value: totalSolidAmount,
+        color: "#4CD964",
+        legendFontColor: "transparent", // Hide legend text
+        legendFontSize: 0,
+      },
+    ];
+
+    // Filter out zero values
+    const filteredPieData = pieChartData.filter((item) => item.value > 0);
+
+    return (
+      <View style={styles.chartWrapper}>
+        <PieChart
+          data={filteredPieData}
+          width={screenWidth}
+          height={220}
+          chartConfig={{
+            backgroundColor: theme.cardBackground,
+            backgroundGradientFrom: theme.cardBackground,
+            backgroundGradientTo: theme.cardBackground,
+            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+            labelColor: (opacity = 1) => theme.text,
+          }}
+          accessor="value"
+          backgroundColor="transparent"
+          paddingLeft="0"
+          center={[screenWidth / 4, 0]} // Center the chart
+          absolute
+          hasLegend={false} // Disable the legend completely
+        />
+      </View>
+    );
+  }, [processedData, theme, timePeriod]);
+
   const renderFeedingSummary = useCallback(() => {
     if (!processedData) return null;
+
+    // Check if there's any feeding data
+    const hasData =
+      processedData.breastFeedingData.some((val) => val > 0) ||
+      processedData.bottleFeedingData.some((val) => val > 0) ||
+      processedData.solidFoodData.some((val) => val > 0);
+
+    if (!hasData) return null;
 
     return (
       <View
@@ -522,101 +660,6 @@ const FeedingChartComponent = ({
     );
   }, [processedData, theme]);
 
-  const renderDailyFeedingSummary = useCallback(() => {
-    if (!processedData || !processedData.dailyFeedings) return null;
-
-    const { dailyFeedings } = processedData;
-
-    return (
-      <View
-        style={[
-          styles.dailyFeedingContainer,
-          { backgroundColor: `${theme.cardBackground}80` },
-        ]}
-      >
-        <Text style={[styles.dailyFeedingTitle, { color: theme.text }]}>
-          {timePeriod === "week" ? "Weekly" : "Monthly"} Feeding Summary
-        </Text>
-
-        <View style={styles.feedingLegendContainer}>
-          <View style={styles.feedingLegendItem}>
-            <Ionicons name="woman-outline" size={24} color="#FF9500" />
-            <Text style={[styles.feedingLegendText, { color: theme.text }]}>
-              Breast Feeding
-            </Text>
-          </View>
-          <View style={styles.feedingLegendItem}>
-            <Ionicons name="water-outline" size={24} color="#5AC8FA" />
-            <Text style={[styles.feedingLegendText, { color: theme.text }]}>
-              Bottle Feeding
-            </Text>
-          </View>
-          <View style={styles.feedingLegendItem}>
-            <Ionicons name="restaurant-outline" size={24} color="#4CD964" />
-            <Text style={[styles.feedingLegendText, { color: theme.text }]}>
-              Solid Food
-            </Text>
-          </View>
-        </View>
-
-        {dailyFeedings.map((day, i) => {
-          return (
-            <View
-              key={`feeding-day-${i}`}
-              style={[
-                styles.dailyFeedingRow,
-                { borderBottomColor: `${theme.text}10` },
-                i === dailyFeedings.length - 1 && { borderBottomWidth: 0 },
-              ]}
-            >
-              <View style={styles.dayColumn}>
-                <Text style={[styles.dayText, { color: theme.text }]}>
-                  {day.label}
-                </Text>
-              </View>
-
-              <View style={styles.feedingTypeColumn}>
-                <View
-                  style={[
-                    styles.feedingTypeIndicator,
-                    { backgroundColor: "#FF9500" },
-                  ]}
-                />
-                <Text style={[styles.feedingTypeText, { color: theme.text }]}>
-                  {day.breastDuration} min
-                </Text>
-              </View>
-
-              <View style={styles.feedingTypeColumn}>
-                <View
-                  style={[
-                    styles.feedingTypeIndicator,
-                    { backgroundColor: "#5AC8FA" },
-                  ]}
-                />
-                <Text style={[styles.feedingTypeText, { color: theme.text }]}>
-                  {day.bottleAmount} ml
-                </Text>
-              </View>
-
-              <View style={styles.feedingTypeColumn}>
-                <View
-                  style={[
-                    styles.feedingTypeIndicator,
-                    { backgroundColor: "#4CD964" },
-                  ]}
-                />
-                <Text style={[styles.feedingTypeText, { color: theme.text }]}>
-                  {day.solidAmount} g
-                </Text>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    );
-  }, [processedData, theme, timePeriod]);
-
   return (
     <>
       {renderFeedingChart()}
@@ -653,9 +696,9 @@ const styles = StyleSheet.create({
     minWidth: "100%",
   },
   chartWrapper: {
-    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
     overflow: "hidden",
-    borderRadius: 16,
   },
   chart: {
     marginVertical: 12,
@@ -680,6 +723,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 16,
     fontWeight: "600",
+    marginBottom: 4,
   },
   insightText: {
     fontSize: 14,
@@ -727,71 +771,11 @@ const styles = StyleSheet.create({
   feedingTypeText: {
     fontSize: 12,
   },
-  // Custom candle chart styles
+  // Custom chart styles
   customChartContainer: {
     marginVertical: 20,
-  },
-  legendContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 10,
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 8,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 4,
-  },
-  legendText: {
-    fontSize: 12,
-  },
-  candleChartContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    height: 150, // Fixed height
-    paddingBottom: 20,
-    paddingHorizontal: 10,
-  },
-  candleContainer: {
-    width: 40,
-    marginHorizontal: 5,
-    alignItems: "center",
-  },
-  candleValuesContainer: {
-    alignItems: "center",
-    marginBottom: 5,
-    height: 20,
-  },
-  candleValue: {
-    fontSize: 10,
-    marginBottom: 2,
-  },
-  candleBody: {
-    alignItems: "center",
-    justifyContent: "flex-end",
-    height: 100, // Fixed height
-  },
-  candleLines: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "center",
+    height: 220,
     width: "100%",
-  },
-  candleLine: {
-    width: 8,
-    marginHorizontal: 2,
-    borderRadius: 4,
-  },
-  candleLabel: {
-    marginTop: 5,
-    fontSize: 12,
-    textAlign: "center",
   },
   // Month selector styles
   monthSelectorContainer: {
@@ -845,6 +829,7 @@ const styles = StyleSheet.create({
   },
   summaryStatLabel: {
     fontSize: 12,
+    marginBottom: 4,
   },
   summaryDivider: {
     height: 1,
@@ -876,55 +861,28 @@ const styles = StyleSheet.create({
   distributionLabel: {
     fontSize: 12,
   },
-  // Feeding legend styles
-  feedingLegendContainer: {
+  // Legend row styles
+  legendRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
-  },
-  feedingLegendItem: {
-    flexDirection: "row",
     alignItems: "center",
-    marginRight: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
     marginBottom: 8,
   },
-  feedingLegendText: {
+  legendText: {
     fontSize: 12,
-    marginLeft: 6,
   },
-  // Monthly candle styles
-  monthlyCandleWrapper: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 20,
-    height: 180, // Fixed height
-  },
-  monthlyCandleBody: {
-    alignItems: "center",
-    justifyContent: "flex-end",
-    height: 150, // Fixed height
-  },
-  monthlyCandleLines: {
+  // No data styles
+  noDataContainer: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "center",
+    padding: 20,
   },
-  monthlyCandleLine: {
-    width: 20,
-    marginHorizontal: 5,
-    borderRadius: 6,
-    maxHeight: 150, // Ensure it doesn't exceed the container
-  },
-  monthlyCandleLabel: {
-    marginTop: 10,
+  noDataText: {
+    marginLeft: 8,
     fontSize: 14,
-    fontWeight: "500",
-    textAlign: "center",
   },
 });
 

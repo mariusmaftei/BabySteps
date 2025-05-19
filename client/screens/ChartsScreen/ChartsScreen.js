@@ -33,7 +33,6 @@ import {
   getWeeklyFeedingData,
   getMonthlyFeedingData,
   getFeedingDataByMonth,
-  formatDateForPeriod as formatFeedingDateForPeriod,
 } from "../../services/feeding-service";
 
 // Import chart components
@@ -50,6 +49,35 @@ const safeReduce = (array, callback, initialValue) => {
     return initialValue;
   }
   return array.reduce(callback, initialValue);
+};
+
+// Update the getDayFromTimestamp function to be more robust
+const getDayFromTimestamp = (timestamp) => {
+  if (!timestamp) return null;
+
+  try {
+    // Handle different timestamp formats
+    let day;
+
+    // Format: "2025-05-19T08:24:11.000Z" (ISO format)
+    if (timestamp.includes("T")) {
+      day = timestamp.split("T")[0].split("-")[2];
+    }
+    // Format: "2025-05-19 08:24:11" (database format)
+    else if (timestamp.includes(" ")) {
+      day = timestamp.split(" ")[0].split("-")[2];
+    }
+    // Format: "2025-05-19" (date only)
+    else if (timestamp.includes("-")) {
+      day = timestamp.split("-")[2];
+    }
+
+    // Remove leading zeros if any
+    return day ? Number.parseInt(day, 10).toString() : null;
+  } catch (error) {
+    console.error("Error parsing timestamp:", error);
+    return null;
+  }
 };
 
 export default function ChartsScreen({ navigation }) {
@@ -109,6 +137,17 @@ export default function ChartsScreen({ navigation }) {
 
   // Add a check for no children
   const noChildren = !currentChild || currentChild.id === "default";
+
+  // Define category colors
+  const categoryColors = useMemo(
+    () => ({
+      Sleep: "#5A87FF",
+      Feeding: "#FF9500",
+      Diaper: "#FF2D55",
+      Growth: "#4CD964",
+    }),
+    []
+  );
 
   const defaultSleepChartData = useMemo(() => {
     return {
@@ -243,209 +282,126 @@ export default function ChartsScreen({ navigation }) {
     };
   }, [timePeriod]);
 
-  // Handle month change from the SleepChartComponent
-  const handleSleepMonthChange = async (startDate, endDate) => {
-    if (noChildren || activeTab !== "Sleep") return;
+  // Update the processedFeedingData function to only include days with actual data
+  const processedFeedingData = useMemo(() => {
+    if (!feedingData || !Array.isArray(feedingData) || feedingData.length === 0)
+      return null;
 
-    setIsLoading(true);
-    setError(null);
+    // Create a map to store feeding data by day
+    const feedingByDay = new Map();
 
-    try {
-      console.log(
-        `Fetching sleep data for month: ${
-          startDate.getMonth() + 1
-        }/${startDate.getFullYear()}`
-      );
-      const data = await getSleepDataByMonth(
-        currentChild.id,
-        startDate.getFullYear(),
-        startDate.getMonth()
-      );
-      console.log(
-        `Sleep data fetched for month: ${data ? data.length : 0} records`
-      );
-      setSleepData(data || []);
-      setSelectedMonth(startDate.getMonth());
-      setSelectedYear(startDate.getFullYear());
-    } catch (err) {
-      console.error(`Error fetching sleep data for month:`, err);
-      setError(
-        `Failed to load sleep data for the selected month. Please try again.`
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    // Process each feeding record
+    feedingData.forEach((record) => {
+      // Extract the day from the timestamp
+      const day = record.timestamp
+        ? getDayFromTimestamp(record.timestamp)
+        : null;
 
-  // Handle month change from the FeedingChartComponent
-  const handleFeedingMonthChange = async (startDate, endDate) => {
-    if (noChildren || activeTab !== "Feeding") return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      console.log(
-        `Fetching feeding data for month: ${
-          startDate.getMonth() + 1
-        }/${startDate.getFullYear()}`
-      );
-      const data = await getFeedingDataByMonth(
-        currentChild.id,
-        startDate.getFullYear(),
-        startDate.getMonth()
-      );
-      console.log(
-        `Feeding data fetched for month: ${data ? data.length : 0} records`
-      );
-      setFeedingData(data || []);
-      setSelectedMonth(startDate.getMonth());
-      setSelectedYear(startDate.getFullYear());
-    } catch (err) {
-      console.error(`Error fetching feeding data for month:`, err);
-      setError(
-        `Failed to load feeding data for the selected month. Please try again.`
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Function to fetch data based on selected time period and active tab
-  const fetchData = async () => {
-    if (noChildren) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      console.log(
-        `Fetching ${timePeriod} ${activeTab.toLowerCase()} data for charts...`
-      );
-      let data;
-
-      if (activeTab === "Sleep") {
-        if (timePeriod === "week") {
-          data = await getWeeklySleepData(currentChild.id);
-        } else if (timePeriod === "month") {
-          // If in month view, fetch data for the selected month
-          if (selectedMonth !== undefined && selectedYear !== undefined) {
-            data = await getSleepDataByMonth(
-              currentChild.id,
-              selectedYear,
-              selectedMonth
-            );
-          } else {
-            data = await getMonthlySleepData(currentChild.id);
-          }
-        } else if (timePeriod === "year") {
-          const yearData = await getYearlySleepData(currentChild.id);
-          data = aggregateSleepDataByMonth(yearData);
+      if (day) {
+        if (!feedingByDay.has(day)) {
+          feedingByDay.set(day, {
+            day,
+            label: day, // Use the actual day number as the label
+            breastDuration: 0,
+            bottleAmount: 0,
+            solidAmount: 0,
+            totalCount: 0,
+            feedings: [],
+          });
         }
-        console.log(
-          `${timePeriod} sleep data fetched for charts:`,
-          data ? data.length : 0,
-          "records"
-        );
-        setSleepData(data || []);
-      } else if (activeTab === "Diaper") {
-        if (timePeriod === "week") {
-          data = await getWeeklyDiaperData(currentChild.id);
-        } else if (timePeriod === "month") {
-          data = await getMonthlyDiaperData(currentChild.id);
-        } else if (timePeriod === "year") {
-          const yearData = await getYearlyDiaperData(currentChild.id);
-          data = aggregateDiaperDataByMonth(yearData);
+
+        // Add this record to the day's data
+        const dayData = feedingByDay.get(day);
+        dayData.feedings.push(record);
+        dayData.totalCount++;
+
+        // Update the totals based on record type
+        if (record.type === "breast") {
+          dayData.breastDuration += Number(record.duration) || 0;
+        } else if (record.type === "bottle") {
+          dayData.bottleAmount += Number(record.amount) || 0;
+        } else if (record.type === "solid") {
+          dayData.solidAmount += Number(record.amount) || 0;
         }
-        console.log(
-          `${timePeriod} diaper data fetched for charts:`,
-          data ? data.length : 0,
-          "records"
-        );
-        setDiaperData(data || []);
-      } else if (activeTab === "Feeding") {
-        // Fetch feeding data
-        if (timePeriod === "week") {
-          data = await getWeeklyFeedingData(currentChild.id);
-          // Add debug logging
-          console.log("Weekly feeding data dates:");
-          if (data && data.length > 0) {
-            const dates = [...new Set(data.map((item) => item.date))].sort();
-            dates.forEach((date) => {
-              const count = data.filter((item) => item.date === date).length;
-              console.log(`${date}: ${count} records`);
-            });
-          } else {
-            console.log("No feeding data found for this week");
-          }
-        } else if (timePeriod === "month") {
-          // If in month view, fetch data for the selected month
-          if (selectedMonth !== undefined && selectedYear !== undefined) {
-            data = await getFeedingDataByMonth(
-              currentChild.id,
-              selectedYear,
-              selectedMonth
-            );
-          } else {
-            data = await getMonthlyFeedingData(currentChild.id);
-          }
-        }
-        console.log(
-          `${timePeriod} feeding data fetched for charts:`,
-          data ? data.length : 0,
-          "records"
-        );
-        setFeedingData(data || []);
       }
-    } catch (err) {
-      console.error(
-        `Error fetching ${activeTab.toLowerCase()} data for charts:`,
-        err
-      );
-      setError(
-        `Failed to load ${activeTab.toLowerCase()} data. Please try again.`
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    });
 
-  // Fetch data when the component mounts, when the current child changes, or when time period changes
-  useEffect(() => {
-    fetchData();
-  }, [currentChild, noChildren, timePeriod, activeTab]);
+    // Convert the map to an array and sort by day
+    const dailyFeedings = Array.from(feedingByDay.values()).sort(
+      (a, b) => Number(a.day) - Number(b.day)
+    );
 
-  // Add a focus effect to refresh data when the screen comes into focus
-  const fetchDataRef = useMemo(
-    () => fetchData,
-    [currentChild, noChildren, timePeriod, activeTab]
-  );
+    // Extract data for charts - ONLY include days with actual data
+    const labels = dailyFeedings.map((day) => day.day);
+    const breastFeedingData = dailyFeedings.map((day) => day.breastDuration);
+    const bottleFeedingData = dailyFeedings.map((day) => day.bottleAmount);
+    const solidFoodData = dailyFeedings.map((day) => day.solidAmount);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log("ChartsScreen focused, refreshing data...");
-      fetchDataRef();
-      return () => {
-        // This runs when the screen is unfocused
-        console.log("ChartsScreen unfocused");
-      };
-    }, [fetchDataRef])
-  );
+    // Calculate averages
+    const avgBreastDuration =
+      breastFeedingData.length > 0
+        ? Math.round(
+            breastFeedingData.reduce((sum, val) => sum + val, 0) /
+              (breastFeedingData.filter((d) => d > 0).length || 1)
+          )
+        : 0;
 
-  // Add this useEffect after the other useEffects
-  useEffect(() => {
-    // If timePeriod is set to "year", change it to "month"
-    if (timePeriod === "year") {
-      setTimePeriod("month");
-    }
+    const avgBottleAmount =
+      bottleFeedingData.length > 0
+        ? Math.round(
+            bottleFeedingData.reduce((sum, val) => sum + val, 0) /
+              (bottleFeedingData.filter((a) => a > 0).length || 1)
+          )
+        : 0;
 
-    // Reset to current month when switching to month view
-    if (timePeriod === "month") {
-      const now = new Date();
-      setSelectedMonth(now.getMonth());
-      setSelectedYear(now.getFullYear());
-    }
-  }, [timePeriod]);
+    const avgSolidAmount =
+      solidFoodData.length > 0
+        ? Math.round(
+            solidFoodData.reduce((sum, val) => sum + val, 0) /
+              (solidFoodData.filter((a) => a > 0).length || 1)
+          )
+        : 0;
+
+    // Calculate feeding counts by type
+    const breastCount = feedingData.filter(
+      (item) => item && item.type === "breast"
+    ).length;
+    const bottleCount = feedingData.filter(
+      (item) => item && item.type === "bottle"
+    ).length;
+    const solidCount = feedingData.filter(
+      (item) => item && item.type === "solid"
+    ).length;
+    const totalCount = feedingData.length;
+
+    // Calculate percentages
+    const breastPercentage =
+      totalCount > 0 ? Math.round((breastCount / totalCount) * 100) : 0;
+    const bottlePercentage =
+      totalCount > 0 ? Math.round((bottleCount / totalCount) * 100) : 0;
+    const solidPercentage =
+      totalCount > 0 ? Math.round((solidCount / totalCount) * 100) : 0;
+
+    // Add raw data for debugging
+    return {
+      labels,
+      breastFeedingData,
+      bottleFeedingData,
+      solidFoodData,
+      dailyFeedings,
+      avgBreastDuration,
+      avgBottleAmount,
+      avgSolidAmount,
+      breastCount,
+      bottleCount,
+      solidCount,
+      totalCount,
+      breastPercentage,
+      bottlePercentage,
+      solidPercentage,
+      rawData: feedingData,
+    };
+  }, [feedingData]);
 
   // Process sleep data for the chart based on time period
   const processedSleepData = useMemo(() => {
@@ -859,308 +815,209 @@ export default function ChartsScreen({ navigation }) {
     };
   }, [diaperData, timePeriod]);
 
-  // Process feeding data for the chart
-  const processedFeedingData = useMemo(() => {
-    if (!feedingData || !Array.isArray(feedingData) || feedingData.length === 0)
-      return null;
+  // Handle month change from the SleepChartComponent
+  const handleSleepMonthChange = async (startDate, endDate) => {
+    if (noChildren || activeTab !== "Sleep") return;
 
-    const dates = [];
-    const labels = [];
-    const breastFeedingData = [];
-    const bottleFeedingData = [];
-    const solidFoodData = [];
-    const dailyFeedings = [];
+    setIsLoading(true);
+    setError(null);
 
-    if (timePeriod === "week") {
-      // Get the last 7 days (including today)
-      const today = new Date();
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(today.getDate() - i);
-        const dateStr = date.toISOString().split("T")[0];
-        dates.push(dateStr);
-        labels.push(formatFeedingDateForPeriod(dateStr, "week"));
+    try {
+      console.log(
+        `Fetching sleep data for month: ${
+          startDate.getMonth() + 1
+        }/${startDate.getFullYear()}`
+      );
+      const data = await getSleepDataByMonth(
+        currentChild.id,
+        startDate.getFullYear(),
+        startDate.getMonth()
+      );
+      console.log(
+        `Sleep data fetched for month: ${data ? data.length : 0} records`
+      );
+      setSleepData(data || []);
+      setSelectedMonth(startDate.getMonth());
+      setSelectedYear(startDate.getFullYear());
+    } catch (err) {
+      console.error(`Error fetching sleep data for month:`, err);
+      setError(
+        `Failed to load sleep data for the selected month. Please try again.`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle month change from the FeedingChartComponent
+  const handleFeedingMonthChange = async (startDate, endDate) => {
+    if (noChildren || activeTab !== "Feeding") return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log(
+        `Fetching feeding data for month: ${
+          startDate.getMonth() + 1
+        }/${startDate.getFullYear()}`
+      );
+      const data = await getFeedingDataByMonth(
+        currentChild.id,
+        startDate.getFullYear(),
+        startDate.getMonth()
+      );
+      console.log(
+        `Feeding data fetched for month: ${data ? data.length : 0} records`
+      );
+      setFeedingData(data || []);
+      setSelectedMonth(startDate.getMonth());
+      setSelectedYear(startDate.getFullYear());
+    } catch (err) {
+      console.error(`Error fetching feeding data for month:`, err);
+      setError(
+        `Failed to load feeding data for the selected month. Please try again.`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Function to fetch data based on selected time period and active tab
+  const fetchData = async () => {
+    if (noChildren) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log(
+        `Fetching ${timePeriod} ${activeTab.toLowerCase()} data for charts...`
+      );
+      let data;
+
+      if (activeTab === "Sleep") {
+        if (timePeriod === "week") {
+          data = await getWeeklySleepData(currentChild.id);
+        } else if (timePeriod === "month") {
+          // If in month view, fetch data for the selected month
+          if (selectedMonth !== undefined && selectedYear !== undefined) {
+            data = await getSleepDataByMonth(
+              currentChild.id,
+              selectedYear,
+              selectedMonth
+            );
+          } else {
+            data = await getMonthlySleepData(currentChild.id);
+          }
+        } else if (timePeriod === "year") {
+          const yearData = await getYearlySleepData(currentChild.id);
+          data = aggregateSleepDataByMonth(yearData);
+        }
+        console.log(
+          `${timePeriod} sleep data fetched for charts:`,
+          data ? data.length : 0,
+          "records"
+        );
+        setSleepData(data || []);
+      } else if (activeTab === "Diaper") {
+        if (timePeriod === "week") {
+          data = await getWeeklyDiaperData(currentChild.id);
+        } else if (timePeriod === "month") {
+          data = await getMonthlyDiaperData(currentChild.id);
+        } else if (timePeriod === "year") {
+          const yearData = await getYearlyDiaperData(currentChild.id);
+          data = aggregateDiaperDataByMonth(yearData);
+        }
+        console.log(
+          `${timePeriod} diaper data fetched for charts:`,
+          data ? data.length : 0,
+          "records"
+        );
+        setDiaperData(data || []);
+      } else if (activeTab === "Feeding") {
+        // Fetch feeding data
+        if (timePeriod === "week") {
+          data = await getWeeklyFeedingData(currentChild.id);
+          // Add debug logging
+          console.log("Weekly feeding data dates:");
+          if (data && data.length > 0) {
+            const dates = [...new Set(data.map((item) => item.date))].sort();
+            dates.forEach((date) => {
+              const count = data.filter((item) => item.date === date).length;
+              console.log(`${date}: ${count} records`);
+            });
+          } else {
+            console.log("No feeding data found for this week");
+          }
+        } else if (timePeriod === "month") {
+          // If in month view, fetch data for the selected month
+          if (selectedMonth !== undefined && selectedYear !== undefined) {
+            data = await getFeedingDataByMonth(
+              currentChild.id,
+              selectedYear,
+              selectedMonth
+            );
+          } else {
+            data = await getMonthlyFeedingData(currentChild.id);
+          }
+        }
+        console.log(
+          `${timePeriod} feeding data fetched for charts:`,
+          data ? data.length : 0,
+          "records"
+        );
+        setFeedingData(data || []);
       }
+    } catch (err) {
+      console.error(
+        `Error fetching ${activeTab.toLowerCase()} data for charts:`,
+        err
+      );
+      setError(
+        `Failed to load ${activeTab.toLowerCase()} data. Please try again.`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      // Process feeding data by type for each day
-      dates.forEach((date, index) => {
-        const dayFeedings = feedingData.filter(
-          (item) => item && item.date === date
-        );
+  // Fetch data when the component mounts, when the current child changes, or when time period changes
+  useEffect(() => {
+    fetchData();
+  }, [currentChild, noChildren, timePeriod, activeTab]);
 
-        // Get breast feeding duration total
-        const breastFeedings = dayFeedings.filter(
-          (item) => item && item.type === "breast"
-        );
-        const breastDuration = safeReduce(
-          breastFeedings,
-          (sum, item) => sum + (Number(item.duration) || 0),
-          0
-        );
-        breastFeedingData.push(breastDuration);
+  // Add a focus effect to refresh data when the screen comes into focus
+  const fetchDataRef = useMemo(
+    () => fetchData,
+    [currentChild, noChildren, timePeriod, activeTab]
+  );
 
-        // Get bottle feeding amount total
-        const bottleFeedings = dayFeedings.filter(
-          (item) => item && item.type === "bottle"
-        );
-        const bottleAmount = safeReduce(
-          bottleFeedings,
-          (sum, item) => sum + (Number(item.amount) || 0),
-          0
-        );
-        bottleFeedingData.push(bottleAmount);
+  useFocusEffect(
+    useCallback(() => {
+      console.log("ChartsScreen focused, refreshing data...");
+      fetchDataRef();
+      return () => {
+        // This runs when the screen is unfocused
+        console.log("ChartsScreen unfocused");
+      };
+    }, [fetchDataRef])
+  );
 
-        // Get solid food amount total
-        const solidFeedings = dayFeedings.filter(
-          (item) => item && item.type === "solid"
-        );
-        const solidAmount = safeReduce(
-          solidFeedings,
-          (sum, item) => sum + (Number(item.amount) || 0),
-          0
-        );
-        solidFoodData.push(solidAmount);
-
-        // Store daily feedings for the summary
-        dailyFeedings.push({
-          date,
-          label: labels[index],
-          feedings: dayFeedings,
-          breastDuration,
-          bottleAmount,
-          solidAmount,
-          totalCount: dayFeedings.length,
-        });
-      });
-    } else if (timePeriod === "month") {
-      // Get all days in the selected month
-      const daysInMonth = new Date(
-        selectedYear,
-        selectedMonth + 1,
-        0
-      ).getDate();
-
-      for (let i = 1; i <= daysInMonth; i++) {
-        const date = new Date(selectedYear, selectedMonth, i);
-        const dateStr = date.toISOString().split("T")[0];
-        dates.push(dateStr);
-        labels.push(i.toString()); // Just show the day number
-      }
-
-      // Process feeding data by type for each day
-      dates.forEach((date, index) => {
-        const dayFeedings = feedingData.filter((item) => {
-          // Convert item.date to a date object if it's a string
-          const itemDate =
-            typeof item.date === "string"
-              ? item.date
-              : item.date.toISOString().split("T")[0];
-          return item && itemDate === date;
-        });
-
-        // Get breast feeding duration total
-        const breastFeedings = dayFeedings.filter(
-          (item) => item && item.type === "breast"
-        );
-        const breastDuration = safeReduce(
-          breastFeedings,
-          (sum, item) => sum + (Number(item.duration) || 0),
-          0
-        );
-        breastFeedingData.push(breastDuration);
-
-        // Get bottle feeding amount total
-        const bottleFeedings = dayFeedings.filter(
-          (item) => item && item.type === "bottle"
-        );
-        const bottleAmount = safeReduce(
-          bottleFeedings,
-          (sum, item) => sum + (Number(item.amount) || 0),
-          0
-        );
-        bottleFeedingData.push(bottleAmount);
-
-        // Get solid food amount total
-        const solidFeedings = dayFeedings.filter(
-          (item) => item && item.type === "solid"
-        );
-        const solidAmount = safeReduce(
-          solidFeedings,
-          (sum, item) => sum + (Number(item.amount) || 0),
-          0
-        );
-        solidFoodData.push(solidAmount);
-
-        // Store daily feedings for the summary
-        dailyFeedings.push({
-          date,
-          label: labels[index],
-          feedings: dayFeedings,
-          breastDuration,
-          bottleAmount,
-          solidAmount,
-          totalCount: dayFeedings.length,
-        });
-      });
+  // Add this useEffect after the other useEffects
+  useEffect(() => {
+    // If timePeriod is set to "year", change it to "month"
+    if (timePeriod === "year") {
+      setTimePeriod("month");
     }
 
-    // Calculate averages
-    const avgBreastDuration =
-      breastFeedingData.length > 0
-        ? Math.round(
-            safeReduce(
-              breastFeedingData,
-              (sum, duration) => sum + duration,
-              0
-            ) / breastFeedingData.filter((d) => d > 0).length || 1
-          )
-        : 0;
-
-    const avgBottleAmount =
-      bottleFeedingData.length > 0
-        ? Math.round(
-            safeReduce(bottleFeedingData, (sum, amount) => sum + amount, 0) /
-              (bottleFeedingData.filter((a) => a > 0).length || 1)
-          )
-        : 0;
-
-    const avgSolidAmount =
-      solidFoodData.length > 0
-        ? Math.round(
-            safeReduce(solidFoodData, (sum, amount) => sum + amount, 0) /
-              (solidFoodData.filter((a) => a > 0).length || 1)
-          )
-        : 0;
-
-    // Calculate feeding counts by type
-    const breastCount = feedingData.filter(
-      (item) => item && item.type === "breast"
-    ).length;
-    const bottleCount = feedingData.filter(
-      (item) => item && item.type === "bottle"
-    ).length;
-    const solidCount = feedingData.filter(
-      (item) => item && item.type === "solid"
-    ).length;
-    const totalCount = feedingData.length;
-
-    // Calculate percentages
-    const breastPercentage =
-      totalCount > 0 ? Math.round((breastCount / totalCount) * 100) : 0;
-    const bottlePercentage =
-      totalCount > 0 ? Math.round((bottleCount / totalCount) * 100) : 0;
-    const solidPercentage =
-      totalCount > 0 ? Math.round((solidCount / totalCount) * 100) : 0;
-
-    // Calculate trend
-    let breastTrend = 0;
-    let bottleTrend = 0;
-    let solidTrend = 0;
-
-    if (breastFeedingData.length > 0) {
-      const halfIndex = Math.floor(breastFeedingData.length / 2);
-      const recentBreast = breastFeedingData
-        .slice(halfIndex)
-        .filter((d) => d > 0);
-      const previousBreast = breastFeedingData
-        .slice(0, halfIndex)
-        .filter((d) => d > 0);
-
-      const recentAvg =
-        recentBreast.length > 0
-          ? safeReduce(recentBreast, (sum, d) => sum + d, 0) /
-            recentBreast.length
-          : 0;
-      const previousAvg =
-        previousBreast.length > 0
-          ? safeReduce(previousBreast, (sum, d) => sum + d, 0) /
-            previousBreast.length
-          : 0;
-
-      if (previousAvg > 0) {
-        breastTrend = Math.round(
-          ((recentAvg - previousAvg) / previousAvg) * 100
-        );
-      }
+    // Reset to current month when switching to month view
+    if (timePeriod === "month") {
+      const now = new Date();
+      setSelectedMonth(now.getMonth());
+      setSelectedYear(now.getFullYear());
     }
-
-    if (bottleFeedingData.length > 0) {
-      const halfIndex = Math.floor(bottleFeedingData.length / 2);
-      const recentBottle = bottleFeedingData
-        .slice(halfIndex)
-        .filter((a) => a > 0);
-      const previousBottle = bottleFeedingData
-        .slice(0, halfIndex)
-        .filter((a) => a > 0);
-
-      const recentAvg =
-        recentBottle.length > 0
-          ? safeReduce(recentBottle, (sum, a) => sum + a, 0) /
-            recentBottle.length
-          : 0;
-      const previousAvg =
-        previousBottle.length > 0
-          ? safeReduce(previousBottle, (sum, a) => sum + a, 0) /
-            previousBottle.length
-          : 0;
-
-      if (previousAvg > 0) {
-        bottleTrend = Math.round(
-          ((recentAvg - previousAvg) / previousAvg) * 100
-        );
-      }
-    }
-
-    if (solidFoodData.length > 0) {
-      const halfIndex = Math.floor(solidFoodData.length / 2);
-      const recentSolid = solidFoodData.slice(halfIndex).filter((a) => a > 0);
-      const previousSolid = solidFoodData
-        .slice(0, halfIndex)
-        .filter((a) => a > 0);
-
-      const recentAvg =
-        recentSolid.length > 0
-          ? safeReduce(recentSolid, (sum, a) => sum + a, 0) / recentSolid.length
-          : 0;
-      const previousAvg =
-        previousSolid.length > 0
-          ? safeReduce(previousSolid, (sum, a) => sum + a, 0) /
-            previousSolid.length
-          : 0;
-
-      if (previousAvg > 0) {
-        solidTrend = Math.round(
-          ((recentAvg - previousAvg) / previousAvg) * 100
-        );
-      }
-    }
-
-    // Format trend text
-    const formatTrendText = (trend) => {
-      return trend > 0 ? `+${trend}%` : trend < 0 ? `${trend}%` : "Stable";
-    };
-
-    return {
-      labels,
-      breastFeedingData,
-      bottleFeedingData,
-      solidFoodData,
-      dailyFeedings,
-      avgBreastDuration,
-      avgBottleAmount,
-      avgSolidAmount,
-      breastCount,
-      bottleCount,
-      solidCount,
-      totalCount,
-      breastPercentage,
-      bottlePercentage,
-      solidPercentage,
-      breastTrendText: formatTrendText(breastTrend),
-      bottleTrendText: formatTrendText(bottleTrend),
-      solidTrendText: formatTrendText(solidTrend),
-    };
-  }, [feedingData, timePeriod, selectedMonth, selectedYear]);
+  }, [timePeriod]);
 
   // In the useEffect that updates sleepChartData, modify to use sleepProgress
   useEffect(() => {
@@ -1251,133 +1108,24 @@ export default function ChartsScreen({ navigation }) {
 
   // Chart configuration
   const getChartConfig = useCallback(() => {
-    return (color, timePeriod = "week") => {
-      return {
-        backgroundColor: theme.cardBackground,
-        backgroundGradientFrom: theme.cardBackground,
-        backgroundGradientTo: theme.cardBackground,
-        decimalPlaces: 1,
-        color: (opacity = 1) => `rgba(${hexToRgb(color)}, ${opacity})`,
-        labelColor: (opacity = 1) =>
-          `rgba(${hexToRgb(theme.text)}, ${opacity})`,
-        style: {
-          borderRadius: 16,
-        },
-        propsForDots: {
-          r: "4",
-          strokeWidth: "2",
-          stroke: theme.cardBackground,
-        },
-        propsForBackgroundLines: {
-          strokeWidth: 1,
-          stroke: `${theme.text}15`,
-          strokeDasharray: "5, 5",
-        },
-        // Simplify labels for month view
-        formatYLabel: (value) => (timePeriod === "month" ? "" : value),
-        formatXLabel: (value) => {
-          if (timePeriod === "month") {
-            // For month view, only show every 5th day
-            const day = Number.parseInt(value, 10);
-            return day % 5 === 0 ? day.toString() : "";
-          }
-          return value;
-        },
-      };
-    };
-  }, [theme.cardBackground, theme.text]);
-
-  // Update the data useMemo to reflect the changes
-  const data = useMemo(() => {
-    const sleepData = {
-      labels: sleepChartData.labels || [],
-      datasets:
-        sleepChartData.datasets && sleepChartData.datasets.length > 0
-          ? sleepChartData.datasets
-          : [
-              {
-                data: [0],
-                color: (opacity = 1) => `rgba(90, 135, 255, ${opacity})`,
-                strokeWidth: 2,
-              },
-            ],
-      legend: ["Sleep Progress (%)"],
-      unit: "%",
-      type: "line",
-    };
-
-    const diaperData = {
-      labels: diaperChartData.labels || [],
-      datasets:
-        diaperChartData.datasets && diaperChartData.datasets.length > 0
-          ? diaperChartData.datasets
-          : [
-              {
-                data: [0],
-                color: (opacity = 1) => `rgba(255, 45, 85, ${opacity})`,
-              },
-            ],
-      legend: ["Diaper changes per day"],
-      unit: "changes",
-      type: "bar",
-    };
-
-    const feedingData = {
-      labels: feedingChartData.labels || [],
-      datasets:
-        feedingChartData.datasets && feedingChartData.datasets.length > 0
-          ? feedingChartData.datasets
-          : [
-              {
-                data: [0],
-                color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
-              },
-              {
-                data: [0],
-                color: (opacity = 1) => `rgba(90, 200, 250, ${opacity})`,
-              },
-              {
-                data: [0],
-                color: (opacity = 1) => `rgba(88, 86, 214, ${opacity})`,
-              },
-            ],
-      legend: ["Breast (min)", "Bottle (ml)", "Solid (g)"],
-      unit: "",
-      type: "bar",
-    };
-
-    const growthData = {
-      labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-      datasets: [
-        {
-          data: [4.2, 4.8, 5.3, 5.9, 6.4, 6.8],
-          color: (opacity = 1) => `rgba(76, 217, 100, ${opacity})`,
-          strokeWidth: 2,
-        },
-      ],
-      legend: ["Weight (kg)"],
-      unit: "kg",
-      type: "line",
-    };
-
     return {
-      Sleep: sleepData,
-      Feeding: feedingData,
-      Diaper: diaperData,
-      Growth: growthData,
+      backgroundColor: theme.cardBackground,
+      backgroundGradientFrom: theme.cardBackground,
+      backgroundGradientTo: theme.cardBackground,
+      decimalPlaces: 0,
+      color: (opacity = 1) =>
+        `rgba(${hexToRgb(categoryColors[activeTab])}, ${opacity})`,
+      labelColor: (opacity = 1) => `rgba(${hexToRgb(theme.text)}, ${opacity})`,
+      style: {
+        borderRadius: 16,
+      },
+      propsForDots: {
+        r: "6",
+        strokeWidth: "2",
+        stroke: categoryColors[activeTab],
+      },
     };
-  }, [sleepChartData, diaperChartData, feedingChartData]);
-
-  // Custom colors for each category
-  const categoryColors = useMemo(
-    () => ({
-      Sleep: "#5A87FF",
-      Feeding: "#FF9500",
-      Diaper: "#FF2D55",
-      Growth: "#4CD964",
-    }),
-    []
-  );
+  }, [theme.cardBackground, theme.text, categoryColors, activeTab]);
 
   // Helper function to convert hex to rgb
   const hexToRgb = (hex) => {
@@ -1475,7 +1223,6 @@ export default function ChartsScreen({ navigation }) {
     );
   }, [
     activeTab,
-    data,
     categoryColors,
     theme.tabBackground,
     theme.tabActiveText,
@@ -1485,90 +1232,73 @@ export default function ChartsScreen({ navigation }) {
   // Render category tabs
   const renderTabs = renderTabsMemoized;
 
-  const renderTimePeriodTabsMemoized = useCallback(
-    (activeTab, categoryColors, theme, timePeriod, setTimePeriod) => {
-      if (
-        activeTab !== "Sleep" &&
-        activeTab !== "Diaper" &&
-        activeTab !== "Feeding"
-      )
-        return null;
+  const renderTimePeriodTabsMemoized = useCallback(() => {
+    if (
+      activeTab !== "Sleep" &&
+      activeTab !== "Diaper" &&
+      activeTab !== "Feeding"
+    )
+      return null;
 
-      return (
-        <View style={styles.timePeriodTabsContainer}>
-          <TouchableOpacity
+    return (
+      <View style={styles.timePeriodTabsContainer}>
+        <TouchableOpacity
+          style={[
+            styles.timePeriodTabNew,
+            timePeriod === "week" && {
+              borderBottomWidth: 3,
+              borderBottomColor: categoryColors[activeTab],
+            },
+          ]}
+          onPress={() => setTimePeriod("week")}
+        >
+          <Text
             style={[
-              styles.timePeriodTabNew,
-              timePeriod === "week" && {
-                borderBottomWidth: 3,
-                borderBottomColor: categoryColors[activeTab],
+              styles.timePeriodTabTextNew,
+              {
+                color:
+                  timePeriod === "week"
+                    ? categoryColors[activeTab]
+                    : theme.textSecondary,
+                fontWeight: timePeriod === "week" ? "700" : "400",
               },
             ]}
-            onPress={() => setTimePeriod("week")}
           >
-            <Text
-              style={[
-                styles.timePeriodTabTextNew,
-                {
-                  color:
-                    timePeriod === "week"
-                      ? categoryColors[activeTab]
-                      : theme.textSecondary,
-                  fontWeight: timePeriod === "week" ? "700" : "400",
-                },
-              ]}
-            >
-              Week
-            </Text>
-          </TouchableOpacity>
+            Week
+          </Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity
+        <TouchableOpacity
+          style={[
+            styles.timePeriodTabNew,
+            timePeriod === "month" && {
+              borderBottomWidth: 3,
+              borderBottomColor: categoryColors[activeTab],
+            },
+          ]}
+          onPress={() => setTimePeriod("month")}
+        >
+          <Text
             style={[
-              styles.timePeriodTabNew,
-              timePeriod === "month" && {
-                borderBottomWidth: 3,
-                borderBottomColor: categoryColors[activeTab],
+              styles.timePeriodTabTextNew,
+              {
+                color:
+                  timePeriod === "month"
+                    ? categoryColors[activeTab]
+                    : theme.textSecondary,
+                fontWeight: timePeriod === "month" ? "700" : "400",
               },
             ]}
-            onPress={() => setTimePeriod("month")}
           >
-            <Text
-              style={[
-                styles.timePeriodTabTextNew,
-                {
-                  color:
-                    timePeriod === "month"
-                      ? categoryColors[activeTab]
-                      : theme.textSecondary,
-                  fontWeight: timePeriod === "month" ? "700" : "400",
-                },
-              ]}
-            >
-              Month
-            </Text>
-          </TouchableOpacity>
-        </View>
-      );
-    },
-    []
-  );
+            Month
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }, [activeTab, categoryColors, theme.textSecondary, timePeriod]);
 
   // Render time period tabs for Sleep category
-  const renderTimePeriodTabs = useCallback(() => {
-    return renderTimePeriodTabsMemoized(
-      activeTab,
-      categoryColors,
-      theme,
-      timePeriod,
-      setTimePeriod
-    );
-  }, [
-    activeTab,
-    categoryColors,
-    theme,
-    timePeriod,
-    renderTimePeriodTabsMemoized,
-  ]);
+  const renderTimePeriodTabs = renderTimePeriodTabsMemoized;
 
   // If there are no children, show a message to add a child
   if (noChildren) {
@@ -1608,6 +1338,14 @@ export default function ChartsScreen({ navigation }) {
     );
   }
 
+  // Create data object for tabs
+  const data = {
+    Sleep: sleepChartData,
+    Feeding: feedingChartData,
+    Diaper: diaperChartData,
+    Growth: {},
+  };
+
   // Render the appropriate component based on the active tab
   const renderActiveTabContent = () => {
     switch (activeTab) {
@@ -1621,7 +1359,7 @@ export default function ChartsScreen({ navigation }) {
             theme={theme}
             categoryColor={categoryColors.Sleep}
             timePeriod={timePeriod}
-            getChartConfig={getChartConfig()}
+            getChartConfig={getChartConfig}
             onMonthChange={handleSleepMonthChange}
             currentMonth={selectedMonth}
             currentYear={selectedYear}
@@ -1637,7 +1375,7 @@ export default function ChartsScreen({ navigation }) {
             theme={theme}
             categoryColor={categoryColors.Diaper}
             timePeriod={timePeriod}
-            getChartConfig={getChartConfig()}
+            getChartConfig={getChartConfig}
             rawData={diaperData}
           />
         );
@@ -1651,8 +1389,10 @@ export default function ChartsScreen({ navigation }) {
             theme={theme}
             categoryColor={categoryColors.Feeding}
             timePeriod={timePeriod}
-            getChartConfig={getChartConfig()}
+            getChartConfig={getChartConfig}
             onMonthChange={handleFeedingMonthChange}
+            currentMonth={selectedMonth}
+            currentYear={selectedYear}
           />
         );
       case "Growth":
@@ -1665,7 +1405,7 @@ export default function ChartsScreen({ navigation }) {
             theme={theme}
             categoryColor={categoryColors.Growth}
             timePeriod={timePeriod}
-            getChartConfig={getChartConfig()}
+            getChartConfig={getChartConfig}
           />
         );
       default:

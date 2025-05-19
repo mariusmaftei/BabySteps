@@ -123,31 +123,46 @@ const SleepChartComponent = ({
     const chartWidth = Math.min(screenWidth - 40, 500);
     const isSmallScreen = screenWidth < 350;
 
-    // Create a modified chart config for month view
-    let finalChartConfig;
-    if (timePeriod === "month") {
-      // For month view, create a config with no labels
-      finalChartConfig = {
-        ...getChartConfig(categoryColor),
-        // Override label functions to return empty strings
-        propsForLabels: {
-          fontSize: 0, // Make labels invisible
-        },
-        propsForDots: {
-          r: "2", // Smaller dots for month view
-          strokeWidth: "1",
-          stroke: categoryColor,
-        },
-        // Remove all labels
-        formatYLabel: () => "",
-        formatXLabel: () => "",
-        // Keep the legend
-        legend: ["Sleep Progress (%)"],
-      };
-    } else {
-      // For week view, use the normal config
-      finalChartConfig = getChartConfig(categoryColor);
+    // Create a modified chart config without legend
+    const baseConfig = getChartConfig(categoryColor);
+
+    // Create a completely new config object without any legend properties
+    const finalChartConfig = {
+      backgroundColor: baseConfig.backgroundColor,
+      backgroundGradientFrom: baseConfig.backgroundGradientFrom,
+      backgroundGradientTo: baseConfig.backgroundGradientTo,
+      color: baseConfig.color,
+      strokeWidth: baseConfig.strokeWidth,
+      barPercentage: baseConfig.barPercentage,
+      useShadowColorFromDataset: baseConfig.useShadowColorFromDataset,
+      decimalPlaces: baseConfig.decimalPlaces,
+      propsForBackgroundLines: baseConfig.propsForBackgroundLines,
+      propsForLabels: {
+        fontSize:
+          timePeriod === "month" ? 0 : baseConfig.propsForLabels?.fontSize,
+        fontWeight: baseConfig.propsForLabels?.fontWeight,
+      },
+      propsForDots: {
+        r: "0",
+        strokeWidth: "0",
+        stroke: "transparent",
+      },
+      formatYLabel: () => "",
+      formatXLabel: timePeriod === "month" ? () => "" : baseConfig.formatXLabel,
+    };
+
+    // Remove the datasets legend property if it exists
+    const modifiedChartData = { ...chartData };
+    if (modifiedChartData.datasets) {
+      modifiedChartData.datasets = modifiedChartData.datasets.map((dataset) => {
+        const newDataset = { ...dataset };
+        delete newDataset.legend;
+        return newDataset;
+      });
     }
+
+    // Remove the legend property from chartData if it exists
+    delete modifiedChartData.legend;
 
     return (
       <ScrollView
@@ -157,7 +172,7 @@ const SleepChartComponent = ({
       >
         <View style={styles.chartWrapper}>
           <LineChart
-            data={chartData}
+            data={modifiedChartData}
             width={chartWidth}
             height={isSmallScreen ? 220 : 260}
             chartConfig={finalChartConfig}
@@ -166,16 +181,11 @@ const SleepChartComponent = ({
             withOuterLines={false}
             withHorizontalLabels={timePeriod !== "month"}
             withVerticalLabels={timePeriod !== "month"}
-            withDots={true}
+            withDots={false}
             fromZero={true}
             bezier={true}
-            getDotColor={() => categoryColor}
-            // Make sure the legend is always shown
-            withLegend={true}
-            legendStyle={{
-              color: theme.text,
-              marginBottom: 8,
-            }}
+            withLegend={false}
+            hidePointsAtIndex={[0, 1, 2, 3, 4, 5, 6]} // Hide all points
           />
         </View>
       </ScrollView>
@@ -232,6 +242,73 @@ const SleepChartComponent = ({
     } = processedData;
     const sunnyColor = "#FF9500"; // Same color as in SleepScreen.js
 
+    // Filter to only include days with actual sleep data
+    const daysWithData = labels
+      .map((label, i) => ({
+        label,
+        date: dates[i],
+        nap: napHours[i],
+        night: nightHours[i],
+        total: totalSleepHours[i],
+        progress: sleepProgress[i],
+        index: i,
+      }))
+      .filter((day) => day.nap > 0 || day.night > 0);
+
+    // If no data for this month/week, show a message
+    if (daysWithData.length === 0) {
+      return (
+        <View
+          style={[
+            styles.dailySleepContainer,
+            { backgroundColor: `${theme.cardBackground}80` },
+          ]}
+        >
+          <Text style={[styles.dailySleepTitle, { color: theme.text }]}>
+            {timePeriod === "week" ? "Weekly" : "Monthly"} Sleep Summary
+          </Text>
+          <View style={styles.noDataContainer}>
+            <Ionicons
+              name="information-circle-outline"
+              size={24}
+              color={theme.textSecondary}
+            />
+            <Text style={[styles.noDataText, { color: theme.textSecondary }]}>
+              No sleep data recorded for this {timePeriod}.
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Render the legend row
+    const renderLegendRow = () => (
+      <View
+        style={[styles.legendRow, { borderBottomColor: `${theme.text}20` }]}
+      >
+        <View style={styles.dayColumn}>
+          <Text style={[styles.legendText, { color: theme.textSecondary }]}>
+            Day
+          </Text>
+        </View>
+        <View style={styles.sleepTypeColumn}>
+          <Text style={[styles.legendText, { color: theme.textSecondary }]}>
+            Nap/Bed
+          </Text>
+        </View>
+        <View style={styles.hoursColumn}>
+          <Text style={[styles.legendText, { color: theme.textSecondary }]}>
+            Total
+          </Text>
+        </View>
+        <View style={styles.progressColumn}>
+          <Text style={[styles.legendText, { color: theme.textSecondary }]}>
+            Progress
+          </Text>
+        </View>
+      </View>
+    );
+
     return (
       <View
         style={[
@@ -243,27 +320,32 @@ const SleepChartComponent = ({
           {timePeriod === "week" ? "Weekly" : "Monthly"} Sleep Summary
         </Text>
 
-        {labels.map((label, i) => {
-          const nap = napHours[i];
-          const night = nightHours[i];
-          const total = totalSleepHours[i];
-          const progress = sleepProgress[i];
-          const isPositive = progress >= 0;
+        {/* Add the legend row */}
+        {renderLegendRow()}
+
+        {daysWithData.map((day) => {
+          const isPositive = day.progress >= 0;
           const progressColor = isPositive ? "#2ecc71" : "#e74c3c";
+
+          // Format the date for display - extract just the day number
+          const dateObj = new Date(day.date);
+          const dayNumber = dateObj.getDate(); // Just the day number (1-31)
 
           return (
             <View
-              key={`day-${i}`}
+              key={`day-${day.index}`}
               style={[
                 styles.dailySleepRow,
                 { borderBottomColor: `${theme.text}10` },
-                i === labels.length - 1 && { borderBottomWidth: 0 },
+                day === daysWithData[daysWithData.length - 1] && {
+                  borderBottomWidth: 0,
+                },
               ]}
             >
-              {/* Day column (left) */}
+              {/* Day column (left) - show only day number for monthly view */}
               <View style={styles.dayColumn}>
                 <Text style={[styles.dayText, { color: theme.text }]}>
-                  {label}
+                  {timePeriod === "month" ? dayNumber : day.label}
                 </Text>
               </View>
 
@@ -284,7 +366,7 @@ const SleepChartComponent = ({
                       { color: theme.textSecondary },
                     ]}
                   >
-                    {nap} hrs
+                    {day.nap} hrs
                   </Text>
                 </View>
 
@@ -303,7 +385,7 @@ const SleepChartComponent = ({
                       { color: theme.textSecondary },
                     ]}
                   >
-                    {night} hrs
+                    {day.night} hrs
                   </Text>
                 </View>
               </View>
@@ -311,7 +393,7 @@ const SleepChartComponent = ({
               {/* Total hours column (right) */}
               <View style={styles.hoursColumn}>
                 <Text style={[styles.hoursText, { color: theme.text }]}>
-                  {total} hrs
+                  {day.total} hrs
                 </Text>
               </View>
 
@@ -320,24 +402,26 @@ const SleepChartComponent = ({
                 <View style={styles.progressBarContainer}>
                   <View style={styles.centerLine} />
 
-                  {progress < 0 && (
+                  {day.progress < 0 && (
                     <View
                       style={[
                         styles.negativeProgressFill,
                         {
-                          width: `${Math.min(Math.abs(progress), 100) / 2}%`,
+                          width: `${
+                            Math.min(Math.abs(day.progress), 100) / 2
+                          }%`,
                           backgroundColor: "#e74c3c",
                         },
                       ]}
                     />
                   )}
 
-                  {progress > 0 && (
+                  {day.progress > 0 && (
                     <View
                       style={[
                         styles.positiveProgressFill,
                         {
-                          width: `${Math.min(progress, 100) / 2}%`,
+                          width: `${Math.min(day.progress, 100) / 2}%`,
                           backgroundColor: "#2ecc71",
                         },
                       ]}
@@ -345,7 +429,7 @@ const SleepChartComponent = ({
                   )}
                 </View>
                 <Text style={[styles.progressText, { color: progressColor }]}>
-                  {isPositive ? `+${progress}%` : `${progress}%`}
+                  {isPositive ? `+${day.progress}%` : `${day.progress}%`}
                 </Text>
               </View>
             </View>
@@ -580,6 +664,29 @@ const styles = StyleSheet.create({
   monthText: {
     fontSize: 18,
     fontWeight: "600",
+  },
+  noDataContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+    flexDirection: "row",
+  },
+  noDataText: {
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  // Legend row styles
+  legendRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    marginBottom: 4,
+  },
+  legendText: {
+    fontSize: 12,
+    fontWeight: "500",
   },
 });
 

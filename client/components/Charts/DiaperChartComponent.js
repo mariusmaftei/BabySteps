@@ -1,16 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react"; // Add useMemo
+import { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
-import { BarChart } from "react-native-chart-kit";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { Dimensions } from "react-native";
+import { PieChart } from "react-native-chart-kit";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -24,59 +24,296 @@ const DiaperChartComponent = ({
   timePeriod,
   getChartConfig,
   rawData,
+  onMonthChange,
+  currentMonth,
+  currentYear,
 }) => {
-  // Add useEffect for debugging
-  useEffect(() => {
-    console.log(
-      "DiaperChartComponent rawData:",
-      rawData?.length || 0,
-      "records"
+  // State for month navigation
+  const [selectedMonth, setSelectedMonth] = useState(
+    currentMonth || new Date().getMonth()
+  );
+  const [selectedYear, setSelectedYear] = useState(
+    currentYear || new Date().getFullYear()
+  );
+
+  // Handle month navigation
+  const handlePreviousMonth = () => {
+    let newMonth = selectedMonth - 1;
+    let newYear = selectedYear;
+
+    if (newMonth < 0) {
+      newMonth = 11;
+      newYear = newYear - 1;
+    }
+
+    setSelectedMonth(newMonth);
+    setSelectedYear(newYear);
+
+    if (onMonthChange) {
+      const startDate = new Date(newYear, newMonth, 1);
+      const endDate = new Date(newYear, newMonth + 1, 0);
+      onMonthChange(startDate, endDate);
+    }
+  };
+
+  const handleNextMonth = () => {
+    let newMonth = selectedMonth + 1;
+    let newYear = selectedYear;
+
+    if (newMonth > 11) {
+      newMonth = 0;
+      newYear = newYear + 1;
+    }
+
+    setSelectedMonth(newMonth);
+    setSelectedYear(newYear);
+
+    if (onMonthChange) {
+      const startDate = new Date(newYear, newMonth, 1);
+      const endDate = new Date(newYear, newMonth + 1, 0);
+      onMonthChange(startDate, endDate);
+    }
+  };
+
+  // Month selector component
+  const renderMonthSelector = () => {
+    if (timePeriod !== "month") return null;
+
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+
+    return (
+      <View style={styles.monthSelectorContainer}>
+        <TouchableOpacity
+          onPress={handlePreviousMonth}
+          style={styles.monthNavButton}
+        >
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
+        </TouchableOpacity>
+
+        <Text style={[styles.monthSelectorText, { color: theme.text }]}>
+          {monthNames[selectedMonth]} {selectedYear}
+        </Text>
+
+        <TouchableOpacity
+          onPress={handleNextMonth}
+          style={styles.monthNavButton}
+        >
+          <Ionicons name="chevron-forward" size={24} color={theme.text} />
+        </TouchableOpacity>
+      </View>
     );
-    console.log("DiaperChartComponent rawData sample:", rawData?.[0]);
-    console.log("DiaperChartComponent chartData:", chartData);
-    console.log("DiaperChartComponent processedData:", processedData);
-  }, [rawData, chartData, processedData]);
+  };
 
-  // Process daily summary data
-  const dailySummaryData = useMemo(() => {
-    if (!rawData || rawData.length === 0) return [];
+  // Process data for pie chart
+  const getPieChartData = useMemo(() => {
+    if (!rawData || rawData.length === 0) {
+      return [
+        {
+          name: "No Data",
+          population: 1,
+          color: "#CCCCCC",
+          legendFontColor: theme.textSecondary,
+          legendFontSize: 12,
+        },
+      ];
+    }
 
-    // Group diaper changes by date
-    const groupedByDate = {};
+    // For monthly view, filter by selected month
+    let filteredData = rawData;
+    if (timePeriod === "month") {
+      filteredData = rawData.filter((record) => {
+        const recordDate = new Date(record.date);
+        return (
+          recordDate.getMonth() === selectedMonth &&
+          recordDate.getFullYear() === selectedYear
+        );
+      });
+    } else if (timePeriod === "week") {
+      // For weekly view, filter by current week
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay()); // Start from Sunday
+      startOfWeek.setHours(0, 0, 0, 0);
 
-    // First, collect all dates from the data
-    rawData.forEach((record) => {
-      const date = new Date(record.date);
-      const dateStr = date.toISOString().split("T")[0]; // YYYY-MM-DD format
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6); // End on Saturday
+      endOfWeek.setHours(23, 59, 59, 999);
 
-      if (!groupedByDate[dateStr]) {
-        groupedByDate[dateStr] = {
-          date: dateStr,
-          displayDate: `${date.getMonth() + 1}/${date.getDate()}`,
-          wet: 0,
-          dirty: 0,
-          both: 0,
-          total: 0,
-        };
-      }
+      filteredData = rawData.filter((record) => {
+        const recordDate = new Date(record.date);
+        return recordDate >= startOfWeek && recordDate <= endOfWeek;
+      });
+    }
 
-      if (record.type === "wet") groupedByDate[dateStr].wet++;
-      else if (record.type === "dirty") groupedByDate[dateStr].dirty++;
-      else if (record.type === "both") groupedByDate[dateStr].both++;
+    // Count diaper types
+    let wetCount = 0;
+    let dirtyCount = 0;
+    let bothCount = 0;
 
-      groupedByDate[dateStr].total++;
+    filteredData.forEach((record) => {
+      if (record.type === "wet") wetCount++;
+      else if (record.type === "dirty") dirtyCount++;
+      else if (record.type === "both") bothCount++;
     });
 
-    // Convert to array and sort by date (newest first)
-    const dailyData = Object.values(groupedByDate);
-    dailyData.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const data = [];
 
-    // Limit to last 7 days for week view or 10 days for month view
-    const limit = timePeriod === "week" ? 7 : 10;
-    return dailyData.slice(0, limit);
-  }, [rawData, timePeriod]);
+    if (wetCount > 0) {
+      data.push({
+        name: "Wet",
+        population: wetCount,
+        color: "#5A87FF",
+        legendFontColor: theme.textSecondary,
+        legendFontSize: 12,
+      });
+    }
 
-  // Fix the date parsing in the renderDiaperChart function
+    if (dirtyCount > 0) {
+      data.push({
+        name: "Dirty",
+        population: dirtyCount,
+        color: "#FF9500",
+        legendFontColor: theme.textSecondary,
+        legendFontSize: 12,
+      });
+    }
+
+    if (bothCount > 0) {
+      data.push({
+        name: "Both",
+        population: bothCount,
+        color: "#FF2D55",
+        legendFontColor: theme.textSecondary,
+        legendFontSize: 12,
+      });
+    }
+
+    // If no data, add a placeholder
+    if (data.length === 0) {
+      data.push({
+        name: "No Data",
+        population: 1,
+        color: "#CCCCCC",
+        legendFontColor: theme.textSecondary,
+        legendFontSize: 12,
+      });
+    }
+
+    return data;
+  }, [rawData, theme, timePeriod, selectedMonth, selectedYear]);
+
+  // Process weekly data
+  const weeklyData = useMemo(() => {
+    if (!rawData || rawData.length === 0) return [];
+
+    // Get current date
+    const today = new Date();
+
+    // Find the previous Sunday (start of week)
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    // Find the next Saturday (end of week)
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    // Create an array for each day of the week
+    const weekDays = [];
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(startOfWeek);
+      day.setDate(startOfWeek.getDate() + i);
+
+      weekDays.push({
+        date: day,
+        label: dayNames[i],
+        wet: 0,
+        dirty: 0,
+        both: 0,
+        total: 0,
+      });
+    }
+
+    // Fill in the data
+    rawData.forEach((record) => {
+      const recordDate = new Date(record.date);
+
+      // Check if the record is within the current week
+      if (recordDate >= startOfWeek && recordDate <= endOfWeek) {
+        const dayIndex = recordDate.getDay(); // 0 for Sunday, 1 for Monday, etc.
+
+        if (record.type === "wet") weekDays[dayIndex].wet++;
+        else if (record.type === "dirty") weekDays[dayIndex].dirty++;
+        else if (record.type === "both") weekDays[dayIndex].both++;
+
+        weekDays[dayIndex].total++;
+      }
+    });
+
+    return weekDays;
+  }, [rawData]);
+
+  // Process monthly data
+  const monthlyData = useMemo(() => {
+    if (!rawData || rawData.length === 0 || timePeriod !== "month") return [];
+
+    // Create an array for each day of the selected month
+    const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const monthDays = [];
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      const day = new Date(selectedYear, selectedMonth, i);
+
+      monthDays.push({
+        date: day,
+        label: `${i}`,
+        wet: 0,
+        dirty: 0,
+        both: 0,
+        total: 0,
+      });
+    }
+
+    // Fill in the data
+    rawData.forEach((record) => {
+      const recordDate = new Date(record.date);
+
+      // Check if the record is within the selected month
+      if (
+        recordDate.getMonth() === selectedMonth &&
+        recordDate.getFullYear() === selectedYear
+      ) {
+        const dayIndex = recordDate.getDate() - 1; // Array is 0-indexed, days are 1-indexed
+
+        if (dayIndex >= 0 && dayIndex < monthDays.length) {
+          if (record.type === "wet") monthDays[dayIndex].wet++;
+          else if (record.type === "dirty") monthDays[dayIndex].dirty++;
+          else if (record.type === "both") monthDays[dayIndex].both++;
+
+          monthDays[dayIndex].total++;
+        }
+      }
+    });
+
+    return monthDays;
+  }, [rawData, selectedMonth, selectedYear, timePeriod]);
+
   const renderDiaperChart = useCallback(() => {
     if (isLoading) {
       return (
@@ -98,113 +335,65 @@ const DiaperChartComponent = ({
       );
     }
 
-    // If we have raw data but no chart data, process it here as a fallback
-    let displayChartData = chartData;
-    if (
-      !chartData?.datasets?.[0]?.data?.some((val) => val > 0) &&
-      rawData &&
-      rawData.length > 0
-    ) {
-      console.log("Processing raw diaper data as fallback");
-
-      // Process raw data into chart format
-      const labels = [];
-      const wetCounts = [];
-      const dirtyCounts = [];
-      const bothCounts = [];
-      const totalCounts = [];
-
-      // Group by date - handle ISO date strings properly
-      const groupedByDate = {};
-      rawData.forEach((record) => {
-        // Parse the date string to get a Date object
-        const date = new Date(record.date);
-        const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
-
-        if (!groupedByDate[dateStr]) {
-          groupedByDate[dateStr] = { wet: 0, dirty: 0, both: 0, total: 0 };
-        }
-
-        if (record.type === "wet") groupedByDate[dateStr].wet++;
-        else if (record.type === "dirty") groupedByDate[dateStr].dirty++;
-        else if (record.type === "both") groupedByDate[dateStr].both++;
-
-        groupedByDate[dateStr].total++;
-      });
-
-      // Convert grouped data to arrays for chart
-      Object.keys(groupedByDate).forEach((date) => {
-        labels.push(date);
-        wetCounts.push(groupedByDate[date].wet);
-        dirtyCounts.push(groupedByDate[date].dirty);
-        bothCounts.push(groupedByDate[date].both);
-        totalCounts.push(groupedByDate[date].total);
-      });
-
-      displayChartData = {
-        labels,
-        datasets: [
-          {
-            data: totalCounts,
-            color: (opacity = 1) => `rgba(255, 45, 85, ${opacity})`, // Main color - pink
-          },
-        ],
-        legend: ["Diaper changes per day"],
-      };
-
-      console.log("Created displayChartData:", displayChartData);
-    }
-
-    // Ensure we have valid chart data
-    if (!displayChartData?.datasets?.[0]?.data?.some((val) => val > 0)) {
-      return (
-        <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: theme.text }]}>
-            No diaper data available for this time period
-          </Text>
-        </View>
-      );
-    }
-
-    // Calculate responsive width based on screen size
-    const chartWidth = Math.min(screenWidth - 40, 500);
-    const isSmallScreen = screenWidth < 350;
-
-    const chartConfig = getChartConfig(categoryColor);
-
     return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chartScrollContainer}
-      >
-        <View style={styles.chartWrapper}>
-          <BarChart
-            data={displayChartData}
-            width={chartWidth}
-            height={isSmallScreen ? 220 : 260}
-            chartConfig={chartConfig}
-            style={styles.chart}
-            withInnerLines={false}
-            withOuterLines={true}
-            withHorizontalLabels={true}
-            withVerticalLabels={true}
-            fromZero={true}
-            showBarTops={false}
-            showValuesOnTopOfBars={true}
-            segments={5}
-          />
+      <View style={styles.customChartContainer}>
+        {timePeriod === "month" && renderMonthSelector()}
+
+        <View style={styles.legendContainer}>
+          <View style={styles.legendItem}>
+            <View
+              style={[styles.legendColor, { backgroundColor: "#5A87FF" }]}
+            />
+            <Text style={[styles.legendText, { color: theme.text }]}>Wet</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View
+              style={[styles.legendColor, { backgroundColor: "#FF9500" }]}
+            />
+            <Text style={[styles.legendText, { color: theme.text }]}>
+              Dirty
+            </Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View
+              style={[styles.legendColor, { backgroundColor: "#FF2D55" }]}
+            />
+            <Text style={[styles.legendText, { color: theme.text }]}>Both</Text>
+          </View>
         </View>
-      </ScrollView>
+
+        {/* Custom centered chart container with adjustment */}
+        <View style={styles.chartOuterContainer}>
+          <View style={[styles.chartInnerContainer, { marginLeft: 140 }]}>
+            <PieChart
+              data={getPieChartData}
+              width={300} // Fixed width
+              height={180}
+              chartConfig={{
+                backgroundColor: theme.cardBackground,
+                backgroundGradientFrom: theme.cardBackground,
+                backgroundGradientTo: theme.cardBackground,
+                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                labelColor: (opacity = 1) => theme.text,
+              }}
+              accessor="population"
+              backgroundColor="transparent"
+              paddingLeft="0"
+              hasLegend={false}
+            />
+          </View>
+        </View>
+      </View>
     );
   }, [
     isLoading,
     error,
-    chartData,
-    rawData,
+    getPieChartData,
     theme,
     categoryColor,
-    getChartConfig,
+    timePeriod,
+    selectedMonth,
+    selectedYear,
   ]);
 
   // Calculate summary statistics from raw data
@@ -231,80 +420,147 @@ const DiaperChartComponent = ({
       mostCommonType = "both";
 
     return (
-      <View>
-        <View style={[styles.statsContainer, { borderColor: theme.border }]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-              Total Changes
-            </Text>
-            <Text style={[styles.statValue, { color: theme.text }]}>
-              {counts.total}
-            </Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-              Daily Average
-            </Text>
-            <Text style={[styles.statValue, { color: theme.text }]}>
-              {dailyAverage}
-            </Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-              Most Common
+      <View
+        style={[
+          styles.summaryContainer,
+          { backgroundColor: theme.cardBackground },
+        ]}
+      >
+        <View style={styles.summaryHeader}>
+          <Text style={[styles.summaryTitle, { color: theme.text }]}>
+            Diaper Summary
+          </Text>
+        </View>
+
+        <View style={styles.summaryStatsContainer}>
+          <View style={styles.summaryStatItem}>
+            <View
+              style={[styles.summaryStatIcon, { backgroundColor: "#5A87FF" }]}
+            >
+              <Ionicons name="water" size={20} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.summaryStatValue, { color: theme.text }]}>
+              {counts.wet}
             </Text>
             <Text
-              style={[
-                styles.statValue,
-                { color: theme.text, textTransform: "capitalize" },
-              ]}
+              style={[styles.summaryStatLabel, { color: theme.textSecondary }]}
             >
-              {mostCommonType}
+              Wet
+            </Text>
+          </View>
+
+          <View style={styles.summaryStatItem}>
+            <View
+              style={[styles.summaryStatIcon, { backgroundColor: "#FF9500" }]}
+            >
+              <FontAwesome5 name="poo" size={20} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.summaryStatValue, { color: theme.text }]}>
+              {counts.dirty}
+            </Text>
+            <Text
+              style={[styles.summaryStatLabel, { color: theme.textSecondary }]}
+            >
+              Dirty
+            </Text>
+          </View>
+
+          <View style={styles.summaryStatItem}>
+            <View
+              style={[styles.summaryStatIcon, { backgroundColor: "#FF2D55" }]}
+            >
+              <View style={styles.combinedIcons}>
+                <Ionicons name="water" size={16} color="#FFFFFF" />
+                <FontAwesome5
+                  name="poo"
+                  size={16}
+                  color="#FFFFFF"
+                  style={{ marginLeft: 4 }}
+                />
+              </View>
+            </View>
+            <Text style={[styles.summaryStatValue, { color: theme.text }]}>
+              {counts.both}
+            </Text>
+            <Text
+              style={[styles.summaryStatLabel, { color: theme.textSecondary }]}
+            >
+              Both
             </Text>
           </View>
         </View>
 
-        <View style={[styles.typeBreakdown, { borderColor: theme.border }]}>
-          <Text style={[styles.breakdownTitle, { color: theme.text }]}>
-            Diaper Type Breakdown:
+        <View
+          style={[
+            styles.summaryDivider,
+            { backgroundColor: `${theme.text}15` },
+          ]}
+        />
+
+        <View style={styles.summaryDistributionContainer}>
+          <Text
+            style={[styles.summaryDistributionTitle, { color: theme.text }]}
+          >
+            Diaper Distribution
           </Text>
-          <View style={styles.breakdownRow}>
-            <View style={styles.breakdownItem}>
-              <View
-                style={[
-                  styles.colorIndicator,
-                  { backgroundColor: "royalblue" },
-                ]}
-              />
-              <Text style={[styles.breakdownLabel, { color: theme.text }]}>
-                Wet: {counts.wet}
-              </Text>
-            </View>
-            <View style={styles.breakdownItem}>
-              <View
-                style={[styles.colorIndicator, { backgroundColor: "brown" }]}
-              />
-              <Text style={[styles.breakdownLabel, { color: theme.text }]}>
-                Dirty: {counts.dirty}
-              </Text>
-            </View>
-            <View style={styles.breakdownItem}>
-              <View
-                style={[styles.colorIndicator, { backgroundColor: "purple" }]}
-              />
-              <Text style={[styles.breakdownLabel, { color: theme.text }]}>
-                Both: {counts.both}
-              </Text>
-            </View>
+
+          <View style={styles.distributionBarContainer}>
+            <View
+              style={[
+                styles.distributionBarSegment,
+                {
+                  backgroundColor: "#5A87FF",
+                  width: `${(counts.wet / counts.total) * 100}%`,
+                },
+              ]}
+            />
+            <View
+              style={[
+                styles.distributionBarSegment,
+                {
+                  backgroundColor: "#FF9500",
+                  width: `${(counts.dirty / counts.total) * 100}%`,
+                },
+              ]}
+            />
+            <View
+              style={[
+                styles.distributionBarSegment,
+                {
+                  backgroundColor: "#FF2D55",
+                  width: `${(counts.both / counts.total) * 100}%`,
+                },
+              ]}
+            />
+          </View>
+
+          <View style={styles.distributionLabelsContainer}>
+            <Text
+              style={[styles.distributionLabel, { color: theme.textSecondary }]}
+            >
+              Wet {Math.round((counts.wet / counts.total) * 100)}%
+            </Text>
+            <Text
+              style={[styles.distributionLabel, { color: theme.textSecondary }]}
+            >
+              Dirty {Math.round((counts.dirty / counts.total) * 100)}%
+            </Text>
+            <Text
+              style={[styles.distributionLabel, { color: theme.textSecondary }]}
+            >
+              Both {Math.round((counts.both / counts.total) * 100)}%
+            </Text>
           </View>
         </View>
 
-        <Text
+        <View
           style={[
-            styles.insightText,
-            { color: theme.textSecondary, borderColor: theme.border },
+            styles.summaryDivider,
+            { backgroundColor: `${theme.text}15` },
           ]}
-        >
+        />
+
+        <Text style={[styles.insightText, { color: theme.textSecondary }]}>
           {dailyAverage >= 6
             ? "Your baby has a healthy number of diaper changes. This indicates good hydration and digestion."
             : dailyAverage >= 4
@@ -315,9 +571,10 @@ const DiaperChartComponent = ({
     );
   }, [rawData, timePeriod, theme]);
 
-  // Render daily diaper summary
+  // Render daily diaper summary - EXACTLY matching the feeding chart UI
   const renderDailySummary = useCallback(() => {
-    if (!dailySummaryData || dailySummaryData.length === 0) return null;
+    const data = timePeriod === "week" ? weeklyData : monthlyData;
+    if (!data || data.length === 0) return null;
 
     return (
       <View
@@ -327,127 +584,95 @@ const DiaperChartComponent = ({
         ]}
       >
         <Text style={[styles.dailyDiaperTitle, { color: theme.text }]}>
-          Daily Diaper Summary
+          {timePeriod === "week" ? "Weekly" : "Monthly"} Diaper Summary
         </Text>
 
-        {dailySummaryData.map((day, index) => {
-          // Calculate the maximum value for proper scaling of bars
-          const maxValue = Math.max(day.wet, day.dirty, day.both, 1);
+        <View style={styles.diaperLegendContainer}>
+          <View style={styles.diaperLegendItem}>
+            <Ionicons name="water" size={24} color="#5A87FF" />
+            <Text style={[styles.diaperLegendText, { color: theme.text }]}>
+              Wet
+            </Text>
+          </View>
+          <View style={styles.diaperLegendItem}>
+            <FontAwesome5 name="poo" size={24} color="#FF9500" />
+            <Text style={[styles.diaperLegendText, { color: theme.text }]}>
+              Dirty
+            </Text>
+          </View>
+          <View style={styles.diaperLegendItem}>
+            <View style={styles.combinedIcons}>
+              <Ionicons name="water" size={16} color="#5A87FF" />
+              <FontAwesome5
+                name="poo"
+                size={16}
+                color="#FF9500"
+                style={{ marginLeft: 4 }}
+              />
+            </View>
+            <Text style={[styles.diaperLegendText, { color: theme.text }]}>
+              Both
+            </Text>
+          </View>
+        </View>
 
+        {data.map((day, i) => {
           return (
             <View
-              key={`diaper-day-${index}`}
+              key={`diaper-day-${i}`}
               style={[
                 styles.dailyDiaperRow,
                 { borderBottomColor: `${theme.text}10` },
-                index === dailySummaryData.length - 1 && {
-                  borderBottomWidth: 0,
-                },
+                i === data.length - 1 && { borderBottomWidth: 0 },
               ]}
             >
               <View style={styles.dayColumn}>
                 <Text style={[styles.dayText, { color: theme.text }]}>
-                  {day.displayDate}
+                  {day.label}
                 </Text>
               </View>
 
-              <View style={styles.totalColumn}>
-                <Text style={[styles.totalText, { color: theme.text }]}>
-                  {day.total} changes
+              <View style={styles.diaperTypeColumn}>
+                <View
+                  style={[
+                    styles.diaperTypeIndicator,
+                    { backgroundColor: "#5A87FF" },
+                  ]}
+                />
+                <Text style={[styles.diaperTypeText, { color: theme.text }]}>
+                  {day.wet}
                 </Text>
               </View>
 
-              <View style={styles.typesColumn}>
-                {/* Wet diapers */}
-                <View style={styles.typeRow}>
-                  <View
-                    style={[
-                      styles.typeIndicator,
-                      { backgroundColor: "royalblue" },
-                    ]}
-                  />
-                  <Text
-                    style={[styles.typeText, { color: theme.textSecondary }]}
-                  >
-                    Wet:
-                  </Text>
-                  <View style={styles.typeBarContainer}>
-                    <View
-                      style={[
-                        styles.typeBarFill,
-                        {
-                          width: `${(day.wet / maxValue) * 100}%`,
-                          backgroundColor: "royalblue",
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.typeCount, { color: theme.text }]}>
-                    {day.wet}
-                  </Text>
-                </View>
+              <View style={styles.diaperTypeColumn}>
+                <View
+                  style={[
+                    styles.diaperTypeIndicator,
+                    { backgroundColor: "#FF9500" },
+                  ]}
+                />
+                <Text style={[styles.diaperTypeText, { color: theme.text }]}>
+                  {day.dirty}
+                </Text>
+              </View>
 
-                {/* Dirty diapers */}
-                <View style={styles.typeRow}>
-                  <View
-                    style={[styles.typeIndicator, { backgroundColor: "brown" }]}
-                  />
-                  <Text
-                    style={[styles.typeText, { color: theme.textSecondary }]}
-                  >
-                    Dirty:
-                  </Text>
-                  <View style={styles.typeBarContainer}>
-                    <View
-                      style={[
-                        styles.typeBarFill,
-                        {
-                          width: `${(day.dirty / maxValue) * 100}%`,
-                          backgroundColor: "brown",
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.typeCount, { color: theme.text }]}>
-                    {day.dirty}
-                  </Text>
-                </View>
-
-                {/* Both diapers */}
-                <View style={styles.typeRow}>
-                  <View
-                    style={[
-                      styles.typeIndicator,
-                      { backgroundColor: "purple" },
-                    ]}
-                  />
-                  <Text
-                    style={[styles.typeText, { color: theme.textSecondary }]}
-                  >
-                    Both:
-                  </Text>
-                  <View style={styles.typeBarContainer}>
-                    <View
-                      style={[
-                        styles.typeBarFill,
-                        {
-                          width: `${(day.both / maxValue) * 100}%`,
-                          backgroundColor: "purple",
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.typeCount, { color: theme.text }]}>
-                    {day.both}
-                  </Text>
-                </View>
+              <View style={styles.diaperTypeColumn}>
+                <View
+                  style={[
+                    styles.diaperTypeIndicator,
+                    { backgroundColor: "#FF2D55" },
+                  ]}
+                />
+                <Text style={[styles.diaperTypeText, { color: theme.text }]}>
+                  {day.both}
+                </Text>
               </View>
             </View>
           );
         })}
       </View>
     );
-  }, [dailySummaryData, theme]);
+  }, [weeklyData, monthlyData, theme, timePeriod]);
 
   return (
     <>
@@ -479,82 +704,134 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 20,
   },
-  chartScrollContainer: {
-    flexGrow: 1,
+  // Custom chart styles
+  customChartContainer: {
+    marginVertical: 20,
+    alignItems: "center",
+    width: "100%",
+  },
+  legendContainer: {
+    flexDirection: "row",
     justifyContent: "center",
-    alignItems: "center",
-    minWidth: "100%",
+    marginBottom: 10,
   },
-  chartWrapper: {
-    position: "relative",
-    overflow: "hidden",
-    borderRadius: 16,
-    marginVertical: 10,
-  },
-  chart: {
-    marginVertical: 12,
-    borderRadius: 16,
-    paddingRight: 16,
-  },
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 16,
-    marginBottom: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    paddingHorizontal: 10,
-  },
-  statItem: {
-    alignItems: "center",
-    flex: 1,
-  },
-  statLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  typeBreakdown: {
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    paddingHorizontal: 10,
-  },
-  breakdownTitle: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  breakdownRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  breakdownItem: {
+  legendItem: {
     flexDirection: "row",
     alignItems: "center",
+    marginHorizontal: 8,
   },
-  colorIndicator: {
+  legendColor: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginRight: 6,
+    marginRight: 4,
   },
-  breakdownLabel: {
-    fontSize: 13,
+  legendText: {
+    fontSize: 12,
+  },
+  // Chart containers with fixed centering
+  chartOuterContainer: {
+    width: "100%",
+    height: 180,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chartInnerContainer: {
+    width: 300, // Fixed width to match chart
+    height: 180,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Month selector styles
+  monthSelectorContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  monthNavButton: {
+    padding: 5,
+  },
+  monthSelectorText: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginHorizontal: 10,
+  },
+  // Summary styles
+  summaryContainer: {
+    borderRadius: 12,
+    marginTop: 20,
+    overflow: "hidden",
+  },
+  summaryHeader: {
+    padding: 16,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  summaryStatsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  summaryStatItem: {
+    alignItems: "center",
+  },
+  summaryStatIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  summaryStatValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  summaryStatLabel: {
+    fontSize: 12,
+  },
+  summaryDivider: {
+    height: 1,
+    width: "100%",
+    marginVertical: 16,
+  },
+  summaryDistributionContainer: {
+    paddingHorizontal: 16,
+  },
+  summaryDistributionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  distributionBarContainer: {
+    flexDirection: "row",
+    height: 12,
+    borderRadius: 6,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  distributionBarSegment: {
+    height: "100%",
+  },
+  distributionLabelsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  distributionLabel: {
+    fontSize: 12,
   },
   insightText: {
     fontSize: 14,
     lineHeight: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
     paddingBottom: 16,
   },
-  // Daily diaper summary styles
+  // Daily diaper summary styles - EXACTLY matching feeding chart
   dailyDiaperContainer: {
     marginTop: 20,
     backgroundColor: "rgba(0,0,0,0.02)",
@@ -566,60 +843,58 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 12,
   },
-  dailyDiaperRow: {
+  diaperLegendContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     marginBottom: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(0,0,0,0.05)",
   },
-  dayColumn: {
+  diaperLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 10,
     marginBottom: 8,
+  },
+  diaperLegendText: {
+    fontSize: 12,
+    marginLeft: 6,
+  },
+  dailyDiaperRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
+  },
+  dayColumn: {
+    width: 50,
   },
   dayText: {
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  totalColumn: {
-    marginBottom: 8,
-  },
-  totalText: {
     fontSize: 14,
     fontWeight: "500",
   },
-  typesColumn: {
-    marginTop: 4,
-  },
-  typeRow: {
+  diaperTypeColumn: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    width: 80,
   },
-  typeIndicator: {
+  diaperTypeIndicator: {
     width: 10,
     height: 10,
     borderRadius: 5,
     marginRight: 6,
   },
-  typeText: {
+  diaperTypeText: {
     fontSize: 12,
-    width: 40,
   },
-  typeBarContainer: {
-    height: 8,
-    backgroundColor: "rgba(0,0,0,0.05)",
-    borderRadius: 4,
-    flex: 1,
-    marginHorizontal: 8,
-    overflow: "hidden",
-  },
-  typeBarFill: {
-    height: "100%",
-    borderRadius: 4,
-  },
-  typeCount: {
-    fontSize: 12,
-    width: 20,
-    textAlign: "right",
+  combinedIcons: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 

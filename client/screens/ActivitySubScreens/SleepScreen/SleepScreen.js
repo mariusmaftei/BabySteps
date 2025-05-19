@@ -54,6 +54,21 @@ const SleepScreen = () => {
   const [savedRecord, setSavedRecord] = useState(null);
   const [isDefaultData, setIsDefaultData] = useState(false);
 
+  // Determine if there's actual sleep data entered
+  const hasActualData = () => {
+    const napValue = Number.parseFloat(napHours) || 0;
+    const nightValue = Number.parseFloat(nightHours) || 0;
+    return napValue > 0 || nightValue > 0;
+  };
+
+  // Effect to set edit mode based on whether there's actual data
+  useEffect(() => {
+    // If this is the first load or there's no actual data, show edit mode
+    if (isFirstRecord || !hasActualData()) {
+      setIsEditMode(true);
+    }
+  }, [isFirstRecord, napHours, nightHours]);
+
   const formatDate = (dateString) => {
     if (!dateString) return "";
     const date = new Date(dateString);
@@ -161,7 +176,11 @@ const SleepScreen = () => {
         savedRecord.napHours.toString(),
         savedRecord.nightHours.toString()
       );
-      setIsEditMode(false);
+
+      // Only set to view mode if there's actual data
+      const hasData = savedRecord.napHours > 0 || savedRecord.nightHours > 0;
+      setIsEditMode(!hasData);
+
       setIsDefaultData(false);
 
       if (savedRecord.sleepProgress !== undefined) {
@@ -219,7 +238,11 @@ const SleepScreen = () => {
           savedRecord.napHours.toString(),
           savedRecord.nightHours.toString()
         );
-        setIsEditMode(false);
+
+        // Only set to view mode if there's actual data
+        const hasData = savedRecord.napHours > 0 || savedRecord.nightHours > 0;
+        setIsEditMode(!hasData);
+
         setIsDefaultData(false);
 
         if (savedRecord.sleepProgress !== undefined) {
@@ -261,7 +284,7 @@ const SleepScreen = () => {
         setSelectedRecord(defaultRecord);
         setCurrentDate(today);
         updateTotalHours("0", "0");
-        setIsEditMode(true);
+        setIsEditMode(true); // Always edit mode for first record
         setIsDefaultData(true);
 
         setLoading(false);
@@ -285,7 +308,11 @@ const SleepScreen = () => {
             todayData.nightHours.toString()
           );
           setShowingYesterdayData(false);
-          setIsEditMode(todayData.isDefaultData || false);
+
+          // Only set to view mode if there's actual data
+          const hasData = todayData.napHours > 0 || todayData.nightHours > 0;
+          setIsEditMode(!hasData);
+
           setIsDefaultData(todayData.isDefaultData || false);
 
           if (todayData.sleepProgress !== undefined) {
@@ -324,7 +351,12 @@ const SleepScreen = () => {
               currentData.nightHours.toString()
             );
             setShowingYesterdayData(currentData.isBeforeNoon);
-            setIsEditMode(!currentData.id || currentData.isDefaultData);
+
+            // Only set to view mode if there's actual data
+            const hasData =
+              currentData.napHours > 0 || currentData.nightHours > 0;
+            setIsEditMode(!hasData);
+
             setIsDefaultData(currentData.isDefaultData || false);
 
             if (currentData.sleepProgress !== undefined) {
@@ -354,7 +386,12 @@ const SleepScreen = () => {
               mostRecent.napHours.toString(),
               mostRecent.nightHours.toString()
             );
-            setIsEditMode(false);
+
+            // Only set to view mode if there's actual data
+            const hasData =
+              mostRecent.napHours > 0 || mostRecent.nightHours > 0;
+            setIsEditMode(!hasData);
+
             setIsDefaultData(false);
 
             if (mostRecent.sleepProgress !== undefined) {
@@ -394,7 +431,7 @@ const SleepScreen = () => {
     });
     setCurrentDate(today);
     updateTotalHours("0", "0");
-    setIsEditMode(true);
+    setIsEditMode(true); // Always edit mode for new/reset form
     setSleepPercentage(0);
     setIsDefaultData(true);
   };
@@ -406,7 +443,11 @@ const SleepScreen = () => {
     setNotes(record.notes || "");
     setCurrentDate(record.date);
     updateTotalHours(record.napHours.toString(), record.nightHours.toString());
-    setIsEditMode(false);
+
+    // Only set to view mode if there's actual data
+    const hasData = record.napHours > 0 || record.nightHours > 0;
+    setIsEditMode(!hasData);
+
     setIsDefaultData(record.isDefaultData || false);
 
     if (record.sleepProgress !== undefined) {
@@ -510,7 +551,11 @@ const SleepScreen = () => {
           result.napHours.toString(),
           result.nightHours.toString()
         );
-        setIsEditMode(false);
+
+        // Only set to view mode if there's actual data
+        const hasData = result.napHours > 0 || result.nightHours > 0;
+        setIsEditMode(!hasData);
+
         setIsDefaultData(false);
 
         if (result.sleepProgress !== undefined) {
@@ -1072,12 +1117,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ageGroupText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
   },
   ageGroupSubtext: {
-    fontSize: 13,
-    marginTop: 2,
+    fontSize: 12,
+    marginTop: 4,
   },
   infoBanner: {
     flexDirection: "row",
