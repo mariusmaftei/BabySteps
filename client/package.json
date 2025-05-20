@@ -30,6 +30,7 @@
     "react-native-circular-progress": "^1.4.1",
     "react-native-date-picker": "^5.0.10",
     "react-native-linear-gradient": "^2.8.3",
+    "react-native-paper": "^5.14.4",
     "react-native-screens": "~4.10.0",
     "use-latest-callback": "^0.2.3"
   },

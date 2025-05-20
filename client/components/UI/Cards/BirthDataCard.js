@@ -12,6 +12,15 @@ const BirthDataCard = ({
   childName,
   birthDate,
 }) => {
+  // Add more detailed debugging at the top of the component
+  console.log("BirthDataCard RENDER with props:", {
+    birthWeight: birthWeight,
+    birthHeight: birthHeight,
+    birthHeadCirc: birthHeadCirc,
+    childGender: childGender,
+    childName: childName,
+  });
+
   // Calculate percentage difference from WHO average
   const calculatePercentage = (actual, average) => {
     if (!actual || !average) return null;
@@ -129,7 +138,7 @@ const BirthDataCard = ({
                   Your child:
                 </Text>
                 <Text style={[styles.dataValue, { color: theme.text }]}>
-                  {birthWeight ? `${birthWeight} g` : "Not recorded"}
+                  {birthWeight ? `${birthWeight}g` : "Not recorded"}
                 </Text>
               </View>
 
@@ -140,14 +149,14 @@ const BirthDataCard = ({
                   WHO Standard:
                 </Text>
                 <Text style={[styles.idealValue, { color: theme.text }]}>
-                  {childGender === "male" ? "3300 g (avg)" : "3200 g (avg)"}
+                  {childGender === "male" ? "3300g (avg)" : "3200g (avg)"}
                 </Text>
                 <Text
                   style={[styles.idealRange, { color: theme.textSecondary }]}
                 >
                   {childGender === "male"
-                    ? "Range: 2500 – 4600 g"
-                    : "Range: 2400 – 4200 g"}
+                    ? "Range: 2500 – 4600g"
+                    : "Range: 2400 – 4200g"}
                 </Text>
               </View>
             </View>
@@ -200,7 +209,7 @@ const BirthDataCard = ({
                   Your child:
                 </Text>
                 <Text style={[styles.dataValue, { color: theme.text }]}>
-                  {birthHeight ? `${birthHeight} cm` : "Not recorded"}
+                  {birthHeight ? `${birthHeight}cm` : "Not recorded"}
                 </Text>
               </View>
 
@@ -211,14 +220,14 @@ const BirthDataCard = ({
                   WHO Standard:
                 </Text>
                 <Text style={[styles.idealValue, { color: theme.text }]}>
-                  {childGender === "male" ? "50 cm (avg)" : "49 cm (avg)"}
+                  {childGender === "male" ? "50cm (avg)" : "49cm (avg)"}
                 </Text>
                 <Text
                   style={[styles.idealRange, { color: theme.textSecondary }]}
                 >
                   {childGender === "male"
-                    ? "Range: 46 – 54 cm"
-                    : "Range: 45 – 53 cm"}
+                    ? "Range: 46 – 54cm"
+                    : "Range: 45 – 53cm"}
                 </Text>
               </View>
             </View>
@@ -278,7 +287,7 @@ const BirthDataCard = ({
                   Your child:
                 </Text>
                 <Text style={[styles.dataValue, { color: theme.text }]}>
-                  {birthHeadCirc ? `${birthHeadCirc} cm` : "Not recorded"}
+                  {birthHeadCirc ? `${birthHeadCirc}cm` : "Not recorded"}
                 </Text>
               </View>
 
@@ -289,14 +298,14 @@ const BirthDataCard = ({
                   WHO Standard:
                 </Text>
                 <Text style={[styles.idealValue, { color: theme.text }]}>
-                  {childGender === "male" ? "35 cm (avg)" : "34 cm (avg)"}
+                  {childGender === "male" ? "35cm (avg)" : "34cm (avg)"}
                 </Text>
                 <Text
                   style={[styles.idealRange, { color: theme.textSecondary }]}
                 >
                   {childGender === "male"
-                    ? "Range: 32 – 37 cm"
-                    : "Range: 32 – 36 cm"}
+                    ? "Range: 32 – 37cm"
+                    : "Range: 32 – 36cm"}
                 </Text>
               </View>
             </View>

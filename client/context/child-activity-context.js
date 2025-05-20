@@ -1,3 +1,5 @@
+"use client";
+
 import { createContext, useState, useContext, useEffect } from "react";
 import { useAuth } from "./auth-context";
 import {
@@ -28,6 +30,12 @@ export const ChildActivityProvider = ({ children }) => {
       name: "No Child",
       age: "N/A",
       gender: "other",
+      birthWeight: null,
+      birthHeight: null,
+      birthHeadCircumference: null,
+      weight: null,
+      height: null,
+      headCircumference: null,
       imageSrc: "https://randomuser.me/api/portraits/lego/1.jpg",
       activities: {
         sleep: {
@@ -52,6 +60,12 @@ export const ChildActivityProvider = ({ children }) => {
           bmi: "0",
           trend: "0%",
           percentile: "0th",
+          birthWeight: null,
+          birthHeight: null,
+          birthHeadCircumference: null,
+          weight: null,
+          height: null,
+          headCircumference: null,
         },
         playtime: {
           data: [0, 0, 0, 0, 0, 0, 0],
@@ -83,6 +97,80 @@ export const ChildActivityProvider = ({ children }) => {
       },
     };
 
+  useEffect(() => {
+    if (currentChild && currentChild.id !== "default") {
+      console.log("Current child in context:", {
+        id: currentChild.id,
+        name: currentChild.name,
+        birthWeight: currentChild.birthWeight,
+        birthHeight: currentChild.birthHeight,
+        birthHeadCircumference: currentChild.birthHeadCircumference,
+        weight: currentChild.weight,
+        height: currentChild.height,
+        headCircumference: currentChild.headCircumference,
+      });
+    }
+  }, [currentChild]);
+
+  // Add this function to the context to ensure birth measurements are properly processed
+  const processChildData = (childData) => {
+    if (!childData) return childData;
+
+    // Create a copy to avoid modifying the original object
+    const processedData = { ...childData };
+
+    // Ensure birth measurements are accessible at the top level
+    // Check for both naming conventions (birthWeight/weight)
+    if (processedData.activities && processedData.activities.growth) {
+      // Check for birthWeight/birthHeight/birthHeadCircumference in activities.growth
+      if (
+        processedData.activities.growth.birthWeight &&
+        !processedData.birthWeight
+      ) {
+        processedData.birthWeight = processedData.activities.growth.birthWeight;
+      }
+      if (
+        processedData.activities.growth.birthHeight &&
+        !processedData.birthHeight
+      ) {
+        processedData.birthHeight = processedData.activities.growth.birthHeight;
+      }
+      if (
+        processedData.activities.growth.birthHeadCircumference &&
+        !processedData.birthHeadCircumference
+      ) {
+        processedData.birthHeadCircumference =
+          processedData.activities.growth.birthHeadCircumference;
+      }
+
+      // Also check for weight/height/headCircumference in activities.growth
+      if (
+        processedData.activities.growth.weight &&
+        !processedData.weight &&
+        !processedData.birthWeight
+      ) {
+        processedData.weight = processedData.activities.growth.weight;
+      }
+      if (
+        processedData.activities.growth.height &&
+        !processedData.height &&
+        !processedData.birthHeight
+      ) {
+        processedData.height = processedData.activities.growth.height;
+      }
+      if (
+        processedData.activities.growth.headCircumference &&
+        !processedData.headCircumference &&
+        !processedData.birthHeadCircumference
+      ) {
+        processedData.headCircumference =
+          processedData.activities.growth.headCircumference;
+      }
+    }
+
+    return processedData;
+  };
+
   // Fetch children from API when authenticated
   useEffect(() => {
     const fetchChildren = async () => {
@@ -102,7 +190,9 @@ export const ChildActivityProvider = ({ children }) => {
         console.log("Children fetched:", data);
 
         if (data && Array.isArray(data)) {
-          setChildren(data);
+          // Process each child to ensure birth measurements are accessible
+          const processedData = data.map(processChildData);
+          setChildren(processedData);
 
           // Set current child to the first one if not already set
           if (
@@ -191,6 +281,44 @@ export const ChildActivityProvider = ({ children }) => {
     }
 
     try {
+      // Ensure birth measurements are included in the API call
+      // Check for both naming conventions (birthWeight/weight)
+      if (newChildData.birthWeight) {
+        console.log(
+          "Including birth weight in child creation:",
+          newChildData.birthWeight
+        );
+      } else if (newChildData.weight) {
+        console.log("Including weight in child creation:", newChildData.weight);
+        // If only weight is provided, use it as birthWeight too
+        newChildData.birthWeight = newChildData.weight;
+      }
+
+      if (newChildData.birthHeight) {
+        console.log(
+          "Including birth height in child creation:",
+          newChildData.birthHeight
+        );
+      } else if (newChildData.height) {
+        console.log("Including height in child creation:", newChildData.height);
+        // If only height is provided, use it as birthHeight too
+        newChildData.birthHeight = newChildData.height;
+      }
+
+      if (newChildData.birthHeadCircumference) {
+        console.log(
+          "Including birth head circumference in child creation:",
+          newChildData.birthHeadCircumference
+        );
+      } else if (newChildData.headCircumference) {
+        console.log(
+          "Including head circumference in child creation:",
+          newChildData.headCircumference
+        );
+        // If only headCircumference is provided, use it as birthHeadCircumference too
+        newChildData.birthHeadCircumference = newChildData.headCircumference;
+      }
+
       const createdChild = await apiCreateChild(newChildData, token);
 
       // Update local state with the new child
@@ -302,6 +430,12 @@ export const ChildActivityProvider = ({ children }) => {
         bmi: "0",
         trend: "0%",
         percentile: "0th",
+        birthWeight: null,
+        birthHeight: null,
+        birthHeadCircumference: null,
+        weight: null,
+        height: null,
+        headCircumference: null,
       },
       playtime: {
         data: [0, 0, 0, 0, 0, 0, 0],

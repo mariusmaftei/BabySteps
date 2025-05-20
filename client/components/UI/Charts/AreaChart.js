@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Dimensions, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -41,33 +43,54 @@ const AreaCharts = ({
   birthWeight,
   birthHeight,
   birthHeadCirc,
+  hasWeightMeasurement = false,
+  hasHeightMeasurement = false,
+  hasHeadCircMeasurement = false,
 }) => {
-  const mmToCm = (mm) => {
-    if (!mm) return 0;
-    return Math.round(mm / 10);
+  console.log("AreaChart props:", {
+    birthWeight,
+    birthHeight,
+    birthHeadCirc,
+    currentWeight,
+    currentHeight,
+    currentHeadCirc,
+    hasWeightMeasurement,
+    hasHeightMeasurement,
+    hasHeadCircMeasurement,
+  });
+
+  // This function should NOT convert mm to cm - the values are already in their correct units
+  // We'll just return the value as is, or 0 if it's falsy
+  const ensureNumber = (value) => {
+    if (!value) return 0;
+    const num = Number.parseFloat(value);
+    return isNaN(num) ? 0 : num;
   };
 
   const getBirthValue = (type) => {
     switch (type) {
       case "weight":
-        return Number.parseFloat(birthWeight) || 3000;
+        return ensureNumber(birthWeight) || 3500;
       case "height":
-        return mmToCm(Number.parseFloat(birthHeight)) || 50;
+        return ensureNumber(birthHeight) || 50;
       case "headCirc":
-        return mmToCm(Number.parseFloat(birthHeadCirc)) || 35;
+        return ensureNumber(birthHeadCirc) || 35;
       default:
-        return 3000;
+        return 3500;
     }
   };
 
   const getAdditionalValue = (type) => {
     switch (type) {
       case "weight":
-        return Number.parseFloat(currentWeight) || 0;
+        // Only return a value if weight measurement exists
+        return hasWeightMeasurement ? ensureNumber(currentWeight) : 0;
       case "height":
-        return mmToCm(Number.parseFloat(currentHeight)) || 0;
+        // Only return a value if height measurement exists
+        return hasHeightMeasurement ? ensureNumber(currentHeight) : 0;
       case "headCirc":
-        return mmToCm(Number.parseFloat(currentHeadCirc)) || 0;
+        // Only return a value if head circumference measurement exists
+        return hasHeadCircMeasurement ? ensureNumber(currentHeadCirc) : 0;
       default:
         return 0;
     }
@@ -76,6 +99,12 @@ const AreaCharts = ({
   const getTotalValue = (type) => {
     const birth = getBirthValue(type);
     const additional = getAdditionalValue(type);
+
+    // If additional value is 0 or not set, return birth value
+    if (additional === 0) {
+      return birth;
+    }
+
     return birth + additional;
   };
 
@@ -84,9 +113,9 @@ const AreaCharts = ({
       case "weight":
         return Math.round(targetWeight);
       case "height":
-        return Math.round(mmToCm(targetHeight));
+        return Math.round(targetHeight);
       case "headCirc":
-        return Math.round(mmToCm(targetHeadCirc));
+        return Math.round(targetHeadCirc);
       default:
         return Math.round(targetWeight);
     }
@@ -131,6 +160,9 @@ const AreaCharts = ({
     birthWeight,
     birthHeight,
     birthHeadCirc,
+    hasWeightMeasurement,
+    hasHeightMeasurement,
+    hasHeadCircMeasurement,
   ]);
 
   useEffect(() => {
@@ -170,7 +202,15 @@ const AreaCharts = ({
     }
 
     const birthValue = getBirthValue(type);
-    const totalValue = getTotalValue(type);
+
+    // Check if this specific measurement type has a value
+    const hasMeasurement =
+      (type === "weight" && hasWeightMeasurement) ||
+      (type === "height" && hasHeightMeasurement) ||
+      (type === "headCirc" && hasHeadCircMeasurement);
+
+    // If no measurement for this specific type, use birth value as current value
+    const totalValue = !hasMeasurement ? birthValue : getTotalValue(type);
     const targetValue = getTotalTargetValue(type);
     const hasPreviousRecord =
       baseData.labels && baseData.labels.includes("Previous");
@@ -185,10 +225,14 @@ const AreaCharts = ({
           previousValue = baseData.datasets[0].data[1];
           break;
         case "height":
-          previousValue = mmToCm(getHeightChartData().datasets[0].data[1]);
+          previousValue = ensureNumber(
+            getHeightChartData().datasets[0].data[1]
+          );
           break;
         case "headCirc":
-          previousValue = mmToCm(getHeadCircChartData().datasets[0].data[1]);
+          previousValue = ensureNumber(
+            getHeadCircChartData().datasets[0].data[1]
+          );
           break;
         default:
           previousValue = 0;
@@ -342,6 +386,17 @@ const AreaCharts = ({
     const progress = getSmoothProgress(type);
     const typeColor = getTypeColor(type);
 
+    // Check if this specific measurement type has a value
+    const hasMeasurement =
+      (type === "weight" && hasWeightMeasurement) ||
+      (type === "height" && hasHeightMeasurement) ||
+      (type === "headCirc" && hasHeadCircMeasurement);
+
+    // Get the correct current value to display
+    const displayValue = !hasMeasurement
+      ? getBirthValue(type)
+      : getTotalValue(type);
+
     return (
       <View style={styles.chartSection} key={type}>
         <View style={styles.chartTitleContainer}>
@@ -402,9 +457,17 @@ const AreaCharts = ({
           >
             Current:{" "}
             <Text style={[styles.growthStatValue, { color: theme.primary }]}>
-              {getTotalValue(type)}
+              {displayValue}
               {getUnit(type)}
             </Text>
+            {!hasMeasurement && (
+              <Text
+                style={[styles.growthStatNote, { color: theme.textSecondary }]}
+              >
+                {" "}
+                (Birth)
+              </Text>
+            )}
           </Text>
           <Text
             style={[styles.growthStatLabel, { color: theme.textSecondary }]}
@@ -541,6 +604,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 2,
     textAlign: "center",
+  },
+  growthStatNote: {
+    fontSize: 10,
+    fontStyle: "italic",
   },
 });
 
