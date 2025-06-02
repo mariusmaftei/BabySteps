@@ -1,6 +1,5 @@
 import api from "./api";
 
-// Get all music tracks
 export const getAllMusic = async () => {
   try {
     console.log("Fetching all music tracks...");
@@ -13,7 +12,6 @@ export const getAllMusic = async () => {
   }
 };
 
-// Get music tracks by category
 export const getMusicByCategory = async (category) => {
   try {
     console.log(`Fetching music tracks for category: ${category}`);
@@ -34,7 +32,6 @@ export const getMusicByCategory = async (category) => {
   }
 };
 
-// Get a single music track by ID
 export const getMusicById = async (id) => {
   try {
     console.log(`Fetching music track with ID: ${id}`);
@@ -53,7 +50,6 @@ export const getMusicById = async (id) => {
   }
 };
 
-// Get all unique music categories
 export const getMusicCategories = async () => {
   try {
     console.log("Fetching all music categories...");

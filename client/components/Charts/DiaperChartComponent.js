@@ -14,28 +14,20 @@ import { PieChart } from "react-native-chart-kit";
 
 const screenWidth = Dimensions.get("window").width;
 
-// Helper function to extract day from ISO timestamp
 const getDayFromTimestamp = (timestamp) => {
   if (!timestamp) return null;
 
   try {
-    // Handle different timestamp formats
     let day;
 
-    // Format: "2025-05-19T08:24:11.000Z" (ISO format)
     if (timestamp.includes("T")) {
       day = timestamp.split("T")[0].split("-")[2];
-    }
-    // Format: "2025-05-19 08:24:11" (database format)
-    else if (timestamp.includes(" ")) {
+    } else if (timestamp.includes(" ")) {
       day = timestamp.split(" ")[0].split("-")[2];
-    }
-    // Format: "2025-05-19" (date only)
-    else if (timestamp.includes("-")) {
+    } else if (timestamp.includes("-")) {
       day = timestamp.split("-")[2];
     }
 
-    // Remove leading zeros if any
     return day ? Number.parseInt(day, 10).toString() : null;
   } catch (error) {
     console.error("Error parsing timestamp:", error);
@@ -43,23 +35,17 @@ const getDayFromTimestamp = (timestamp) => {
   }
 };
 
-// Helper function to extract full date from timestamp
 const getDateFromTimestamp = (timestamp) => {
   if (!timestamp) return null;
 
   try {
     let dateStr;
 
-    // Format: "2025-05-19T08:24:11.000Z" (ISO format)
     if (timestamp.includes("T")) {
       dateStr = timestamp.split("T")[0];
-    }
-    // Format: "2025-05-19 08:24:11" (database format)
-    else if (timestamp.includes(" ")) {
+    } else if (timestamp.includes(" ")) {
       dateStr = timestamp.split(" ")[0];
-    }
-    // Format: "2025-05-19" (date only)
-    else if (timestamp.includes("-")) {
+    } else if (timestamp.includes("-")) {
       dateStr = timestamp;
     }
 
@@ -73,27 +59,21 @@ const getDateFromTimestamp = (timestamp) => {
   }
 };
 
-// Helper function to extract month and year from timestamp
 const getMonthYearFromTimestamp = (timestamp) => {
   if (!timestamp) return null;
 
   try {
     let month, year;
 
-    // Format: "2025-05-19T08:24:11.000Z" (ISO format)
     if (timestamp.includes("T")) {
       const parts = timestamp.split("T")[0].split("-");
       year = Number.parseInt(parts[0], 10);
-      month = Number.parseInt(parts[1], 10) - 1; // JavaScript months are 0-indexed
-    }
-    // Format: "2025-05-19 08:24:11" (database format)
-    else if (timestamp.includes(" ")) {
+      month = Number.parseInt(parts[1], 10) - 1;
+    } else if (timestamp.includes(" ")) {
       const parts = timestamp.split(" ")[0].split("-");
       year = Number.parseInt(parts[0], 10);
       month = Number.parseInt(parts[1], 10) - 1;
-    }
-    // Format: "2025-05-19" (date only)
-    else if (timestamp.includes("-")) {
+    } else if (timestamp.includes("-")) {
       const parts = timestamp.split("-");
       year = Number.parseInt(parts[0], 10);
       month = Number.parseInt(parts[1], 10) - 1;
@@ -109,18 +89,14 @@ const getMonthYearFromTimestamp = (timestamp) => {
 const DiaperChartComponent = ({
   isLoading,
   error,
-  chartData,
-  processedData,
   theme,
   categoryColor,
   timePeriod,
-  getChartConfig,
   rawData,
   onMonthChange,
   currentMonth,
   currentYear,
 }) => {
-  // State for month navigation
   const [selectedMonth, setSelectedMonth] = useState(
     currentMonth || new Date().getMonth()
   );
@@ -128,7 +104,6 @@ const DiaperChartComponent = ({
     currentYear || new Date().getFullYear()
   );
 
-  // Update local state when props change
   useEffect(() => {
     if (currentMonth !== undefined && currentMonth !== selectedMonth) {
       setSelectedMonth(currentMonth);
@@ -138,67 +113,41 @@ const DiaperChartComponent = ({
     }
   }, [currentMonth, currentYear]);
 
-  // Debug logging for month changes
-  useEffect(() => {
-    console.log(
-      `DiaperChartComponent: Month changed to ${
-        selectedMonth + 1
-      }/${selectedYear}`
-    );
-    console.log(`Raw data count: ${rawData ? rawData.length : 0}`);
-    console.log(`Time period: ${timePeriod}`);
+  useEffect(() => {}, [selectedMonth, selectedYear, rawData, timePeriod]);
 
-    if (rawData && rawData.length > 0) {
-      console.log(
-        "First record date:",
-        rawData[0].date || rawData[0].timestamp
-      );
-    }
-  }, [selectedMonth, selectedYear, rawData, timePeriod]);
-
-  // Filter raw data by selected month and year
   const filteredData = useMemo(() => {
     if (!rawData || !Array.isArray(rawData) || rawData.length === 0) return [];
 
     return rawData.filter((record) => {
-      // Get month and year from the record's date or timestamp
       const dateInfo = getMonthYearFromTimestamp(
         record.date || record.timestamp
       );
 
       if (!dateInfo) return false;
 
-      // Only include records from the selected month and year
       return dateInfo.month === selectedMonth && dateInfo.year === selectedYear;
     });
   }, [rawData, selectedMonth, selectedYear]);
 
-  // Process filtered data to get daily diaper counts
   const dailyDiapers = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
-    // Create a map to store diaper data by day
     const diaperByDay = new Map();
 
-    // Process each diaper record
     filteredData.forEach((record) => {
-      // Extract the day from the timestamp or date
       let day = null;
       let date = null;
 
       if (record.timestamp) {
-        // Try to extract from timestamp
         day = getDayFromTimestamp(record.timestamp);
         date = getDateFromTimestamp(record.timestamp);
       } else if (record.date) {
-        // Try to extract from date
         day = getDayFromTimestamp(record.date);
         date = getDateFromTimestamp(record.date);
       }
 
       if (day && date) {
         if (!diaperByDay.has(day)) {
-          // Get the weekday abbreviation
           const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
           const weekday = weekdays[date.getDay()];
 
@@ -213,24 +162,20 @@ const DiaperChartComponent = ({
           });
         }
 
-        // Add this record to the day's data
         const dayData = diaperByDay.get(day);
         dayData.total++;
 
-        // Update the counts based on record type
         if (record.type === "wet") dayData.wet++;
         else if (record.type === "dirty") dayData.dirty++;
         else if (record.type === "both") dayData.both++;
       }
     });
 
-    // Convert the map to an array and sort by day
     return Array.from(diaperByDay.values()).sort(
       (a, b) => Number(a.day) - Number(b.day)
     );
   }, [filteredData]);
 
-  // Calculate summary statistics from filtered data
   const summaryStats = useMemo(() => {
     if (!filteredData || filteredData.length === 0) {
       return {
@@ -244,7 +189,6 @@ const DiaperChartComponent = ({
       };
     }
 
-    // Count diaper types
     let totalWet = 0;
     let totalDirty = 0;
     let totalBoth = 0;
@@ -257,7 +201,6 @@ const DiaperChartComponent = ({
 
     const totalDiapers = totalWet + totalDirty + totalBoth;
 
-    // Calculate percentages
     const wetPercentage =
       totalDiapers > 0 ? Math.round((totalWet / totalDiapers) * 100) : 0;
     const dirtyPercentage =
@@ -276,7 +219,6 @@ const DiaperChartComponent = ({
     };
   }, [filteredData]);
 
-  // Handle month navigation
   const handlePreviousMonth = () => {
     let newMonth = selectedMonth - 1;
     let newYear = selectedYear;
@@ -292,7 +234,6 @@ const DiaperChartComponent = ({
     if (onMonthChange) {
       const startDate = new Date(newYear, newMonth, 1);
       const endDate = new Date(newYear, newMonth + 1, 0);
-      console.log(`Navigating to previous month: ${newMonth + 1}/${newYear}`);
       onMonthChange(startDate, endDate);
     }
   };
@@ -312,12 +253,10 @@ const DiaperChartComponent = ({
     if (onMonthChange) {
       const startDate = new Date(newYear, newMonth, 1);
       const endDate = new Date(newYear, newMonth + 1, 0);
-      console.log(`Navigating to next month: ${newMonth + 1}/${newYear}`);
       onMonthChange(startDate, endDate);
     }
   };
 
-  // Month selector component - Always render this for month view
   const renderMonthSelector = () => {
     if (timePeriod !== "month") return null;
 
@@ -359,7 +298,6 @@ const DiaperChartComponent = ({
     );
   };
 
-  // Helper function to get month name
   const getMonthName = (monthIndex) => {
     const monthNames = [
       "January",
@@ -378,14 +316,11 @@ const DiaperChartComponent = ({
     return monthNames[monthIndex];
   };
 
-  // Update the renderDailySummary function to only show days with data
   const renderDailySummary = useCallback(() => {
-    // Filter to only include days with at least one diaper change
     const daysWithData = dailyDiapers.filter(
       (day) => day.wet > 0 || day.dirty > 0 || day.both > 0
     );
 
-    // If no days with data, show a message
     if (daysWithData.length === 0) {
       return (
         <View
@@ -426,7 +361,6 @@ const DiaperChartComponent = ({
           {timePeriod === "week" ? "Weekly" : "Monthly"} Diaper Summary
         </Text>
 
-        {/* Legend row */}
         <View
           style={[styles.legendRow, { borderBottomColor: `${theme.text}20` }]}
         >
@@ -472,7 +406,6 @@ const DiaperChartComponent = ({
           </View>
         </View>
 
-        {/* Data rows - only for days with data */}
         {daysWithData.map((day, i) => (
           <View
             key={`diaper-day-${i}`}
@@ -494,7 +427,7 @@ const DiaperChartComponent = ({
                   <Ionicons
                     name="water"
                     size={16}
-                    color="#5A87FF"
+                    color="#74c0fc"
                     style={styles.diaperIcon}
                   />
                   <Text style={[styles.diaperTypeText, { color: theme.text }]}>
@@ -516,7 +449,7 @@ const DiaperChartComponent = ({
                   <FontAwesome5
                     name="poo"
                     size={16}
-                    color="#FF9500"
+                    color="#8B4513"
                     style={styles.diaperIcon}
                   />
                   <Text style={[styles.diaperTypeText, { color: theme.text }]}>
@@ -536,11 +469,11 @@ const DiaperChartComponent = ({
               {day.both > 0 ? (
                 <View style={styles.diaperCountContainer}>
                   <View style={styles.combinedIcons}>
-                    <Ionicons name="water" size={14} color="#5A87FF" />
+                    <Ionicons name="water" size={14} color="#74c0fc" />
                     <FontAwesome5
                       name="poo"
                       size={14}
-                      color="#FF9500"
+                      color="#8B4513"
                       style={{ marginLeft: 2 }}
                     />
                   </View>
@@ -562,9 +495,7 @@ const DiaperChartComponent = ({
     );
   }, [dailyDiapers, theme, timePeriod, selectedMonth, selectedYear]);
 
-  // Extract pie chart rendering to a separate function
   const renderPieChart = useCallback(() => {
-    // Check if there's any data
     const hasData = summaryStats.totalDiapers > 0;
 
     if (!hasData) {
@@ -581,32 +512,30 @@ const DiaperChartComponent = ({
       );
     }
 
-    // Create pie chart data with transparent legend text to hide it
     const pieChartData = [
       {
         name: "Wet",
         value: summaryStats.totalWet,
-        color: "#5A87FF",
-        legendFontColor: "transparent", // Hide legend text
+        color: "#74c0fc", // Light blue for wet
+        legendFontColor: "transparent",
         legendFontSize: 0,
       },
       {
         name: "Dirty",
         value: summaryStats.totalDirty,
-        color: "#FF9500",
-        legendFontColor: "transparent", // Hide legend text
+        color: "#8B4513", // Brown for dirty
+        legendFontColor: "transparent",
         legendFontSize: 0,
       },
       {
         name: "Both",
         value: summaryStats.totalBoth,
-        color: "#bacc1d",
-        legendFontColor: "transparent", // Hide legend text
+        color: "rgba(210, 104, 22, 0.91)", // Orange-brown for both
+        legendFontColor: "transparent",
         legendFontSize: 0,
       },
     ];
 
-    // Filter out zero values
     const filteredPieData = pieChartData.filter((item) => item.value > 0);
 
     return (
@@ -625,17 +554,15 @@ const DiaperChartComponent = ({
           accessor="value"
           backgroundColor="transparent"
           paddingLeft="0"
-          center={[screenWidth / 4, 0]} // Center the chart
+          center={[screenWidth / 4, 0]}
           absolute
-          hasLegend={false} // Disable the legend completely
+          hasLegend={false}
         />
       </View>
     );
   }, [summaryStats, theme, timePeriod, selectedMonth, selectedYear]);
 
-  // Update the renderDiaperChart function to always show month selector in month view
   const renderDiaperChart = useCallback(() => {
-    // Always show month selector in month view, even when loading or no data
     if (timePeriod === "month") {
       return (
         <View style={styles.customChartContainer}>
@@ -671,7 +598,6 @@ const DiaperChartComponent = ({
       );
     }
 
-    // For week view, use the original logic
     if (isLoading) {
       return (
         <View style={styles.customChartContainer}>
@@ -698,7 +624,6 @@ const DiaperChartComponent = ({
       );
     }
 
-    // Ensure we have data
     if (filteredData.length === 0) {
       return (
         <View style={styles.customChartContainer}>
@@ -725,7 +650,6 @@ const DiaperChartComponent = ({
   ]);
 
   const renderDiaperSummary = useCallback(() => {
-    // Check if there's any diaper data
     const hasData = summaryStats.totalDiapers > 0;
 
     if (!hasData) return null;
@@ -746,9 +670,9 @@ const DiaperChartComponent = ({
         <View style={styles.summaryStatsContainer}>
           <View style={styles.summaryStatItem}>
             <View
-              style={[styles.summaryStatIcon, { backgroundColor: "#5A87FF20" }]}
+              style={[styles.summaryStatIcon, { backgroundColor: "#74c0fc20" }]}
             >
-              <Ionicons name="water" size={20} color="#5A87FF" />
+              <Ionicons name="water" size={20} color="#74c0fc" />
             </View>
             <Text style={[styles.summaryStatValue, { color: theme.text }]}>
               {summaryStats.totalWet}
@@ -762,9 +686,9 @@ const DiaperChartComponent = ({
 
           <View style={styles.summaryStatItem}>
             <View
-              style={[styles.summaryStatIcon, { backgroundColor: "#FF950020" }]}
+              style={[styles.summaryStatIcon, { backgroundColor: "#8B451320" }]}
             >
-              <FontAwesome5 name="poo" size={20} color="#FF9500" />
+              <FontAwesome5 name="poo" size={20} color="#8B4513" />
             </View>
             <Text style={[styles.summaryStatValue, { color: theme.text }]}>
               {summaryStats.totalDirty}
@@ -778,14 +702,17 @@ const DiaperChartComponent = ({
 
           <View style={styles.summaryStatItem}>
             <View
-              style={[styles.summaryStatIcon, { backgroundColor: "#FF2D5520" }]}
+              style={[
+                styles.summaryStatIcon,
+                { backgroundColor: "rgba(210, 104, 22, 0.2)" },
+              ]}
             >
               <View style={styles.combinedIcons}>
-                <Ionicons name="water" size={16} color="#5A87FF" />
+                <Ionicons name="water" size={16} color="#74c0fc" />
                 <FontAwesome5
                   name="poo"
                   size={16}
-                  color="#FF9500"
+                  color="#8B4513"
                   style={{ marginLeft: 4 }}
                 />
               </View>
@@ -820,7 +747,7 @@ const DiaperChartComponent = ({
               style={[
                 styles.distributionBarSegment,
                 {
-                  backgroundColor: "#5A87FF",
+                  backgroundColor: "#74c0fc", // Light blue for wet
                   width: `${summaryStats.wetPercentage}%`,
                 },
               ]}
@@ -829,7 +756,7 @@ const DiaperChartComponent = ({
               style={[
                 styles.distributionBarSegment,
                 {
-                  backgroundColor: "#FF9500",
+                  backgroundColor: "#8B4513", // Brown for dirty
                   width: `${summaryStats.dirtyPercentage}%`,
                 },
               ]}
@@ -838,7 +765,7 @@ const DiaperChartComponent = ({
               style={[
                 styles.distributionBarSegment,
                 {
-                  backgroundColor: "#bacc1d",
+                  backgroundColor: "rgba(210, 104, 22, 0.91)", // Orange-brown for both
                   width: `${summaryStats.bothPercentage}%`,
                 },
               ]}
@@ -953,7 +880,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   dailyDiaperContainer: {
-    marginTop: 10, // Reduced from 20 to 10
+    marginTop: 10,
     backgroundColor: "rgba(0,0,0,0.02)",
     borderRadius: 12,
     padding: 16,
@@ -994,18 +921,16 @@ const styles = StyleSheet.create({
   diaperTypeText: {
     fontSize: 12,
   },
-  // Custom chart styles
   customChartContainer: {
-    marginVertical: 10, // Reduced from 20 to 10
-    height: 220, // Reduced from 240 to 220 since we removed the legend
+    marginVertical: 10,
+    height: 220,
     width: "100%",
   },
-  // Month selector styles
   monthSelectorContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 10, // Increased from 5 to 10 to add more space below month selector
+    marginBottom: 10,
   },
   monthNavButton: {
     padding: 5,
@@ -1015,11 +940,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginHorizontal: 10,
   },
-  // Summary styles
   summaryContainer: {
     borderRadius: 12,
-    marginTop: 10, // Reduced from 20 to 10
-    marginBottom: 0, // Added to ensure consistent spacing
+    marginTop: 10,
+    marginBottom: 0,
     overflow: "hidden",
   },
   summaryHeader: {
@@ -1085,7 +1009,6 @@ const styles = StyleSheet.create({
   distributionLabel: {
     fontSize: 12,
   },
-  // Legend row styles
   legendRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1097,7 +1020,6 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 12,
   },
-  // No data styles
   noDataContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -1108,7 +1030,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
   },
-  // Combined icons style
   combinedIcons: {
     flexDirection: "row",
     alignItems: "center",

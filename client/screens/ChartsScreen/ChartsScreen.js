@@ -284,18 +284,49 @@ export default function ChartsScreen({ navigation }) {
 
   // Update the processedFeedingData function to only include days with actual data
   const processedFeedingData = useMemo(() => {
-    if (!feedingData || !Array.isArray(feedingData) || feedingData.length === 0)
+    console.log("=== PROCESSING FEEDING DATA ===");
+    console.log("Raw feedingData:", feedingData);
+    console.log("feedingData length:", feedingData ? feedingData.length : 0);
+    console.log("timePeriod:", timePeriod);
+    console.log("selectedMonth:", selectedMonth, "selectedYear:", selectedYear);
+
+    if (
+      !feedingData ||
+      !Array.isArray(feedingData) ||
+      feedingData.length === 0
+    ) {
+      console.log("No feeding data to process");
       return null;
+    }
+
+    // Log all the raw feeding data with their timestamps
+    console.log("All feeding records:");
+    feedingData.forEach((record, index) => {
+      console.log(`Record ${index}:`, {
+        id: record.id,
+        type: record.type,
+        date: record.date,
+        timestamp: record.timestamp,
+        amount: record.amount,
+        duration: record.duration,
+      });
+    });
 
     // Create a map to store feeding data by day
     const feedingByDay = new Map();
 
     // Process each feeding record
-    feedingData.forEach((record) => {
+    feedingData.forEach((record, index) => {
+      console.log(`Processing record ${index}:`, record);
+
       // Extract the day from the timestamp
       const day = record.timestamp
         ? getDayFromTimestamp(record.timestamp)
+        : record.date
+        ? getDayFromTimestamp(record.date)
         : null;
+
+      console.log(`Extracted day for record ${index}:`, day);
 
       if (day) {
         if (!feedingByDay.has(day)) {
@@ -307,6 +338,9 @@ export default function ChartsScreen({ navigation }) {
             solidAmount: 0,
             totalCount: 0,
             feedings: [],
+            date:
+              record.date ||
+              (record.timestamp ? record.timestamp.split("T")[0] : null),
           });
         }
 
@@ -323,19 +357,33 @@ export default function ChartsScreen({ navigation }) {
         } else if (record.type === "solid") {
           dayData.solidAmount += Number(record.amount) || 0;
         }
+
+        console.log(`Updated day ${day} data:`, dayData);
+      } else {
+        console.log(`Could not extract day from record ${index}:`, record);
       }
     });
+
+    console.log("feedingByDay map:", Array.from(feedingByDay.entries()));
 
     // Convert the map to an array and sort by day
     const dailyFeedings = Array.from(feedingByDay.values()).sort(
       (a, b) => Number(a.day) - Number(b.day)
     );
 
+    console.log("dailyFeedings after sorting:", dailyFeedings);
+
     // Extract data for charts - ONLY include days with actual data
     const labels = dailyFeedings.map((day) => day.day);
     const breastFeedingData = dailyFeedings.map((day) => day.breastDuration);
     const bottleFeedingData = dailyFeedings.map((day) => day.bottleAmount);
     const solidFoodData = dailyFeedings.map((day) => day.solidAmount);
+
+    console.log("Chart data extracted:");
+    console.log("labels:", labels);
+    console.log("breastFeedingData:", breastFeedingData);
+    console.log("bottleFeedingData:", bottleFeedingData);
+    console.log("solidFoodData:", solidFoodData);
 
     // Calculate averages
     const avgBreastDuration =
@@ -382,8 +430,7 @@ export default function ChartsScreen({ navigation }) {
     const solidPercentage =
       totalCount > 0 ? Math.round((solidCount / totalCount) * 100) : 0;
 
-    // Add raw data for debugging
-    return {
+    const result = {
       labels,
       breastFeedingData,
       bottleFeedingData,
@@ -401,6 +448,9 @@ export default function ChartsScreen({ navigation }) {
       solidPercentage,
       rawData: feedingData,
     };
+
+    console.log("Final processed feeding data:", result);
+    return result;
   }, [feedingData]);
 
   // Process sleep data for the chart based on time period

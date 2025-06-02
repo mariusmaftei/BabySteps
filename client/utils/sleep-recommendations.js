@@ -1,9 +1,7 @@
 export const getSleepRecommendations = (ageInMonths) => {
-  // Cap age at 12 months since the app is only for infants
   const cappedAge = Math.min(ageInMonths, 12);
 
   if (cappedAge < 4) {
-    // Newborn (0-3 months)
     return {
       ageGroup: "Newborn (0-3 months)",
       totalSleep: "14-17 hours/day",
@@ -17,7 +15,6 @@ export const getSleepRecommendations = (ageInMonths) => {
       recommendedNightHours: 8,
     };
   } else {
-    // Infant (4-12 months)
     return {
       ageGroup: "Infant (4-12 months)",
       totalSleep: "12-16 hours/day",

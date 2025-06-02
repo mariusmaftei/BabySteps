@@ -2,14 +2,11 @@ import { createContext, useState, useContext, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert } from "react-native";
 
-// Storage keys
 const NOTIFICATION_SETTINGS_KEY = "@BabyApp:notificationSettings";
 const CURRENT_SCREEN_KEY = "@BabyApp:currentScreen";
 
-// Create context
 const NotificationContext = createContext();
 
-// Custom hook to use the notification context
 export const useNotification = () => {
   const context = useContext(NotificationContext);
   if (!context) {
@@ -20,16 +17,14 @@ export const useNotification = () => {
   return context;
 };
 
-// Provider component - with dummy notification functions
 export const NotificationProvider = ({ children }) => {
   const [settings, setSettings] = useState({
     enabled: true,
     healthReminders: true,
   });
   const [currentScreen, setCurrentScreen] = useState("Activity");
-  const [permissionGranted, setPermissionGranted] = useState(true); // Always true since we don't check permissions
+  const [permissionGranted, setPermissionGranted] = useState(true);
 
-  // Update current screen in storage
   const updateCurrentScreen = async (screenName) => {
     try {
       await AsyncStorage.setItem(CURRENT_SCREEN_KEY, screenName);
@@ -39,7 +34,6 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  // Save notification settings to storage
   const saveSettings = async (newSettings) => {
     try {
       await AsyncStorage.setItem(
@@ -54,7 +48,6 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  // Load notification settings from storage
   const loadSettings = async () => {
     try {
       const savedSettings = await AsyncStorage.getItem(
@@ -68,24 +61,20 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  // Toggle all notifications - dummy function
   const toggleNotifications = async (value) => {
     const newSettings = { ...settings, enabled: value };
     return await saveSettings(newSettings);
   };
 
-  // Toggle health reminders - dummy function
   const toggleHealthReminders = async (value) => {
     const newSettings = { ...settings, healthReminders: value };
     return await saveSettings(newSettings);
   };
 
-  // Dummy function for requesting permissions
   const requestPermissions = async () => {
     return true;
   };
 
-  // Dummy function for push token registration
   const registerForPushNotifications = async () => {
     Alert.alert(
       "Notifications Disabled",
@@ -95,13 +84,11 @@ export const NotificationProvider = ({ children }) => {
     return null;
   };
 
-  // Dummy function for scheduling vaccination reminders
   const scheduleVaccinationReminders = async () => {
     console.log("Vaccination reminders are disabled");
     return null;
   };
 
-  // Dummy function for test notifications
   const scheduleTestNotification = async () => {
     Alert.alert(
       "Notifications Disabled",
@@ -111,22 +98,18 @@ export const NotificationProvider = ({ children }) => {
     return null;
   };
 
-  // Dummy function for canceling vaccination reminders
   const cancelVaccinationReminders = async () => {
     return true;
   };
 
-  // Dummy function for canceling all notifications
   const cancelAllNotifications = async () => {
     return true;
   };
 
-  // Initialize notification settings
   useEffect(() => {
     console.log("NotificationProvider - Initializing (UI only)");
     loadSettings();
 
-    // Load the current screen from storage
     const loadCurrentScreen = async () => {
       try {
         const savedScreen = await AsyncStorage.getItem(CURRENT_SCREEN_KEY);
@@ -141,7 +124,6 @@ export const NotificationProvider = ({ children }) => {
     loadCurrentScreen();
   }, []);
 
-  // Context value
   const value = {
     settings,
     permissionGranted,

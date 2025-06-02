@@ -4,23 +4,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
-// Storage keys
 const NOTIFICATION_SETTINGS_KEY = "@BabyApp:notificationSettings";
 const HEALTH_NOTIFICATION_ID_KEY = "@BabyApp:healthNotificationId";
 
-// Check if running on emulator
 const isRunningOnEmulator = !Device.isDevice;
 
-// Check if using Expo Go
 const isUsingExpoGo = Constants.appOwnership === "expo";
 
-// Completely disable notifications on Android emulators with Expo Go
 const shouldDisableNotifications =
   Platform.OS === "android" && isRunningOnEmulator && isUsingExpoGo;
 
-// Only configure notifications if not disabled
 if (!shouldDisableNotifications) {
-  // Configure notifications for SDK 53 with the correct properties
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
@@ -31,9 +25,7 @@ if (!shouldDisableNotifications) {
   });
 }
 
-// Create notification channel for Android
 const createNotificationChannel = async () => {
-  // Skip on Android emulators with Expo Go
   if (shouldDisableNotifications) {
     return;
   }
@@ -63,28 +55,22 @@ const createNotificationChannel = async () => {
   }
 };
 
-// Request permissions - updated for SDK 53
 export const requestNotificationPermissions = async () => {
-  // Skip on Android emulators with Expo Go
   if (shouldDisableNotifications) {
     return true;
   }
 
-  // Create notification channels for Android
   if (Platform.OS === "android") {
     await createNotificationChannel();
   }
 
-  // If on emulator, just return true for local notifications
   if (isRunningOnEmulator) {
     return true;
   }
 
-  // Get existing permissions
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
-  // Request permissions if not already granted
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
@@ -98,7 +84,6 @@ export const requestNotificationPermissions = async () => {
   return true;
 };
 
-// Save notification settings to storage
 export const saveNotificationSettings = async (settings) => {
   try {
     await AsyncStorage.setItem(
@@ -112,7 +97,6 @@ export const saveNotificationSettings = async (settings) => {
   }
 };
 
-// Load notification settings from storage
 export const loadNotificationSettings = async () => {
   try {
     const settings = await AsyncStorage.getItem(NOTIFICATION_SETTINGS_KEY);
@@ -125,17 +109,13 @@ export const loadNotificationSettings = async () => {
   }
 };
 
-// Schedule a health vaccination reminder - updated for SDK 53
 export const scheduleVaccinationReminder = async (childName, dueVaccines) => {
-  // Skip on Android emulators with Expo Go
   if (shouldDisableNotifications) {
     return null;
   }
 
-  // Cancel any existing health notification first
   await cancelHealthNotification();
 
-  // Check if we have permission (skip actual permission check on emulator)
   const hasPermission = isRunningOnEmulator
     ? true
     : await requestNotificationPermissions();
@@ -143,11 +123,9 @@ export const scheduleVaccinationReminder = async (childName, dueVaccines) => {
     return null;
   }
 
-  // Create the notification content
   const vaccineCount = dueVaccines.length;
 
   try {
-    // Schedule local notification using the correct format for SDK 53
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: `Vaccination Reminder for ${childName}`,
@@ -158,7 +136,6 @@ export const scheduleVaccinationReminder = async (childName, dueVaccines) => {
         data: { screen: "HealthDetails", type: "vaccination" },
         sound: true,
         badge: 1,
-        // For Android
         channelId: "baby-app-reminders",
       },
       trigger: {
@@ -168,7 +145,6 @@ export const scheduleVaccinationReminder = async (childName, dueVaccines) => {
       },
     });
 
-    // Save the notification ID so we can cancel it later
     await AsyncStorage.setItem(HEALTH_NOTIFICATION_ID_KEY, notificationId);
     console.log("Scheduled vaccination reminder with ID:", notificationId);
     return notificationId;
@@ -178,9 +154,7 @@ export const scheduleVaccinationReminder = async (childName, dueVaccines) => {
   }
 };
 
-// Cancel the health notification
 export const cancelHealthNotification = async () => {
-  // Skip on Android emulators with Expo Go
   if (shouldDisableNotifications) {
     return true;
   }
@@ -201,9 +175,7 @@ export const cancelHealthNotification = async () => {
   }
 };
 
-// Cancel all notifications
 export const cancelAllNotifications = async () => {
-  // Skip on Android emulators with Expo Go
   if (shouldDisableNotifications) {
     return true;
   }
@@ -219,21 +191,17 @@ export const cancelAllNotifications = async () => {
   }
 };
 
-// Handle notification response (when user taps on notification)
 export const handleNotificationResponse = (response, navigation) => {
   if (!navigation) return;
 
   const data = response.notification.request.content.data;
 
   if (data?.screen) {
-    // Navigate to the appropriate screen
     navigation.navigate(data.screen);
   }
 };
 
-// Set up notification listeners - updated for SDK 53
 export const setupNotificationListeners = (navigation) => {
-  // Skip on Android emulators with Expo Go
   if (shouldDisableNotifications) {
     return () => {};
   }
@@ -242,14 +210,12 @@ export const setupNotificationListeners = (navigation) => {
 
   console.log("Setting up notification listeners");
 
-  // Handle notification when app is in foreground
   const notificationListener = Notifications.addNotificationReceivedListener(
     (notification) => {
       console.log("Notification received in foreground:", notification);
     }
   );
 
-  // Handle notification response when user taps on notification
   const responseListener =
     Notifications.addNotificationResponseReceivedListener((response) => {
       console.log(
@@ -259,7 +225,6 @@ export const setupNotificationListeners = (navigation) => {
       handleNotificationResponse(response, navigation);
     });
 
-  // Return cleanup function using the correct method
   return () => {
     notificationListener.remove();
     responseListener.remove();
@@ -267,25 +232,20 @@ export const setupNotificationListeners = (navigation) => {
   };
 };
 
-// Get notification token - updated for SDK 53
 export const getExpoPushToken = async () => {
-  // Skip on Android emulators with Expo Go
   if (shouldDisableNotifications) {
     return null;
   }
 
-  // Skip push token registration on emulators or Expo Go with SDK 53
   if (isRunningOnEmulator || (isUsingExpoGo && Platform.OS === "android")) {
     return null;
   }
 
   try {
-    // Get project ID from Constants
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ??
       Constants?.easConfig?.projectId;
 
-    // If no project ID is found, just log a message and return null without showing an error
     if (!projectId) {
       console.log(
         "No project ID found. Push notifications will not be available, but local notifications will still work."
@@ -293,7 +253,6 @@ export const getExpoPushToken = async () => {
       return null;
     }
 
-    // Request permissions first
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -308,7 +267,6 @@ export const getExpoPushToken = async () => {
       return null;
     }
 
-    // Get Expo push token
     const tokenData = await Notifications.getExpoPushTokenAsync({
       projectId,
     });
@@ -316,22 +274,18 @@ export const getExpoPushToken = async () => {
     console.log("Expo push token:", tokenData.data);
     return tokenData.data;
   } catch (error) {
-    // Silently handle the error
     console.log("Push notifications not available");
     return null;
   }
 };
 
-// Schedule an immediate test notification
 export const scheduleTestNotification = async () => {
-  // Skip on Android emulators with Expo Go
   if (shouldDisableNotifications) {
     console.log("Test notification skipped on Android emulator with Expo Go");
     return null;
   }
 
   try {
-    // On emulators, we don't need to request permissions for local notifications
     if (!isRunningOnEmulator) {
       await requestNotificationPermissions();
     }
@@ -342,7 +296,7 @@ export const scheduleTestNotification = async () => {
         body: "This is a test notification to verify notifications are working",
         data: { screen: "ActivityMain" },
       },
-      trigger: null, // null means send immediately
+      trigger: null,
     });
     console.log("Test notification scheduled with ID:", notificationId);
     return notificationId;
@@ -352,16 +306,13 @@ export const scheduleTestNotification = async () => {
   }
 };
 
-// Initialize notification service
 export const initializeNotifications = async () => {
-  // Skip on Android emulators with Expo Go
   if (shouldDisableNotifications) {
     return;
   }
 
   await createNotificationChannel();
 
-  // Skip permission request on emulators
   if (!isRunningOnEmulator) {
     await requestNotificationPermissions();
   }

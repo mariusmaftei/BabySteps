@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -22,15 +20,13 @@ import { WHO_STANDARDS } from "../../utils/growth-utils";
 const screenWidth = Dimensions.get("window").width;
 
 const GrowthChartComponent = ({ theme }) => {
-  // Get current child from context
   const { currentChild } = useChildActivity();
-  const [activeTab, setActiveTab] = useState("weight"); // "weight", "height", "head"
+  const [activeTab, setActiveTab] = useState("weight");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [growthRecords, setGrowthRecords] = useState([]);
   const [latestRecord, setLatestRecord] = useState(null);
 
-  // Get birth measurements from the current child
   const birthWeight = currentChild?.birthWeight || currentChild?.weight || 0;
   const birthHeight = currentChild?.birthHeight || currentChild?.height || 0;
   const birthHeadCirc =
@@ -38,14 +34,12 @@ const GrowthChartComponent = ({ theme }) => {
     currentChild?.headCircumference ||
     0;
 
-  // Colors for each measurement type
   const colors = {
-    weight: "#5a87ff", // Blue
-    height: "#ff9500", // Orange
-    head: "#ff2d55", // Red
+    weight: "#5a87ff",
+    height: "#ff9500",
+    head: "#ff2d55",
   };
 
-  // Fetch growth records
   useEffect(() => {
     const fetchGrowthData = async () => {
       if (!currentChild || !currentChild.id) {
@@ -58,11 +52,9 @@ const GrowthChartComponent = ({ theme }) => {
         setLoading(true);
         console.log(`Fetching growth records for child ${currentChild.id}`);
 
-        // Fetch growth records
         const records = await getGrowthRecords(currentChild.id);
         console.log(`Fetched ${records.length} growth records`);
 
-        // Sort records by date
         const sortedRecords = [...records].sort((a, b) => {
           return (
             new Date(a.recordDate || a.date || a.createdAt) -
@@ -72,7 +64,6 @@ const GrowthChartComponent = ({ theme }) => {
 
         setGrowthRecords(sortedRecords);
 
-        // Fetch latest record
         try {
           const latest = await getLatestGrowthRecord(currentChild.id);
           setLatestRecord(latest);
@@ -92,22 +83,18 @@ const GrowthChartComponent = ({ theme }) => {
     fetchGrowthData();
   }, [currentChild]);
 
-  // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return "Unknown";
     const date = new Date(dateString);
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
 
-  // Format number to limit decimal places
   const formatNumber = (num) => {
     if (num === undefined || num === null) return "N/A";
     return Number(Number.parseFloat(num).toFixed(2));
   };
 
-  // Get chart data based on active tab
   const getChartData = useCallback(() => {
-    // Get birth value based on active tab
     let birthValue = 0;
     if (activeTab === "weight") {
       birthValue = Number(birthWeight) || 0;
@@ -117,7 +104,6 @@ const GrowthChartComponent = ({ theme }) => {
       birthValue = Number(birthHeadCirc) || 0;
     }
 
-    // Get current value based on latest record or last growth record
     let currentValue = 0;
     let currentDate = "Current";
 
@@ -126,13 +112,10 @@ const GrowthChartComponent = ({ theme }) => {
         latestRecord.recordDate || latestRecord.date || latestRecord.createdAt
       );
       if (activeTab === "weight") {
-        // IMPORTANT: Add birth weight to current weight to get total
         currentValue = birthValue + Number(latestRecord.weight) || 0;
       } else if (activeTab === "height") {
-        // IMPORTANT: Add birth height to current height to get total
         currentValue = birthValue + Number(latestRecord.height) || 0;
       } else if (activeTab === "head") {
-        // IMPORTANT: Add birth head circumference to current to get total
         currentValue =
           birthValue +
             Number(latestRecord.headCircumference || latestRecord.headCirc) ||
@@ -144,28 +127,23 @@ const GrowthChartComponent = ({ theme }) => {
         latest.recordDate || latest.date || latest.createdAt
       );
       if (activeTab === "weight") {
-        // IMPORTANT: Add birth weight to current weight to get total
         currentValue = birthValue + Number(latest.weight) || 0;
       } else if (activeTab === "height") {
-        // IMPORTANT: Add birth height to current height to get total
         currentValue = birthValue + Number(latest.height) || 0;
       } else if (activeTab === "head") {
-        // IMPORTANT: Add birth head circumference to current to get total
         currentValue =
           birthValue + Number(latest.headCircumference || latest.headCirc) || 0;
       }
     } else {
-      // If no records, use a small increase from birth as placeholder
       if (activeTab === "weight") {
-        currentValue = birthValue + 200; // Example: 200g increase
+        currentValue = birthValue + 200;
       } else if (activeTab === "height") {
-        currentValue = birthValue + 5; // Example: 5cm increase
+        currentValue = birthValue + 5;
       } else if (activeTab === "head") {
-        currentValue = birthValue + 2; // Example: 2cm increase
+        currentValue = birthValue + 2;
       }
     }
 
-    // SIMPLIFIED CHART: Just birth on left, current total on right
     const chartData = {
       labels: ["Birth", currentDate],
       datasets: [
@@ -188,68 +166,19 @@ const GrowthChartComponent = ({ theme }) => {
     growthRecords,
   ]);
 
-  // Get RGB values for chart colors
   const getColorRGB = (type) => {
     switch (type) {
       case "weight":
-        return "90, 135, 255"; // Blue
+        return "90, 135, 255";
       case "height":
-        return "255, 149, 0"; // Orange
+        return "255, 149, 0";
       case "head":
-        return "255, 45, 85"; // Red
+        return "255, 45, 85";
       default:
-        return "90, 135, 255"; // Default blue
+        return "90, 135, 255";
     }
   };
 
-  // Calculate growth gain
-  const calculateGrowthGain = () => {
-    // Get birth value based on active tab
-    let birthValue = 0;
-    if (activeTab === "weight") {
-      birthValue = Number(birthWeight) || 0;
-    } else if (activeTab === "height") {
-      birthValue = Number(birthHeight) || 0;
-    } else if (activeTab === "head") {
-      birthValue = Number(birthHeadCirc) || 0;
-    }
-
-    // Get current value based on latest record or last growth record
-    let currentValue = 0;
-
-    if (latestRecord) {
-      if (activeTab === "weight") {
-        currentValue = Number(latestRecord.weight) || 0;
-      } else if (activeTab === "height") {
-        currentValue = Number(latestRecord.height) || 0;
-      } else if (activeTab === "head") {
-        currentValue =
-          Number(latestRecord.headCircumference || latestRecord.headCirc) || 0;
-      }
-    } else if (growthRecords.length > 0) {
-      const latest = growthRecords[growthRecords.length - 1];
-      if (activeTab === "weight") {
-        currentValue = Number(latest.weight) || 0;
-      } else if (activeTab === "height") {
-        currentValue = Number(latest.height) || 0;
-      } else if (activeTab === "head") {
-        currentValue = Number(latest.headCircumference || latest.headCirc) || 0;
-      }
-    } else {
-      // If no records, use birth value
-      currentValue = birthValue;
-    }
-
-    const gain = currentValue - birthValue;
-    const percentage = birthValue > 0 ? (gain / birthValue) * 100 : 0;
-
-    return {
-      value: gain,
-      percentage: percentage,
-    };
-  };
-
-  // Get unit based on active tab
   const getUnit = () => {
     switch (activeTab) {
       case "weight":
@@ -263,7 +192,6 @@ const GrowthChartComponent = ({ theme }) => {
     }
   };
 
-  // Get title based on active tab
   const getTitle = () => {
     switch (activeTab) {
       case "weight":
@@ -277,31 +205,27 @@ const GrowthChartComponent = ({ theme }) => {
     }
   };
 
-  // Get WHO standard for 1-year-old based on gender
   const getWHOOneYearStandard = () => {
     const gender = currentChild?.gender || "male";
     const standards =
       gender === "female" ? WHO_STANDARDS.girls : WHO_STANDARDS.boys;
-    // Get the 12-month (1-year) standard
+
     const oneYearStandard = standards.find((standard) => standard.age === 12);
 
     if (!oneYearStandard) return null;
 
     return {
-      weight: oneYearStandard.weight * 1000, // Convert kg to g
-      height: oneYearStandard.height, // Already in cm
-      headCirc: oneYearStandard.headCirc, // Already in cm
+      weight: oneYearStandard.weight * 1000,
+      height: oneYearStandard.height,
+      headCirc: oneYearStandard.headCirc,
     };
   };
 
-  // Calculate progress toward WHO 1-year milestone
   const calculateWHOProgress = () => {
-    // Get WHO standard for 1-year-old
     const whoOneYearStandard = getWHOOneYearStandard();
     if (!whoOneYearStandard)
       return { percentage: 0, currentTotal: 0, whoTarget: 0 };
 
-    // Get birth value based on active tab
     let birthValue = 0;
     if (activeTab === "weight") {
       birthValue = Number(birthWeight) || 0;
@@ -311,7 +235,6 @@ const GrowthChartComponent = ({ theme }) => {
       birthValue = Number(birthHeadCirc) || 0;
     }
 
-    // Get current gain based on latest record or last growth record
     let currentGain = 0;
     if (latestRecord) {
       if (activeTab === "weight") {
@@ -332,20 +255,17 @@ const GrowthChartComponent = ({ theme }) => {
         currentGain = Number(latest.headCircumference || latest.headCirc) || 0;
       }
     } else {
-      // If no records, use a small increase from birth as placeholder
       if (activeTab === "weight") {
-        currentGain = 200; // Example: 200g increase
+        currentGain = 200;
       } else if (activeTab === "height") {
-        currentGain = 5; // Example: 5cm increase
+        currentGain = 5;
       } else if (activeTab === "head") {
-        currentGain = 2; // Example: 2cm increase
+        currentGain = 2;
       }
     }
 
-    // Calculate current total (birth + gain)
     const currentTotal = birthValue + currentGain;
 
-    // Get WHO target value based on active tab
     let whoTarget = 0;
     if (activeTab === "weight") {
       whoTarget = whoOneYearStandard.weight;
@@ -355,8 +275,6 @@ const GrowthChartComponent = ({ theme }) => {
       whoTarget = whoOneYearStandard.headCirc;
     }
 
-    // Calculate progress percentage toward WHO target
-    // Formula: (current - birth) / (target - birth) * 100
     const expectedGrowth = whoTarget - birthValue;
     const actualGrowth = currentTotal - birthValue;
     const percentage =
@@ -374,7 +292,6 @@ const GrowthChartComponent = ({ theme }) => {
     };
   };
 
-  // Render tabs
   const renderTabs = () => (
     <View style={styles.tabSelectorContainer}>
       <TouchableOpacity
@@ -421,96 +338,6 @@ const GrowthChartComponent = ({ theme }) => {
     </View>
   );
 
-  // Render current measurements
-  const renderCurrentMeasurements = () => {
-    // Get birth values
-    const birthValue =
-      activeTab === "weight"
-        ? birthWeight
-        : activeTab === "height"
-        ? birthHeight
-        : birthHeadCirc;
-
-    // Get current values
-    let currentValue = birthValue;
-    let recordDate = "No records yet";
-
-    if (latestRecord) {
-      recordDate = formatDate(
-        latestRecord.recordDate || latestRecord.date || latestRecord.createdAt
-      );
-      if (activeTab === "weight") {
-        currentValue = latestRecord.weight;
-      } else if (activeTab === "height") {
-        currentValue = latestRecord.height;
-      } else if (activeTab === "head") {
-        currentValue = latestRecord.headCircumference || latestRecord.headCirc;
-      }
-    } else if (growthRecords.length > 0) {
-      const latest = growthRecords[growthRecords.length - 1];
-      recordDate = formatDate(
-        latest.recordDate || latest.date || latest.createdAt
-      );
-      if (activeTab === "weight") {
-        currentValue = latest.weight;
-      } else if (activeTab === "height") {
-        currentValue = latest.height;
-      } else if (activeTab === "head") {
-        currentValue = latest.headCircumference || latest.headCirc;
-      }
-    }
-
-    // Calculate gain
-    const gain = Number(currentValue) - Number(birthValue);
-    const gainText = gain >= 0 ? `+${gain}` : `${gain}`;
-
-    return (
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>{getTitle()} Measurements</Text>
-
-        <View style={styles.measurementsCompare}>
-          <View style={styles.measurementBox}>
-            <Text style={styles.measurementBoxLabel}>Birth</Text>
-            <Text style={styles.measurementBoxValue}>
-              {birthValue || "N/A"} {getUnit()}
-            </Text>
-          </View>
-
-          <View style={styles.measurementArrow}>
-            <Ionicons
-              name="arrow-forward"
-              size={24}
-              color={colors[activeTab]}
-            />
-            <Text
-              style={[styles.measurementGain, { color: colors[activeTab] }]}
-            >
-              {gainText} {getUnit()}
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.measurementBox,
-              { backgroundColor: `${colors[activeTab]}15` },
-            ]}
-          >
-            <Text style={styles.measurementBoxLabel}>
-              Current ({recordDate})
-            </Text>
-            <Text
-              style={[styles.measurementBoxValue, { color: colors[activeTab] }]}
-            >
-              {currentValue || "N/A"} {getUnit()}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.divider} />
-      </View>
-    );
-  };
-
-  // Render progress bar
   const renderProgressBar = () => {
     const whoProgress = calculateWHOProgress();
     const color = colors[activeTab];
@@ -528,9 +355,7 @@ const GrowthChartComponent = ({ theme }) => {
           </Text>
         </View>
 
-        {/* WHO Milestone Progress Bar */}
         <View style={styles.milestoneProgressContainer}>
-          {/* Birth Value */}
           <View style={styles.milestoneMarker}>
             <Text style={styles.milestoneValue}>
               {whoProgress.birthValue} {getUnit()}
@@ -538,7 +363,6 @@ const GrowthChartComponent = ({ theme }) => {
             <Text style={styles.milestoneLabel}>Birth</Text>
           </View>
 
-          {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
             <View style={styles.progressBarBackground}>
               <View
@@ -553,7 +377,6 @@ const GrowthChartComponent = ({ theme }) => {
             </View>
           </View>
 
-          {/* WHO Target */}
           <View style={styles.milestoneMarker}>
             <Text style={styles.milestoneValue}>
               {whoProgress.whoTarget} {getUnit()}
@@ -562,7 +385,6 @@ const GrowthChartComponent = ({ theme }) => {
           </View>
         </View>
 
-        {/* Current Progress Indicator */}
         <View style={styles.currentProgressIndicator}>
           <View
             style={[
@@ -579,7 +401,6 @@ const GrowthChartComponent = ({ theme }) => {
           </View>
         </View>
 
-        {/* Growth Milestone Details - No Container */}
         <View style={styles.milestoneSectionDivider} />
         <Text style={styles.milestoneTitle}>Growth Milestone Details</Text>
 
@@ -621,7 +442,6 @@ const GrowthChartComponent = ({ theme }) => {
     );
   };
 
-  // Render chart
   const renderChart = () => {
     const chartData = getChartData();
     const chartConfig = {
@@ -644,7 +464,6 @@ const GrowthChartComponent = ({ theme }) => {
       },
     };
 
-    // Get birth value based on active tab
     let birthValue = 0;
     if (activeTab === "weight") {
       birthValue = Number(birthWeight) || 0;
@@ -654,7 +473,6 @@ const GrowthChartComponent = ({ theme }) => {
       birthValue = Number(birthHeadCirc) || 0;
     }
 
-    // Get current value based on latest record or last growth record
     let currentGain = 0;
     let currentDate = "Current";
 
@@ -683,17 +501,15 @@ const GrowthChartComponent = ({ theme }) => {
         currentGain = Number(latest.headCircumference || latest.headCirc) || 0;
       }
     } else {
-      // If no records, use a small increase from birth as placeholder
       if (activeTab === "weight") {
-        currentGain = 200; // Example: 200g increase
+        currentGain = 200;
       } else if (activeTab === "height") {
-        currentGain = 5; // Example: 5cm increase
+        currentGain = 5;
       } else if (activeTab === "head") {
-        currentGain = 2; // Example: 2cm increase
+        currentGain = 2;
       }
     }
 
-    // Calculate total current value (birth + gain)
     const currentTotal = birthValue + currentGain;
 
     return (
@@ -723,7 +539,6 @@ const GrowthChartComponent = ({ theme }) => {
     );
   };
 
-  // Render summary table
   const renderSummary = () => {
     if (growthRecords.length === 0 && !latestRecord) {
       return (
@@ -739,15 +554,12 @@ const GrowthChartComponent = ({ theme }) => {
       );
     }
 
-    // Get records but exclude birth record
     const records = [...growthRecords];
 
-    // Add latest record if it's not already in growth records
     if (latestRecord && !growthRecords.some((r) => r.id === latestRecord.id)) {
       records.push(latestRecord);
     }
 
-    // Sort records by date (newest first)
     const sortedRecords = [...records].sort((a, b) => {
       return (
         new Date(b.recordDate || b.date || b.createdAt) -
@@ -759,13 +571,11 @@ const GrowthChartComponent = ({ theme }) => {
       <View style={styles.sectionContainer}>
         <Text style={styles.sectionTitle}>Growth Summary</Text>
 
-        {/* Birth measurements note */}
         <Text style={styles.birthMeasurementsNote}>
           Birth measurements: Weight: {birthWeight || "N/A"}g, Height:{" "}
           {birthHeight || "N/A"}cm, Head: {birthHeadCirc || "N/A"}cm
         </Text>
 
-        {/* Table Header - Just Text without units */}
         <View style={styles.tableHeader}>
           <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Date</Text>
           <Text style={styles.tableHeaderCell}>Weight</Text>
@@ -773,19 +583,16 @@ const GrowthChartComponent = ({ theme }) => {
           <Text style={styles.tableHeaderCell}>Head</Text>
         </View>
 
-        {/* Table Body */}
         <View style={styles.tableBody}>
           {sortedRecords.map((record, index) => (
             <View key={index}>
               <View style={styles.tableRow}>
-                {/* Date */}
                 <Text style={[styles.tableCell, { flex: 2 }]}>
                   {formatDate(
                     record.recordDate || record.date || record.createdAt
                   )}
                 </Text>
 
-                {/* Weight with unit */}
                 <View style={styles.tableCell}>
                   <View style={styles.cellWithIcon}>
                     <Ionicons
@@ -800,7 +607,6 @@ const GrowthChartComponent = ({ theme }) => {
                   </View>
                 </View>
 
-                {/* Height with unit */}
                 <View style={styles.tableCell}>
                   <View style={styles.cellWithIcon}>
                     <Ionicons
@@ -815,7 +621,6 @@ const GrowthChartComponent = ({ theme }) => {
                   </View>
                 </View>
 
-                {/* Head circumference with unit */}
                 <View style={styles.tableCell}>
                   <View style={styles.cellWithIcon}>
                     <Ionicons
@@ -1091,7 +896,7 @@ const styles = StyleSheet.create({
   cellValue: {
     fontWeight: "500",
     fontSize: 14,
-    color: "#333", // Black text for all values
+    color: "#333",
   },
   milestoneProgressContainer: {
     flexDirection: "row",

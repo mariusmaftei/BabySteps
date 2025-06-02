@@ -12,7 +12,6 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check if user is already logged in
   useEffect(() => {
     const loadToken = async () => {
       console.log("AuthProvider - Loading token from storage");
@@ -21,7 +20,6 @@ export const AuthProvider = ({ children }) => {
         if (storedToken) {
           setToken(storedToken);
 
-          // Also try to load the user data
           const storedUser = await AsyncStorage.getItem("user");
           if (storedUser) {
             setUser(JSON.parse(storedUser));
@@ -29,7 +27,6 @@ export const AuthProvider = ({ children }) => {
 
           setIsAuthenticated(true);
 
-          // Initialize API with the token
           try {
             await authService.initializeApiService();
             console.log("API initialized during startup");
@@ -48,7 +45,6 @@ export const AuthProvider = ({ children }) => {
     loadToken();
   }, []);
 
-  // Helper function to check if an error is an invalid credentials error
   const isInvalidCredentialsError = (err) => {
     return (
       err.code === "INVALID_CREDENTIALS" ||
@@ -59,45 +55,35 @@ export const AuthProvider = ({ children }) => {
     );
   };
 
-  // Register a new user
   const register = async (userData) => {
     setError(null);
     try {
       console.log("Auth context register with data:", userData);
 
-      // Call the auth service to register the user
       const result = await authService.register(userData);
 
-      // If registration is successful, directly set the auth state
       if (result && result.token) {
         const { token, user } = result;
 
         console.log("Registration successful, setting token and user");
 
-        // Update state
         setToken(token);
         setUser(user);
 
-        // Store user data in AsyncStorage
         await AsyncStorage.setItem("user", JSON.stringify(user));
 
-        // Set authenticated state AFTER everything else is done
         setIsAuthenticated(true);
       }
 
       return result;
     } catch (err) {
-      // Check if this is a duplicate email error
       if (err.message && err.message.includes("User already exists")) {
-        // For duplicate email errors, just set the error without additional logging
         setError(err.message);
 
-        // Only log this once if it's not already being handled by the service
         if (!authService.getDuplicateEmailErrorFlag()) {
           console.log("Registration failed: Email already exists");
         }
       } else {
-        // For other errors, log normally
         console.error("Registration error in auth context:", err);
         setError(err.message || "Registration failed");
       }
@@ -106,7 +92,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Login a user
   const login = async (email, password) => {
     setError(null);
     try {
@@ -117,29 +102,22 @@ export const AuthProvider = ({ children }) => {
       );
       console.log("Login successful, setting token and user");
 
-      // Update state
       setToken(newToken);
       setUser(userData);
 
-      // Store user data in AsyncStorage
       await AsyncStorage.setItem("user", JSON.stringify(userData));
 
-      // Set authenticated state AFTER everything else is done
       setIsAuthenticated(true);
 
       return true;
     } catch (err) {
-      // Check if this is an invalid credentials error
       if (isInvalidCredentialsError(err)) {
-        // For invalid credentials errors, just set the error without additional logging
         setError(err.message);
 
-        // Only log this once if it's not already being handled by the service
         if (!authService.getInvalidCredentialsFlag()) {
           console.log("Login failed: Invalid credentials");
         }
       } else {
-        // For other errors, log normally
         console.error("Login error in auth context:", err);
         setError(err.message || "Login failed");
       }
@@ -148,7 +126,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Get current user
   const getCurrentUser = async () => {
     if (!token) return null;
 
@@ -157,7 +134,6 @@ export const AuthProvider = ({ children }) => {
       const userData = await authService.getCurrentUser(token);
       setUser(userData);
 
-      // Update stored user data
       await AsyncStorage.setItem("user", JSON.stringify(userData));
 
       return userData;
@@ -167,7 +143,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Update user profile
   const updateUserProfile = async (userData) => {
     if (!token) return null;
 
@@ -181,13 +156,11 @@ export const AuthProvider = ({ children }) => {
 
       const updatedUser = await authService.updateUserProfile(userData, token);
 
-      // Update the user state with the new data
       setUser((prev) => ({
         ...prev,
         ...updatedUser,
       }));
 
-      // Update stored user data
       await AsyncStorage.setItem(
         "user",
         JSON.stringify({
@@ -204,22 +177,17 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout a user
   const logout = async () => {
     try {
       console.log("Logging out user");
 
-      // Call the auth service to logout
       await authService.logout();
 
-      // Clear user data
       setUser(null);
       setToken(null);
 
-      // Clear storage
       await AsyncStorage.removeItem("user");
 
-      // Set isAuthenticated to false AFTER storage is cleared
       setIsAuthenticated(false);
 
       console.log("Logout successful");
@@ -253,7 +221,6 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// Custom hook to use the auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

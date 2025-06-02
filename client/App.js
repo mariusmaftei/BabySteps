@@ -4,18 +4,14 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Dimensions, StatusBar } from "react-native";
 
-// Add these imports at the top
 import { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, Image } from "react-native";
 
-// Screens
 import RegisterScreen from "./screens/RegisterScreen/RegisterScreen";
 import LoginScreen from "./screens/LoginScreen/LoginScreen";
 import ActivityScreen from "./screens/ActivityScreen/ActivityScreen";
 import ChartsScreen from "./screens/ChartsScreen/ChartsScreen";
 import SettingsScreen from "./screens/SettingsScreen/SettingsScreen";
-
-// SubScreens
 
 import SleepScreen from "./screens/ActivitySubScreens/SleepScreen/SleepScreen";
 import FeedingScreen from "./screens/ActivitySubScreens/FeedingScreen/FeedingScreen";
@@ -24,17 +20,14 @@ import HealthScreen from "./screens/ActivitySubScreens/HealthScreen/HealthScreen
 import DiaperScreen from "./screens/ActivitySubScreens/DiaperScreen/DiaperScreen";
 import MusicScreen from "./screens/ActivitySubScreens//MusicScreen/MusicScreen";
 
-// Custom Tab Bar
 import CustomTabBar from "./components/UI/CustomTabBar/CustomTabBar";
 
-// Theme Provider
 import { ThemeProvider, useTheme } from "./context/theme-context";
 
 import {
   ChildActivityProvider,
   useChildActivity,
 } from "./context/child-activity-context";
-// Auth Provider
 
 import { AuthProvider, useAuth } from "./context/auth-context";
 
@@ -47,10 +40,8 @@ const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 const AuthStack = createStackNavigator();
 
-// Get screen dimensions
 const { width, height } = Dimensions.get("window");
 
-// Activity Stack Navigator
 function ActivityStack() {
   const { theme } = useTheme();
 
@@ -96,13 +87,11 @@ function ActivityStack() {
         component={HealthScreen}
         options={{ title: "Health Details" }}
       />
-      {/* Then in the ActivityStack component, add the route for the DiaperDetailsScreen: */}
       <Stack.Screen
         name="DiaperScreen"
         component={DiaperScreen}
         options={{ title: "Diaper Details" }}
       />
-      {/* Add the new route for the relaxing music screen */}
       <Stack.Screen
         name="MusicScreen"
         component={MusicScreen}
@@ -112,7 +101,6 @@ function ActivityStack() {
   );
 }
 
-// Main Tab Navigator
 function MainTabs() {
   const { theme } = useTheme();
 
@@ -130,7 +118,6 @@ function MainTabs() {
   );
 }
 
-// Auth Stack Navigator
 function AuthStackNavigator() {
   const { theme } = useTheme();
 
@@ -147,7 +134,6 @@ function AuthStackNavigator() {
   );
 }
 
-// Add this function to connect the child activity context with the theme context
 const ThemeChildConnector = () => {
   const { currentChild } = useChildActivity();
   const { setThemeByGender } = useTheme();
@@ -158,10 +144,9 @@ const ThemeChildConnector = () => {
     }
   }, [currentChild]);
 
-  return null; // This component doesn't render anything
+  return null;
 };
 
-// Simple splash screen with just the logo image
 function SplashScreen() {
   return (
     <View style={styles.splashContainer}>
@@ -176,7 +161,6 @@ function SplashScreen() {
   );
 }
 
-// Update the MainApp component to include the NotificationHandler
 function MainApp() {
   console.log("MainApp - Component initializing");
   const { theme, setThemeByGender } = useTheme();
@@ -190,7 +174,6 @@ function MainApp() {
   const { currentChild } = useChildActivity();
   const [isSplashVisible, setIsSplashVisible] = useState(true);
   const userChecked = useRef(false);
-  const apiInitialized = useRef(false);
 
   useEffect(() => {
     // Show splash screen for a minimum time
@@ -200,9 +183,6 @@ function MainApp() {
 
     return () => clearTimeout(timer);
   }, []);
-
-  // Check user authentication status and log out if user not found
-  // Only run this once when isAuthenticated changes from false to true
   useEffect(() => {
     console.log("MainApp - Authentication check effect running");
     const checkUser = async () => {
@@ -214,7 +194,6 @@ function MainApp() {
           console.log("User profile fetched successfully");
         } catch (error) {
           console.error("Failed to fetch user profile:", error);
-          // If user not found (401), log out
           if (
             error.message === "User not found" ||
             (error.response && error.response.status === 401)
@@ -224,7 +203,6 @@ function MainApp() {
           }
         }
       } else if (!isAuthenticated) {
-        // Reset the flag when user logs out
         userChecked.current = false;
       }
     };
@@ -232,7 +210,6 @@ function MainApp() {
     checkUser();
   }, [isAuthenticated, getCurrentUser, logout]);
 
-  // Keep only this effect for theme updates based on child gender
   useEffect(() => {
     if (currentChild && currentChild.gender) {
       setThemeByGender(currentChild.gender);
@@ -242,7 +219,6 @@ function MainApp() {
     }
   }, [currentChild, setThemeByGender]);
 
-  // Custom navigation theme
   const customTheme = {
     ...DefaultTheme,
     colors: {
@@ -254,12 +230,10 @@ function MainApp() {
     },
   };
 
-  // Show splash screen
   if (isSplashVisible) {
     return <SplashScreen />;
   }
 
-  // Show loading indicator while checking auth state
   if (authLoading) {
     return (
       <View
@@ -297,7 +271,6 @@ function MainApp() {
   );
 }
 
-// Root component with ThemeProvider and ChildActivityProvider
 export default function App() {
   console.log("App - Root component initializing");
   return (
@@ -316,11 +289,10 @@ export default function App() {
   );
 }
 
-// Update styles for full screen image display
 const styles = StyleSheet.create({
   splashContainer: {
     flex: 1,
-    backgroundColor: "#000", // Black background in case image doesn't cover entire screen
+    backgroundColor: "#000",
   },
   fullScreenImage: {
     width: width,

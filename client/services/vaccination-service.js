@@ -1,9 +1,7 @@
 import { api, ensureToken } from "./api";
 
-// Get all vaccinations for a child
 export const getVaccinationsForChild = async (childId) => {
   try {
-    // Ensure token is set before making the request
     await ensureToken();
 
     const response = await api.get(`/vaccinations/child/${childId}`);
@@ -14,10 +12,8 @@ export const getVaccinationsForChild = async (childId) => {
   }
 };
 
-// Create multiple vaccination records at once (for initial setup)
 export const createMultipleVaccinations = async (childId, vaccinations) => {
   try {
-    // Ensure token is set before making the request
     await ensureToken();
 
     const response = await api.post(`/vaccinations/child/${childId}/bulk`, {
@@ -30,14 +26,12 @@ export const createMultipleVaccinations = async (childId, vaccinations) => {
   }
 };
 
-// Mark a vaccination as completed
 export const markVaccinationAsCompleted = async (
   childId,
   vaccineId,
   completionNotes
 ) => {
   try {
-    // Ensure token is set before making the request
     await ensureToken();
 
     const response = await api.put(
@@ -55,10 +49,8 @@ export const markVaccinationAsCompleted = async (
   }
 };
 
-// Get vaccination progress for a child
 export const getVaccinationProgress = async (childId) => {
   try {
-    // Ensure token is set before making the request
     await ensureToken();
 
     const response = await api.get(`/vaccinations/child/${childId}/progress`);
@@ -69,10 +61,8 @@ export const getVaccinationProgress = async (childId) => {
   }
 };
 
-// Get due vaccinations for a child
 export const getDueVaccinations = async (childId) => {
   try {
-    // Ensure token is set before making the request
     await ensureToken();
 
     const response = await api.get(`/vaccinations/child/${childId}/due`);
@@ -83,10 +73,8 @@ export const getDueVaccinations = async (childId) => {
   }
 };
 
-// Get overdue vaccinations for a child
 export const getOverdueVaccinations = async (childId) => {
   try {
-    // Ensure token is set before making the request
     await ensureToken();
 
     const response = await api.get(`/vaccinations/child/${childId}/overdue`);

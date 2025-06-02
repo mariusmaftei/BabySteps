@@ -212,19 +212,39 @@ export default function DiaperScreen({ navigation }) {
     }
 
     if (!selectedType) {
-      Alert.alert("Error", "Please select a diaper type");
+      Alert.alert(
+        "Missing Information",
+        "Please select a diaper type (Wet, Dirty, or Both)"
+      );
       return;
     }
 
     const needsColorAndConsistency =
       selectedType === "dirty" || selectedType === "both";
 
-    if (needsColorAndConsistency && (!selectedColor || !selectedConsistency)) {
-      Alert.alert(
-        "Error",
-        "Please select both color and consistency for dirty diapers"
-      );
-      return;
+    if (needsColorAndConsistency) {
+      if (!selectedColor && !selectedConsistency) {
+        Alert.alert(
+          "Missing Information",
+          "Please select both stool color and consistency for dirty diapers",
+          [{ text: "OK", onPress: () => console.log("OK Pressed") }]
+        );
+        return;
+      } else if (!selectedColor) {
+        Alert.alert(
+          "Missing Stool Color",
+          "Please select a stool color for the dirty diaper",
+          [{ text: "OK", onPress: () => console.log("OK Pressed") }]
+        );
+        return;
+      } else if (!selectedConsistency) {
+        Alert.alert(
+          "Missing Consistency",
+          "Please select the stool consistency for the dirty diaper",
+          [{ text: "OK", onPress: () => console.log("OK Pressed") }]
+        );
+        return;
+      }
     }
 
     try {
@@ -311,7 +331,7 @@ export default function DiaperScreen({ navigation }) {
       data.push({
         name: "Wet",
         population: wetCount,
-        color: "#5A87FF",
+        color: "#74c0fc", // Light blue for wet
         legendFontColor: theme.textSecondary,
         legendFontSize: 12,
       });
@@ -321,7 +341,7 @@ export default function DiaperScreen({ navigation }) {
       data.push({
         name: "Dirty",
         population: dirtyCount,
-        color: "#FF9500",
+        color: "#8B4513", // Brown for dirty
         legendFontColor: theme.textSecondary,
         legendFontSize: 12,
       });
@@ -331,7 +351,7 @@ export default function DiaperScreen({ navigation }) {
       data.push({
         name: "Both",
         population: bothCount,
-        color: "#FF2D55",
+        color: "rgba(210, 104, 22, 0.91)", // Orange-brown for both
         legendFontColor: theme.textSecondary,
         legendFontSize: 12,
       });
@@ -667,10 +687,10 @@ export default function DiaperScreen({ navigation }) {
                   {
                     backgroundColor:
                       selectedType === "wet"
-                        ? "#5A87FF20"
+                        ? "#74c0fc20"
                         : theme.backgroundSecondary,
                     borderColor:
-                      selectedType === "wet" ? "#5A87FF" : theme.borderLight,
+                      selectedType === "wet" ? "#74c0fc" : theme.borderLight,
                   },
                 ]}
                 onPress={() => setSelectedType("wet")}
@@ -679,14 +699,14 @@ export default function DiaperScreen({ navigation }) {
                   name="water"
                   size={20}
                   color={
-                    selectedType === "wet" ? "#5A87FF" : theme.textSecondary
+                    selectedType === "wet" ? "#74c0fc" : theme.textSecondary
                   }
                   style={styles.typeIcon}
                 />
                 <Text
                   style={[
                     styles.typeText,
-                    { color: selectedType === "wet" ? "#5A87FF" : theme.text },
+                    { color: selectedType === "wet" ? "#74c0fc" : theme.text },
                   ]}
                 >
                   💦 Wet (Urine only)
@@ -699,10 +719,10 @@ export default function DiaperScreen({ navigation }) {
                   {
                     backgroundColor:
                       selectedType === "dirty"
-                        ? "#FF950020"
+                        ? "#8B451320"
                         : theme.backgroundSecondary,
                     borderColor:
-                      selectedType === "dirty" ? "#FF9500" : theme.borderLight,
+                      selectedType === "dirty" ? "#8B4513" : theme.borderLight,
                   },
                 ]}
                 onPress={() => setSelectedType("dirty")}
@@ -711,7 +731,7 @@ export default function DiaperScreen({ navigation }) {
                   name="warning"
                   size={20}
                   color={
-                    selectedType === "dirty" ? "#FF9500" : theme.textSecondary
+                    selectedType === "dirty" ? "#8B4513" : theme.textSecondary
                   }
                   style={styles.typeIcon}
                 />
@@ -719,7 +739,7 @@ export default function DiaperScreen({ navigation }) {
                   style={[
                     styles.typeText,
                     {
-                      color: selectedType === "dirty" ? "#FF9500" : theme.text,
+                      color: selectedType === "dirty" ? "#8B4513" : theme.text,
                     },
                   ]}
                 >
@@ -733,10 +753,12 @@ export default function DiaperScreen({ navigation }) {
                   {
                     backgroundColor:
                       selectedType === "both"
-                        ? "#FF2D5520"
+                        ? "rgba(210, 104, 22, 0.2)"
                         : theme.backgroundSecondary,
                     borderColor:
-                      selectedType === "both" ? "#FF2D55" : theme.borderLight,
+                      selectedType === "both"
+                        ? "rgba(210, 104, 22, 0.91)"
+                        : theme.borderLight,
                   },
                 ]}
                 onPress={() => setSelectedType("both")}
@@ -745,14 +767,21 @@ export default function DiaperScreen({ navigation }) {
                   name="alert-circle"
                   size={20}
                   color={
-                    selectedType === "both" ? "#FF2D55" : theme.textSecondary
+                    selectedType === "both"
+                      ? "rgba(210, 104, 22, 0.91)"
+                      : theme.textSecondary
                   }
                   style={styles.typeIcon}
                 />
                 <Text
                   style={[
                     styles.typeText,
-                    { color: selectedType === "both" ? "#FF2D55" : theme.text },
+                    {
+                      color:
+                        selectedType === "both"
+                          ? "rgba(210, 104, 22, 0.91)"
+                          : theme.text,
+                    },
                   ]}
                 >
                   💦 <FontAwesome5 name="poo" size={16} /> Both (Wet & Dirty)
@@ -1044,12 +1073,12 @@ export default function DiaperScreen({ navigation }) {
             <View style={styles.changeItem}>
               <View style={styles.changeIconContainer}>
                 {change.type === "wet" ? (
-                  <Ionicons name="water" size={18} color={theme.primary} />
+                  <Ionicons name="water" size={18} color="#74c0fc" />
                 ) : change.type === "dirty" ? (
                   <FontAwesome5 name="poo" size={18} color="#8B4513" />
                 ) : (
                   <View style={styles.combinedIcons}>
-                    <Ionicons name="water" size={16} color={theme.primary} />
+                    <Ionicons name="water" size={16} color="#74c0fc" />
                     <FontAwesome5
                       name="poo"
                       size={16}
@@ -1154,10 +1183,10 @@ export default function DiaperScreen({ navigation }) {
               <View
                 style={[
                   styles.iconCircleSmall,
-                  { backgroundColor: "#5A87FF20" },
+                  { backgroundColor: "#74c0fc20" },
                 ]}
               >
-                <FontAwesome5 name="tint" size={20} color="#5A87FF" />
+                <FontAwesome5 name="tint" size={20} color="#74c0fc" />
               </View>
               <Text style={[styles.summaryValueSmall, { color: theme.text }]}>
                 {todayChanges.filter((change) => change.type === "wet").length}
@@ -1181,10 +1210,10 @@ export default function DiaperScreen({ navigation }) {
               <View
                 style={[
                   styles.iconCircleSmall,
-                  { backgroundColor: "#A2845E20" },
+                  { backgroundColor: "#8B451320" },
                 ]}
               >
-                <FontAwesome5 name="poo" size={20} color="#A2845E" />
+                <FontAwesome5 name="poo" size={20} color="#8B4513" />
               </View>
               <Text style={[styles.summaryValueSmall, { color: theme.text }]}>
                 {
@@ -1211,15 +1240,15 @@ export default function DiaperScreen({ navigation }) {
               <View
                 style={[
                   styles.iconCircleSmall,
-                  { backgroundColor: "#FF2D5520" },
+                  { backgroundColor: "rgba(210, 104, 22, 0.2)" },
                 ]}
               >
                 <View style={styles.combinedIcons}>
-                  <Ionicons name="water" size={16} color="#5A87FF" />
+                  <Ionicons name="water" size={16} color="#74c0fc" />
                   <FontAwesome5
                     name="poo"
                     size={16}
-                    color="#A2845E"
+                    color="#8B4513"
                     style={{ marginLeft: 4 }}
                   />
                 </View>

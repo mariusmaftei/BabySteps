@@ -1,17 +1,16 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import api, { ensureToken } from "./api";
 
 const createFeedingRecord = (data) => {
   return {
     id: data.id || null,
     childId: data.childId,
-    type: data.type || "breastfeeding", // breastfeeding, bottleFeeding, solidFood
+    type: data.type || "breastfeeding",
     startTime: data.startTime || null,
     endTime: data.endTime || null,
     duration: data.duration || 0,
-    side: data.side || null, // left, right, both
+    side: data.side || null,
     amount: data.amount || 0,
-    unit: data.unit || null, // ml, oz, g
+    unit: data.unit || null,
     foodType: data.foodType || null,
     notes: data.notes || data.note || "",
     date: data.date || new Date().toISOString().split("T")[0],
@@ -19,27 +18,22 @@ const createFeedingRecord = (data) => {
   };
 };
 
-// Helper function to extract day from timestamp
 export const getDayFromTimestamp = (timestamp) => {
   if (!timestamp) return null;
 
   try {
-    // For ISO format: "2025-05-19T10:05:54.000Z"
     if (timestamp.includes("T")) {
       return timestamp.split("T")[0].split("-")[2];
     }
 
-    // For database format: "2025-05-19 10:05:54"
     if (timestamp.includes(" ")) {
       return timestamp.split(" ")[0].split("-")[2];
     }
 
-    // For date only: "2025-05-19"
     if (timestamp.includes("-")) {
       return timestamp.split("-")[2];
     }
 
-    // If all else fails, try to parse as Date
     const date = new Date(timestamp);
     if (!isNaN(date.getTime())) {
       return date.getDate().toString();
@@ -47,7 +41,6 @@ export const getDayFromTimestamp = (timestamp) => {
 
     return null;
   } catch (error) {
-    console.error("Error parsing timestamp:", timestamp, error);
     return null;
   }
 };
@@ -75,43 +68,20 @@ export const getChildFeedingData = async (childId) => {
   try {
     await ensureToken();
 
-    console.log(`Fetching feeding data for child ID: ${childId}`);
     const response = await api.get(`/feeding/child/${childId}`);
 
-    console.log("API Request: GET /feeding/child/" + childId);
-
     if (response.status === 200) {
-      console.log("API Response Status:", response.status);
       if (response.data && response.data.data) {
-        console.log("Feeding data response:", response.data);
         const records = response.data.data.map((item) =>
           createFeedingRecord(item)
         );
-
-        // Debug the timestamps
-        records.forEach((record) => {
-          console.log(
-            `Record ID: ${record.id}, Timestamp: ${
-              record.timestamp
-            }, Day: ${getDayFromTimestamp(record.timestamp)}`
-          );
-        });
-
         return records;
       }
-    } else {
-      console.error("Unexpected response status:", response.status);
     }
 
     return [];
   } catch (error) {
-    console.error("Error fetching feeding data:", error);
-    if (error.response) {
-      console.error("Error response data:", error.response.data);
-      console.error("Error response status:", error.response.status);
-    } else if (error.request) {
-      console.error("Error request:", error.request);
-    }
+    console.error("Error in getChildFeedingData:", error);
     return [];
   }
 };
@@ -120,41 +90,23 @@ export const getTodayFeedingData = async (childId) => {
   try {
     await ensureToken();
 
-    console.log(`Fetching today's feeding data for child ID: ${childId}`);
-
     try {
-      // First try the /today endpoint
-      console.log("API Request: GET /feeding/child/" + childId + "/today");
       const response = await api.get(`/feeding/child/${childId}/today`);
 
-      console.log("API Response Status:", response.status);
       if (response.data && response.data.data) {
-        console.log("Today's feeding data response:", response.data);
         const records = response.data.data.map((item) =>
           createFeedingRecord(item)
         );
-
-        // Debug the timestamps
-        records.forEach((record) => {
-          console.log(
-            `Today's record ID: ${record.id}, Timestamp: ${
-              record.timestamp
-            }, Day: ${getDayFromTimestamp(record.timestamp)}`
-          );
-        });
-
         return records;
       }
 
       return [];
     } catch (todayError) {
-      console.error("API Response Error:", todayError);
-      console.error("Error Status:", todayError.response?.status);
-      console.error("Error Data:", todayError.response?.data);
+      console.error(
+        "Error in getTodayFeedingData (today endpoint):",
+        todayError
+      );
 
-      console.log("Error with /today endpoint, falling back to date-range");
-
-      // If /today endpoint fails, fall back to date-range
       const today = new Date();
       const startOfDay = new Date(today);
       startOfDay.setHours(0, 0, 0, 0);
@@ -165,36 +117,21 @@ export const getTodayFeedingData = async (childId) => {
       const formattedEndDate = endOfDay.toISOString().split("T")[0];
 
       console.log(
-        `Falling back to date range: ${formattedStartDate} to ${formattedEndDate}`
-      );
-      console.log(
-        "API Request: GET /feeding/child/" +
-          childId +
-          "/date-range?startDate=" +
-          formattedStartDate +
-          "&endDate=" +
-          formattedEndDate
+        `Fallback to date range: ${formattedStartDate} to ${formattedEndDate}`
       );
 
       const response = await api.get(
         `/feeding/child/${childId}/date-range?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
       );
 
-      console.log("API Response Status:", response.status);
       if (response.data && response.data.data) {
-        console.log("Date range fallback response:", response.data);
         return response.data.data.map((item) => createFeedingRecord(item));
       }
 
       return [];
     }
   } catch (error) {
-    console.log("Error fetching today's feeding data:", error.message || error);
-    if (error.response) {
-      console.error("Error response status:", error.response.status);
-      console.error("Error response data:", error.response.data);
-    }
-    // Return empty array for any error
+    console.error("Error in getTodayFeedingData:", error);
     return [];
   }
 };
@@ -207,207 +144,247 @@ export const getFeedingDataByDateRange = async (
   try {
     await ensureToken();
 
+    // Format dates to YYYY-MM-DD format
     const formattedStartDate = startDate.toISOString().split("T")[0];
     const formattedEndDate = endDate.toISOString().split("T")[0];
 
     console.log(
-      `Fetching feeding data for child ID: ${childId} from ${formattedStartDate} to ${formattedEndDate}`
-    );
-    console.log(
-      "API Request: GET /feeding/child/" +
-        childId +
-        "/date-range?startDate=" +
-        formattedStartDate +
-        "&endDate=" +
-        formattedEndDate
+      `API call: Getting feeding data for range ${formattedStartDate} to ${formattedEndDate}`
     );
 
-    const response = await api.get(
-      `/feeding/child/${childId}/date-range?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
-    );
-
-    console.log("API Response Status:", response.status);
-    if (response.data && response.data.data) {
-      console.log("Feeding data by date range response:", response.data);
-      const records = response.data.data.map((item) =>
-        createFeedingRecord(item)
+    // Try the date-range endpoint first
+    try {
+      const response = await api.get(
+        `/feeding/child/${childId}/date-range?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
       );
 
-      // Debug the timestamps
-      records.forEach((record) => {
+      if (response.data && response.data.data) {
         console.log(
-          `Date range record ID: ${record.id}, Timestamp: ${
-            record.timestamp
-          }, Day: ${getDayFromTimestamp(record.timestamp)}`
+          `API returned ${response.data.data.length} records for date range`
+        );
+        const records = response.data.data.map((item) =>
+          createFeedingRecord(item)
+        );
+        return records;
+      }
+
+      console.log("API returned no data for date range");
+      return [];
+    } catch (dateRangeError) {
+      console.error("Error with date-range endpoint:", dateRangeError);
+
+      // Fallback: Get all feeding data and filter manually
+      console.log(
+        "Falling back to getting all feeding data and filtering manually"
+      );
+      const allData = await getChildFeedingData(childId);
+
+      if (!allData || allData.length === 0) {
+        console.log("No feeding data found for child");
+        return [];
+      }
+
+      console.log(
+        `Got ${allData.length} total feeding records, filtering by date range`
+      );
+
+      // Convert start and end dates to timestamps for comparison
+      const startTimestamp = new Date(startDate).getTime();
+      const endTimestamp = new Date(endDate).getTime();
+
+      // Filter records that fall within the date range
+      const filteredData = allData.filter((record) => {
+        let recordDate;
+
+        if (record.timestamp) {
+          recordDate = new Date(record.timestamp);
+        } else if (record.date) {
+          recordDate = new Date(record.date);
+        } else {
+          return false;
+        }
+
+        const recordTimestamp = recordDate.getTime();
+        return (
+          recordTimestamp >= startTimestamp && recordTimestamp <= endTimestamp
         );
       });
 
-      return records;
+      console.log(
+        `Filtered to ${filteredData.length} records within date range`
+      );
+      return filteredData;
     }
-
-    return [];
   } catch (error) {
-    console.log(
-      "Error fetching feeding data by date range:",
-      error.message || error
-    );
-    // Return empty array for any error
+    console.error("Error in getFeedingDataByDateRange:", error);
     return [];
   }
 };
 
-// Update the getWeeklyFeedingData function to match the week calculation in ChartsScreen
 export const getWeeklyFeedingData = async (childId) => {
   try {
-    console.log(`Getting weekly feeding data for child ID: ${childId}`);
-
-    // Get the current week (Sunday to Saturday)
+    console.log("Getting weekly feeding data");
     const today = new Date();
-    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    console.log(`Today is: ${today.toISOString()}`);
 
-    // Calculate the date for Sunday (start of week)
+    // Calculate start date (7 days ago from today)
     const startDate = new Date(today);
-    startDate.setDate(today.getDate() - currentDay);
+    startDate.setDate(today.getDate() - 6);
     startDate.setHours(0, 0, 0, 0);
 
-    // Calculate the date for Saturday (end of week)
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
+    // Calculate end date (today at end of day)
+    const endDate = new Date(today);
     endDate.setHours(23, 59, 59, 999);
 
     console.log(
-      `Fetching feeding data from ${startDate.toISOString().split("T")[0]} to ${
-        endDate.toISOString().split("T")[0]
-      }`
+      `Weekly date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
     );
 
+    // Try to get data for this date range
     const result = await getFeedingDataByDateRange(childId, startDate, endDate);
     console.log(
-      `Retrieved ${result ? result.length : 0} feeding records for the week`
+      `Weekly feeding data retrieved: ${result ? result.length : 0} records`
     );
 
-    // Debug the data
-    if (result && result.length > 0) {
-      console.log("Weekly feeding data sample:");
-      result.slice(0, 3).forEach((record) => {
+    // If no data found, try getting all data as a fallback
+    if (!result || result.length === 0) {
+      console.log(
+        "No weekly data found, trying to get all feeding data as fallback"
+      );
+      const allData = await getChildFeedingData(childId);
+
+      if (allData && allData.length > 0) {
         console.log(
-          `Record ID: ${record.id}, Timestamp: ${
-            record.timestamp
-          }, Day: ${getDayFromTimestamp(record.timestamp)}`
+          `Got ${allData.length} total feeding records, returning most recent ones`
         );
-      });
+        // Sort by date descending and take the most recent ones (up to 10)
+        return allData
+          .sort((a, b) => {
+            const dateA = new Date(a.timestamp || a.date);
+            const dateB = new Date(b.timestamp || b.date);
+            return dateB - dateA;
+          })
+          .slice(0, 10);
+      }
     }
 
-    // If the API call fails, return an empty array instead of throwing an error
     return result || [];
   } catch (error) {
-    console.error("Error in getWeeklyFeedingData:", error.message || error);
-    if (error.response) {
-      console.error("Error response status:", error.response.status);
-      console.error("Error response data:", error.response.data);
-    }
+    console.error("Error in getWeeklyFeedingData:", error);
     return [];
   }
 };
 
-// Function to get monthly feeding data (last 30 days)
 export const getMonthlyFeedingData = async (childId) => {
   try {
-    console.log(`Getting monthly feeding data for child ID: ${childId}`);
+    console.log("Getting monthly feeding data");
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
+    startDate.setHours(0, 0, 0, 0);
 
     console.log(
-      `Fetching feeding data from ${startDate.toISOString().split("T")[0]} to ${
-        endDate.toISOString().split("T")[0]
-      }`
+      `Monthly date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
     );
 
     const result = await getFeedingDataByDateRange(childId, startDate, endDate);
     console.log(
-      `Retrieved ${result ? result.length : 0} feeding records for the month`
+      `Monthly feeding data retrieved: ${result ? result.length : 0} records`
     );
 
-    // Debug the data
-    if (result && result.length > 0) {
-      console.log("Monthly feeding data sample:");
-      result.slice(0, 3).forEach((record) => {
+    // If no data found, try getting all data as a fallback
+    if (!result || result.length === 0) {
+      console.log(
+        "No monthly data found, trying to get all feeding data as fallback"
+      );
+      const allData = await getChildFeedingData(childId);
+
+      if (allData && allData.length > 0) {
         console.log(
-          `Record ID: ${record.id}, Timestamp: ${
-            record.timestamp
-          }, Day: ${getDayFromTimestamp(record.timestamp)}`
+          `Got ${allData.length} total feeding records, returning most recent ones`
         );
-      });
+        // Sort by date descending and take the most recent ones (up to 30)
+        return allData
+          .sort((a, b) => {
+            const dateA = new Date(a.timestamp || a.date);
+            const dateB = new Date(b.timestamp || b.date);
+            return dateB - dateA;
+          })
+          .slice(0, 30);
+      }
     }
 
-    // If the API call fails, return an empty array instead of throwing an error
     return result || [];
   } catch (error) {
-    console.error("Error in getMonthlyFeedingData:", error.message || error);
-    if (error.response) {
-      console.error("Error response status:", error.response.status);
-      console.error("Error response data:", error.response.data);
-    }
+    console.error("Error in getMonthlyFeedingData:", error);
     return [];
   }
 };
 
-// Function to get feeding data for a specific month
 export const getFeedingDataByMonth = async (childId, year, month) => {
   try {
-    console.log(
-      `Getting feeding data for child ID: ${childId} for ${month + 1}/${year}`
-    );
-
-    // Create start date (1st day of month)
+    console.log(`Getting feeding data for ${year}-${month + 1}`);
     const startDate = new Date(year, month, 1);
-
-    // Create end date (last day of month)
     const endDate = new Date(year, month + 1, 0);
+    endDate.setHours(23, 59, 59, 999);
 
     console.log(
-      `Fetching feeding data from ${startDate.toISOString().split("T")[0]} to ${
-        endDate.toISOString().split("T")[0]
-      }`
+      `Month date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
     );
 
     const result = await getFeedingDataByDateRange(childId, startDate, endDate);
     console.log(
-      `Retrieved ${result ? result.length : 0} feeding records for ${
-        month + 1
-      }/${year}`
+      `Month feeding data retrieved: ${result ? result.length : 0} records`
     );
 
-    // Debug the data
-    if (result && result.length > 0) {
-      console.log(`Feeding data for ${month + 1}/${year} sample:`);
-      result.slice(0, 3).forEach((record) => {
+    // If no data found, try getting all data as a fallback
+    if (!result || result.length === 0) {
+      console.log(
+        "No data found for this month, trying to get all feeding data as fallback"
+      );
+      const allData = await getChildFeedingData(childId);
+
+      if (allData && allData.length > 0) {
         console.log(
-          `Record ID: ${record.id}, Timestamp: ${
-            record.timestamp
-          }, Day: ${getDayFromTimestamp(record.timestamp)}`
+          `Got ${allData.length} total feeding records, filtering for month ${
+            month + 1
+          }/${year}`
         );
-      });
+
+        // Filter records for the specified month and year
+        const filteredData = allData.filter((record) => {
+          let recordDate;
+
+          if (record.timestamp) {
+            recordDate = new Date(record.timestamp);
+          } else if (record.date) {
+            recordDate = new Date(record.date);
+          } else {
+            return false;
+          }
+
+          return (
+            recordDate.getFullYear() === year && recordDate.getMonth() === month
+          );
+        });
+
+        console.log(
+          `Filtered to ${filteredData.length} records for month ${
+            month + 1
+          }/${year}`
+        );
+        return filteredData;
+      }
     }
 
     return result || [];
   } catch (error) {
-    console.error(
-      `Error in getFeedingDataByMonth for ${month + 1}/${year}:`,
-      error.message || error
-    );
-    if (error.response) {
-      console.error("Error response status:", error.response.status);
-      console.error("Error response data:", error.response.data);
-    }
+    console.error("Error in getFeedingDataByMonth:", error);
     return [];
   }
 };
 
-// Helper function to format date for display in charts
 export const formatDateForPeriod = (dateString, period) => {
-  // For timestamp format, extract the day directly
   if (
     typeof dateString === "string" &&
     (dateString.includes("T") || dateString.includes(" "))
@@ -415,16 +392,13 @@ export const formatDateForPeriod = (dateString, period) => {
     const day = getDayFromTimestamp(dateString);
 
     if (period === "week") {
-      // For weekly view, we need the day name
       const date = new Date(dateString);
       return date.toLocaleDateString("en-US", { weekday: "short" });
     } else if (period === "month") {
-      // For monthly view, just return the day number
       return day;
     }
   }
 
-  // Fallback to the original implementation
   const date = new Date(dateString);
 
   if (period === "week") {
@@ -436,20 +410,13 @@ export const formatDateForPeriod = (dateString, period) => {
   }
 };
 
-// Also add a debug function to help troubleshoot date issues
 export const debugFeedingData = (feedingData) => {
   if (!feedingData || feedingData.length === 0) {
-    console.log("No feeding data to debug");
     return;
   }
 
-  console.log("=== FEEDING DATA DEBUG ===");
-  console.log(`Total records: ${feedingData.length}`);
-
-  // Group by date based on timestamp
   const dateGroups = {};
   feedingData.forEach((item) => {
-    // Use timestamp to get the day
     const day = getDayFromTimestamp(item.timestamp);
     const dateKey = day || item.date;
 
@@ -459,33 +426,18 @@ export const debugFeedingData = (feedingData) => {
     dateGroups[dateKey].push(item);
   });
 
-  // Log summary by date
-  console.log("Records by date:");
   Object.keys(dateGroups)
     .sort()
     .forEach((date) => {
       const items = dateGroups[date];
-      console.log(`${date}: ${items.length} records`);
 
-      // Count by type
       const breastCount = items.filter((i) => i.type === "breast").length;
       const bottleCount = items.filter((i) => i.type === "bottle").length;
       const solidCount = items.filter((i) => i.type === "solid").length;
 
-      console.log(
-        `  - Breast: ${breastCount}, Bottle: ${bottleCount}, Solid: ${solidCount}`
-      );
-
-      // Log a sample timestamp
       if (items.length > 0) {
-        console.log(`  - Sample timestamp: ${items[0].timestamp}`);
-        console.log(
-          `  - Extracted day: ${getDayFromTimestamp(items[0].timestamp)}`
-        );
       }
     });
-
-  console.log("=== END DEBUG ===");
 };
 
 export const getFeedingSummary = async (childId, date) => {
@@ -496,35 +448,21 @@ export const getFeedingSummary = async (childId, date) => {
       ? date.toISOString().split("T")[0]
       : new Date().toISOString().split("T")[0];
 
-    console.log(
-      `Fetching feeding summary for child ID: ${childId} on ${formattedDate}`
-    );
-    console.log(
-      "API Request: GET /feeding/child/" +
-        childId +
-        "/summary?date=" +
-        formattedDate
-    );
-
     const response = await api.get(
       `/feeding/child/${childId}/summary?date=${formattedDate}`
     );
 
-    console.log("API Response Status:", response.status);
     if (response.data && response.data.data) {
-      console.log("Feeding summary response:", response.data);
       return response.data.data;
     }
 
-    // Return default summary if no data
     return {
       breastFeedings: { count: 0, totalMinutes: 0, leftSide: 0, rightSide: 0 },
       bottleFeedings: { count: 0, totalMl: 0 },
       solidFeedings: { count: 0, totalGrams: 0 },
     };
   } catch (error) {
-    console.log("Error fetching feeding summary:", error.message || error);
-    // Return default summary for any error
+    console.error("Error in getFeedingSummary:", error);
     return {
       breastFeedings: { count: 0, totalMinutes: 0, leftSide: 0, rightSide: 0 },
       bottleFeedings: { count: 0, totalMl: 0 },
@@ -544,36 +482,24 @@ export const saveBreastfeedingData = async (feedingData) => {
       endTime: feedingData.endTime,
       duration: feedingData.duration,
       side: feedingData.side,
-      amount: 0, // Explicitly set to 0 for breastfeeding
+      amount: 0,
       notes: feedingData.notes || "",
       date: feedingData.date || new Date().toISOString().split("T")[0],
       timestamp: feedingData.timestamp || new Date().toISOString(),
     };
 
-    console.log("Saving breastfeeding data to database:", formattedData);
-
     if (feedingData.id) {
-      console.log("API Request: PUT /feeding/" + feedingData.id);
       const response = await api.put(
         `/feeding/${feedingData.id}`,
         formattedData
       );
-      console.log("API Response Status:", response.status);
-      console.log("Update breastfeeding data response:", response.data);
       return createFeedingRecord(response.data.data || response.data);
     } else {
-      console.log("API Request: POST /feeding");
       const response = await api.post("/feeding", formattedData);
-      console.log("API Response Status:", response.status);
-      console.log("Save breastfeeding data response:", response.data);
       return createFeedingRecord(response.data.data || response.data);
     }
   } catch (error) {
-    console.error("Error saving breastfeeding data to database:", error);
-    if (error.response) {
-      console.error("Error response status:", error.response.status);
-      console.error("Error response data:", error.response.data);
-    }
+    console.error("Error in saveBreastfeedingData:", error);
     throw error;
   }
 };
@@ -585,10 +511,10 @@ export const saveBottleFeedingData = async (feedingData) => {
     const formattedData = {
       childId: feedingData.childId,
       type: "bottle",
-      startTime: null, // Explicitly set to null for bottle feeding
-      endTime: null, // Explicitly set to null for bottle feeding
-      duration: 0, // Explicitly set to 0 for bottle feeding
-      side: null, // Explicitly set to null for bottle feeding
+      startTime: null,
+      endTime: null,
+      duration: 0,
+      side: null,
       amount: feedingData.amount,
       unit: feedingData.unit || "ml",
       notes: feedingData.notes || "",
@@ -596,30 +522,18 @@ export const saveBottleFeedingData = async (feedingData) => {
       timestamp: feedingData.timestamp || new Date().toISOString(),
     };
 
-    console.log("Saving bottle feeding data to database:", formattedData);
-
     if (feedingData.id) {
-      console.log("API Request: PUT /feeding/" + feedingData.id);
       const response = await api.put(
         `/feeding/${feedingData.id}`,
         formattedData
       );
-      console.log("API Response Status:", response.status);
-      console.log("Update bottle feeding data response:", response.data);
       return createFeedingRecord(response.data.data || response.data);
     } else {
-      console.log("API Request: POST /feeding");
       const response = await api.post("/feeding", formattedData);
-      console.log("API Response Status:", response.status);
-      console.log("Save bottle feeding data response:", response.data);
       return createFeedingRecord(response.data.data || response.data);
     }
   } catch (error) {
-    console.error("Error saving bottle feeding data to database:", error);
-    if (error.response) {
-      console.error("Error response status:", error.response.status);
-      console.error("Error response data:", error.response.data);
-    }
+    console.error("Error in saveBottleFeedingData:", error);
     throw error;
   }
 };
@@ -631,10 +545,10 @@ export const saveSolidFoodData = async (feedingData) => {
     const formattedData = {
       childId: feedingData.childId,
       type: "solid",
-      startTime: null, // Explicitly set to null for solid food
-      endTime: null, // Explicitly set to null for solid food
-      duration: 0, // Explicitly set to null for solid food
-      side: null, // Explicitly set to null for solid food
+      startTime: null,
+      endTime: null,
+      duration: 0,
+      side: null,
       amount: feedingData.amount,
       unit: feedingData.unit || "g",
       foodType: feedingData.foodType,
@@ -643,30 +557,18 @@ export const saveSolidFoodData = async (feedingData) => {
       timestamp: feedingData.timestamp || new Date().toISOString(),
     };
 
-    console.log("Saving solid food data to database:", formattedData);
-
     if (feedingData.id) {
-      console.log("API Request: PUT /feeding/" + feedingData.id);
       const response = await api.put(
         `/feeding/${feedingData.id}`,
         formattedData
       );
-      console.log("API Response Status:", response.status);
-      console.log("Update solid food data response:", response.data);
       return createFeedingRecord(response.data.data || response.data);
     } else {
-      console.log("API Request: POST /feeding");
       const response = await api.post("/feeding", formattedData);
-      console.log("API Response Status:", response.status);
-      console.log("Save solid food data response:", response.data);
       return createFeedingRecord(response.data.data || response.data);
     }
   } catch (error) {
-    console.error("Error saving solid food data to database:", error);
-    if (error.response) {
-      console.error("Error response status:", error.response.status);
-      console.error("Error response data:", error.response.data);
-    }
+    console.error("Error in saveSolidFoodData:", error);
     throw error;
   }
 };
@@ -675,76 +577,111 @@ export const deleteFeedingData = async (feedingId) => {
   try {
     await ensureToken();
 
-    console.log(`Deleting feeding data with ID: ${feedingId} from database`);
-    console.log("API Request: DELETE /feeding/" + feedingId);
-
     const response = await api.delete(`/feeding/${feedingId}`);
 
-    console.log("API Response Status:", response.status);
-    console.log("Feeding data deleted successfully from database");
     return true;
   } catch (error) {
-    console.error("Error deleting feeding data from database:", error);
-    if (error.response) {
-      console.error("Error response data:", error.response.data);
-      console.error("Error response status:", error.response.status);
-    } else if (error.request) {
-      console.error("Error request:", error.request);
-    }
+    console.error("Error in deleteFeedingData:", error);
     throw error;
   }
 };
 
-// Local storage functions kept for reference but not used
-const FEEDING_STORAGE_KEY = "kindergrow_feeding_data";
-
-const getLocalFeedingData = async (childId) => {
+// Add this debug function at the end of the file
+export const debugWeeklyFeedingData = async (childId) => {
   try {
-    console.log(`Getting local feeding data for child ID: ${childId}`);
-    const jsonValue = await AsyncStorage.getItem(FEEDING_STORAGE_KEY);
-    if (!jsonValue) {
-      console.log("No local feeding data found");
-      return [];
+    console.log("=== DEBUG: Weekly Feeding Data Flow ===");
+
+    const today = new Date();
+    console.log(`Today's date: ${today.toISOString()}`);
+
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 6);
+    startDate.setHours(0, 0, 0, 0);
+
+    const endDate = new Date(today);
+    endDate.setHours(23, 59, 59, 999);
+
+    console.log(
+      `Weekly date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
+    );
+
+    // Get the day names for the last 7 days
+    const dayNames = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(today.getDate() - i);
+      const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+      const dateStr = date.toISOString().split("T")[0];
+      dayNames.push({ day: dayName, date: dateStr });
     }
 
-    const allData = JSON.parse(jsonValue);
-    console.log("All local feeding data:", allData);
-    const filteredData = allData.filter((item) => item.childId === childId);
-    console.log("Filtered local feeding data:", filteredData);
-    return filteredData.map((item) => createFeedingRecord(item));
+    console.log("Expected days in weekly view:", dayNames);
+
+    // Get the actual data
+    const result = await getFeedingDataByDateRange(childId, startDate, endDate);
+    console.log(`Raw weekly feeding data (${result.length} records):`, result);
+
+    // Check which days have data
+    const dataByDay = {};
+    result.forEach((record) => {
+      let recordDate = null;
+
+      if (record.date) {
+        recordDate = record.date;
+      } else if (record.timestamp) {
+        recordDate = record.timestamp.split("T")[0];
+      }
+
+      if (recordDate) {
+        if (!dataByDay[recordDate]) {
+          dataByDay[recordDate] = [];
+        }
+        dataByDay[recordDate].push(record);
+      }
+    });
+
+    console.log("Data grouped by date:", dataByDay);
+
+    // Check if any of the expected days match the data
+    dayNames.forEach(({ day, date }) => {
+      const hasData = dataByDay[date] && dataByDay[date].length > 0;
+      console.log(
+        `${day} (${date}): ${
+          hasData ? dataByDay[date].length + " records" : "No data"
+        }`
+      );
+    });
+
+    // If no data found, try getting all data as a fallback
+    if (result.length === 0) {
+      console.log("No weekly data found, trying to get all feeding data");
+      const allData = await getChildFeedingData(childId);
+      console.log(
+        `Total feeding records for child: ${allData ? allData.length : 0}`
+      );
+
+      if (allData && allData.length > 0) {
+        console.log("Sample of available feeding records:");
+        allData.slice(0, 3).forEach((record, index) => {
+          console.log(`Record ${index + 1}:`, {
+            id: record.id,
+            type: record.type,
+            date: record.date,
+            timestamp: record.timestamp,
+          });
+        });
+      }
+    }
+
+    return result;
   } catch (error) {
-    console.error("Error reading feeding data from storage:", error);
+    console.error("Error in debugWeeklyFeedingData:", error);
     return [];
   }
 };
 
-const saveLocalFeedingData = async (feedingData) => {
-  try {
-    console.log("Saving feeding data to local storage:", feedingData);
-    // Get existing data
-    const jsonValue = await AsyncStorage.getItem(FEEDING_STORAGE_KEY);
-    let allData = jsonValue ? JSON.parse(jsonValue) : [];
-    console.log("Existing local feeding data:", allData);
-
-    // Check if we're updating an existing record
-    if (feedingData.id) {
-      console.log(`Updating local feeding data with ID: ${feedingData.id}`);
-      allData = allData.map((item) =>
-        item.id === feedingData.id ? { ...feedingData } : item
-      );
-    } else {
-      // Generate a unique ID for new records
-      feedingData.id = Date.now().toString();
-      console.log(`Created new local feeding data with ID: ${feedingData.id}`);
-      allData.push(feedingData);
-    }
-
-    // Save back to storage
-    await AsyncStorage.setItem(FEEDING_STORAGE_KEY, JSON.stringify(allData));
-    console.log("Updated local feeding data:", allData);
-    return createFeedingRecord(feedingData);
-  } catch (error) {
-    console.error("Error saving feeding data to storage:", error);
-    return null;
-  }
-};
+// Make it available globally for console testing
+if (typeof window !== "undefined") {
+  window.debugWeeklyFeedingData = debugWeeklyFeedingData;
+  window.getChildFeedingData = getChildFeedingData;
+}

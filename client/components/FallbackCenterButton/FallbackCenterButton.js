@@ -7,7 +7,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-// This is a fallback component in case you don't want to install react-native-linear-gradient
 export default function FallbackCenterButton({
   isFocused,
   onPress,
