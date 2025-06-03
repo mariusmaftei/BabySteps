@@ -56,9 +56,21 @@ const Sleep = sequelize.define(
         "Percentage difference from recommended sleep hours (can be negative or positive)",
     },
     date: {
-      type: DataTypes.DATEONLY,
+      type: DataTypes.STRING,
       allowNull: false,
-      defaultValue: DataTypes.NOW,
+      defaultValue: "2025-01-01 00:00:00", // Default datetime string value
+      comment:
+        "Datetime string in YYYY-MM-DD HH:MM:SS format sent from client (Romania local time)",
+      validate: {
+        len: {
+          args: [19, 19],
+          msg: "Date must be exactly 19 characters (YYYY-MM-DD HH:MM:SS)",
+        },
+        is: {
+          args: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+          msg: "Date must be in YYYY-MM-DD HH:MM:SS format",
+        },
+      },
     },
     notes: {
       type: DataTypes.TEXT,

@@ -2,25 +2,40 @@ import Sleep from "../models/Sleep.js";
 import Child from "../models/Child.js";
 import { Op } from "sequelize";
 
-// Helper function to get today's date in Romania timezone (YYYY-MM-DD format)
-const getTodayLocalDate = () => {
+// Helper function to get current Romanian datetime (YYYY-MM-DD HH:MM:SS format)
+const getRomaniaDateTime = () => {
   const now = new Date();
-  // Convert to Romania timezone (Europe/Bucharest)
-  const romaniaDate = new Date(
-    now.toLocaleString("en-US", { timeZone: "Europe/Bucharest" })
-  );
+  // Convert to Romania timezone (Europe/Bucharest) - UTC+3 during summer
+  const romaniaOffset = 3 * 60 * 60 * 1000; // UTC+3 for Romania (EEST)
+  const romaniaTime = new Date(now.getTime() + romaniaOffset);
 
-  const year = romaniaDate.getFullYear();
-  const month = String(romaniaDate.getMonth() + 1).padStart(2, "0");
-  const day = String(romaniaDate.getDate()).padStart(2, "0");
+  const year = romaniaTime.getFullYear();
+  const month = String(romaniaTime.getMonth() + 1).padStart(2, "0");
+  const day = String(romaniaTime.getDate()).padStart(2, "0");
+  const hours = String(romaniaTime.getHours()).padStart(2, "0");
+  const minutes = String(romaniaTime.getMinutes()).padStart(2, "0");
+  const seconds = String(romaniaTime.getSeconds()).padStart(2, "0");
+
+  const romaniaDatetime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 
   console.log(
-    `Romania local date: ${year}-${month}-${day} (UTC: ${
-      now.toISOString().split("T")[0]
-    })`
+    `Romania datetime: ${romaniaDatetime} (UTC: ${now.toISOString()})`
   );
 
-  return `${year}-${month}-${day}`;
+  return romaniaDatetime;
+};
+
+// Helper function to get today's date in Romania timezone (YYYY-MM-DD format)
+const getTodayLocalDate = () => {
+  const romaniaDatetime = getRomaniaDateTime();
+  return romaniaDatetime.split(" ")[0]; // Extract just the date part
+};
+
+// Helper function to convert date to datetime if needed
+const ensureDateTime = (dateStr) => {
+  if (!dateStr) return getRomaniaDateTime();
+  if (dateStr.length === 10) return `${dateStr} 00:00:00`; // Convert YYYY-MM-DD to YYYY-MM-DD 00:00:00
+  return dateStr; // Already datetime format
 };
 
 export const createSleep = async (req, res) => {
@@ -52,28 +67,34 @@ export const createSleep = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Use the date string as-is from the client (no conversion)
-    const dateString = date || getTodayLocalDate();
+    // Ensure we have a full datetime string
+    const dateTimeString = ensureDateTime(date);
 
-    const existingRecord = await Sleep.findOne({
+    // For finding existing records, we need to match just the date part
+    const datePart = dateTimeString.split(" ")[0];
+
+    const existingRecords = await Sleep.findAll({
       where: {
         childId,
-        date: dateString,
+        date: {
+          [Op.like]: `${datePart}%`, // Match records with the same date part
+        },
       },
     });
 
     let sleep;
 
-    if (existingRecord) {
+    if (existingRecords.length > 0) {
       console.log(
         "Updating existing sleep record in database:",
-        existingRecord.id
+        existingRecords[0].id
       );
+      const existingRecord = existingRecords[0];
       existingRecord.napHours = napHours;
       existingRecord.nightHours = nightHours;
       existingRecord.notes = notes;
       existingRecord.sleepProgress = sleepProgress;
-      existingRecord.date = dateString;
+      existingRecord.date = dateTimeString;
       sleep = await existingRecord.save();
       console.log("Sleep record updated successfully in database:", sleep.id);
       return res.status(200).json(sleep);
@@ -82,7 +103,7 @@ export const createSleep = async (req, res) => {
         childId,
         napHours,
         nightHours,
-        date: dateString,
+        date: dateTimeString,
         notes,
         sleepProgress,
       });
@@ -90,7 +111,7 @@ export const createSleep = async (req, res) => {
         childId,
         napHours,
         nightHours,
-        date: dateString,
+        date: dateTimeString,
         notes,
         sleepProgress,
       });
@@ -145,7 +166,7 @@ export const updateSleep = async (req, res) => {
 
     sleep.napHours = napHours !== undefined ? napHours : sleep.napHours;
     sleep.nightHours = nightHours !== undefined ? nightHours : sleep.nightHours;
-    sleep.date = date || sleep.date; // Use the date string as-is from client
+    sleep.date = ensureDateTime(date); // Ensure we have a full datetime string
     sleep.notes = notes !== undefined ? notes : sleep.notes;
     sleep.sleepProgress =
       sleepProgress !== undefined ? sleepProgress : sleep.sleepProgress;
@@ -166,6 +187,8 @@ export const getSleepByChild = async (req, res) => {
   try {
     const { childId } = req.params;
 
+    console.log(`Fetching all sleep records for child ${childId}`);
+
     const child = await Child.findOne({
       where: { id: childId, userId: req.user.id },
     });
@@ -180,6 +203,11 @@ export const getSleepByChild = async (req, res) => {
       where: { childId },
       order: [["date", "DESC"]],
     });
+
+    console.log(
+      `Found ${sleepRecords.length} sleep records for child ${childId}:`,
+      sleepRecords
+    );
 
     return res.status(200).json(sleepRecords);
   } catch (error) {
@@ -266,6 +294,10 @@ export const getSleepByDateRange = async (req, res) => {
     const { childId } = req.params;
     const { startDate, endDate } = req.query;
 
+    console.log(
+      `Fetching sleep records for child ${childId} from ${startDate} to ${endDate}`
+    );
+
     const child = await Child.findOne({
       where: { id: childId, userId: req.user.id },
     });
@@ -278,17 +310,28 @@ export const getSleepByDateRange = async (req, res) => {
 
     const dateFilter = {};
     if (startDate && endDate) {
-      // Since date is now a string, we can use string comparison
+      // Ensure we have full datetime strings for comparison
+      const startDateTime =
+        startDate.length === 10 ? `${startDate} 00:00:00` : startDate;
+      const endDateTime =
+        endDate.length === 10 ? `${endDate} 23:59:59` : endDate;
+
+      console.log(`Using datetime range: ${startDateTime} to ${endDateTime}`);
+
       dateFilter.date = {
-        [Op.between]: [startDate, endDate],
+        [Op.between]: [startDateTime, endDateTime],
       };
     } else if (startDate) {
+      const startDateTime =
+        startDate.length === 10 ? `${startDate} 00:00:00` : startDate;
       dateFilter.date = {
-        [Op.gte]: startDate,
+        [Op.gte]: startDateTime,
       };
     } else if (endDate) {
+      const endDateTime =
+        endDate.length === 10 ? `${endDate} 23:59:59` : endDate;
       dateFilter.date = {
-        [Op.lte]: endDate,
+        [Op.lte]: endDateTime,
       };
     }
 
@@ -299,6 +342,11 @@ export const getSleepByDateRange = async (req, res) => {
       },
       order: [["date", "DESC"]],
     });
+
+    console.log(
+      `Found ${sleepRecords.length} sleep records in date range:`,
+      sleepRecords
+    );
 
     return res.status(200).json(sleepRecords);
   } catch (error) {
@@ -326,21 +374,34 @@ export const getTodaySleep = async (req, res) => {
     // Get today's date in local format (YYYY-MM-DD)
     const today = getTodayLocalDate();
 
-    const sleepRecord = await Sleep.findOne({
+    console.log(
+      `Looking for today's sleep record for child ${childId} on date: ${today}`
+    );
+
+    // Find sleep records with today's date (matching just the date part)
+    const sleepRecords = await Sleep.findAll({
       where: {
         childId,
-        date: today,
+        date: {
+          [Op.like]: `${today}%`, // Match records with today's date part
+        },
       },
+      order: [["date", "DESC"]],
     });
 
-    if (!sleepRecord) {
-      // Return a default record with today's date
+    console.log(
+      `Found ${sleepRecords.length} sleep records for today:`,
+      sleepRecords
+    );
+
+    if (sleepRecords.length === 0) {
+      // Return a default record with today's datetime
       const defaultRecord = {
         id: null,
         childId,
         napHours: 0,
         nightHours: 0,
-        date: today,
+        date: getRomaniaDateTime(),
         notes: "",
         totalHours: 0,
         sleepProgress: 0,
@@ -350,7 +411,7 @@ export const getTodaySleep = async (req, res) => {
       return res.status(200).json(defaultRecord);
     }
 
-    return res.status(200).json(sleepRecord);
+    return res.status(200).json(sleepRecords[0]);
   } catch (error) {
     console.error("Error fetching today's sleep record:", error);
     return res
@@ -396,21 +457,25 @@ export const getCurrentSleepData = async (req, res) => {
       `Getting sleep data for child ${childId} for date ${targetDate} (current hour: ${currentHour})`
     );
 
-    const sleepRecord = await Sleep.findOne({
+    // Find sleep records with target date (matching just the date part)
+    const sleepRecords = await Sleep.findAll({
       where: {
         childId,
-        date: targetDate,
+        date: {
+          [Op.like]: `${targetDate}%`, // Match records with target date part
+        },
       },
+      order: [["date", "DESC"]],
     });
 
-    if (!sleepRecord) {
+    if (sleepRecords.length === 0) {
       // Return a default record
       const defaultRecord = {
         id: null,
         childId,
         napHours: 0,
         nightHours: 0,
-        date: targetDate,
+        date: `${targetDate} 00:00:00`,
         notes: "",
         totalHours: 0,
         sleepProgress: 0,
@@ -423,7 +488,7 @@ export const getCurrentSleepData = async (req, res) => {
     }
 
     return res.status(200).json({
-      ...sleepRecord.toJSON(),
+      ...sleepRecords[0].toJSON(),
       targetDate: targetDate,
       isBeforeNoon: currentHour < 12,
     });
@@ -449,6 +514,7 @@ export const autoFillSleepRecords = async (req, res) => {
     const yesterdayFormatted = `${yesterday.getFullYear()}-${String(
       yesterday.getMonth() + 1
     ).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+    const yesterdayDateTime = `${yesterdayFormatted} 12:00:00`; // Set a default time
 
     const children = await Child.findAll();
     console.log(
@@ -458,14 +524,17 @@ export const autoFillSleepRecords = async (req, res) => {
     let autoFilledCount = 0;
 
     for (const child of children) {
-      const existingRecord = await Sleep.findOne({
+      // Check if there's any record for yesterday (matching just the date part)
+      const existingRecords = await Sleep.findAll({
         where: {
           childId: child.id,
-          date: yesterdayFormatted,
+          date: {
+            [Op.like]: `${yesterdayFormatted}%`, // Match records with yesterday's date part
+          },
         },
       });
 
-      if (!existingRecord) {
+      if (existingRecords.length === 0) {
         console.log(
           `No sleep record found for child ${child.id} on ${yesterdayFormatted}, creating auto-filled record`
         );
@@ -502,7 +571,7 @@ export const autoFillSleepRecords = async (req, res) => {
           childId: child.id,
           napHours: recommendedNapHours,
           nightHours: recommendedNightHours,
-          date: yesterdayFormatted,
+          date: yesterdayDateTime,
           notes: "Auto-filled with recommended values",
           autoFilled: true,
           sleepProgress: 0,

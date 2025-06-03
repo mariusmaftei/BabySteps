@@ -269,9 +269,28 @@ function ActivityScreen({ navigation }) {
 
       // Fetch sleep data
       const sleepRecords = await fetchSleepRecords(childId);
+      console.log("📊 ActivityScreen - Sleep records fetched:", sleepRecords);
       const today = new Date().toISOString().split("T")[0];
-      const todayRecord = sleepRecords.find((record) => record.date === today);
+      console.log("📊 ActivityScreen - Today's date:", today);
+
+      // Extract date from datetime string for comparison
+      const todayRecord = sleepRecords.find((record) => {
+        const recordDate = record.date ? record.date.split(" ")[0] : null;
+        console.log(
+          "📊 ActivityScreen - Comparing record date:",
+          recordDate,
+          "with today:",
+          today
+        );
+        return recordDate === today;
+      });
+
+      console.log(
+        "📊 ActivityScreen - Today's sleep record found:",
+        todayRecord
+      );
       const sleepPercentage = todayRecord?.sleepProgress || 0;
+      console.log("📊 ActivityScreen - Sleep percentage:", sleepPercentage);
 
       // Fetch vaccination data
       const vaccProgress = await VaccinationService.getVaccinationProgress(

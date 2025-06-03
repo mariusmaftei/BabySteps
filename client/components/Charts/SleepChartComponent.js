@@ -20,11 +20,12 @@ const SleepChartComponent = ({
   error,
   chartData,
   processedData,
+  rawSleepData, // Add this new prop
   theme,
   categoryColor,
   timePeriod,
   getChartConfig,
-  onMonthChange, // New prop for handling month changes
+  onMonthChange,
 }) => {
   // State to track the current month
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -45,6 +46,16 @@ const SleepChartComponent = ({
     "November",
     "December",
   ];
+
+  // Helper function to extract date from datetime string
+  const extractDateFromDateTime = (dateTimeString) => {
+    if (!dateTimeString) return null;
+    // Handle both formats: "2025-06-03" and "2025-06-03 12:28:14"
+    if (dateTimeString.includes(" ")) {
+      return dateTimeString.split(" ")[0]; // Extract just the date part
+    }
+    return dateTimeString;
+  };
 
   // Function to handle month navigation
   const navigateMonth = (direction) => {
@@ -87,6 +98,191 @@ const SleepChartComponent = ({
     }
   }, [timePeriod]);
 
+  // Process raw sleep data for charts
+  const processRawSleepData = useCallback(() => {
+    console.log("🔄 Processing raw sleep data:", rawSleepData);
+
+    if (
+      !rawSleepData ||
+      !Array.isArray(rawSleepData) ||
+      rawSleepData.length === 0
+    ) {
+      console.log("❌ No raw sleep data available");
+      return null;
+    }
+
+    // Get date range based on time period
+    const now = new Date();
+    let startDate,
+      endDate,
+      labels = [];
+
+    if (timePeriod === "week") {
+      // Get current week (last 7 days)
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 6);
+      endDate = new Date(now);
+
+      // Generate labels for the week
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
+        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        labels.push(dayNames[date.getDay()]);
+      }
+    } else {
+      // Monthly view - use current month or selected month
+      startDate = new Date(currentYear, currentMonth, 1);
+      endDate = new Date(currentYear, currentMonth + 1, 0);
+
+      // Generate labels for the month
+      const daysInMonth = endDate.getDate();
+      for (let i = 1; i <= daysInMonth; i++) {
+        labels.push(i.toString());
+      }
+    }
+
+    console.log("📅 Date range:", { startDate, endDate, labels });
+
+    // Filter data for the current period
+    const filteredData = rawSleepData.filter((item) => {
+      const itemDate = extractDateFromDateTime(item.date);
+      if (!itemDate) return false;
+
+      const date = new Date(itemDate);
+      return date >= startDate && date <= endDate;
+    });
+
+    console.log("🔍 Filtered sleep data:", filteredData);
+
+    // Initialize arrays for chart data
+    const napHours = new Array(labels.length).fill(0);
+    const nightHours = new Array(labels.length).fill(0);
+    const totalSleepHours = new Array(labels.length).fill(0);
+    const sleepProgress = new Array(labels.length).fill(0);
+    const dates = [];
+
+    // Generate date strings for each label
+    if (timePeriod === "week") {
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
+        dates.push(date.toISOString().split("T")[0]);
+      }
+    } else {
+      for (let i = 1; i <= labels.length; i++) {
+        const date = new Date(currentYear, currentMonth, i);
+        dates.push(date.toISOString().split("T")[0]);
+      }
+    }
+
+    // Map filtered data to chart arrays
+    filteredData.forEach((item) => {
+      const itemDate = extractDateFromDateTime(item.date);
+      const dateIndex = dates.findIndex((date) => date === itemDate);
+
+      if (dateIndex !== -1) {
+        napHours[dateIndex] = Number.parseFloat(item.napHours) || 0;
+        nightHours[dateIndex] = Number.parseFloat(item.nightHours) || 0;
+        totalSleepHours[dateIndex] = Number.parseFloat(item.totalHours) || 0;
+        sleepProgress[dateIndex] = Number.parseInt(item.sleepProgress) || 0;
+
+        console.log(`📊 Mapped data for ${itemDate} (index ${dateIndex}):`, {
+          nap: napHours[dateIndex],
+          night: nightHours[dateIndex],
+          total: totalSleepHours[dateIndex],
+          progress: sleepProgress[dateIndex],
+        });
+      }
+    });
+
+    // Calculate averages
+    const totalDaysWithData = totalSleepHours.filter(
+      (hours) => hours > 0
+    ).length;
+    const averageTotalSleepHours =
+      totalDaysWithData > 0
+        ? (
+            totalSleepHours.reduce((sum, hours) => sum + hours, 0) /
+            totalDaysWithData
+          ).toFixed(1)
+        : "0.0";
+
+    const averageSleepProgress =
+      totalDaysWithData > 0
+        ? Math.round(
+            sleepProgress.reduce((sum, progress) => sum + progress, 0) /
+              totalDaysWithData
+          )
+        : 0;
+
+    const result = {
+      labels,
+      dates,
+      napHours,
+      nightHours,
+      totalSleepHours,
+      sleepProgress,
+      averageTotalSleepHours,
+      averageSleepProgress,
+      trendText:
+        averageSleepProgress > 0
+          ? `+${averageSleepProgress}%`
+          : averageSleepProgress < 0
+          ? `${averageSleepProgress}%`
+          : "Stable",
+    };
+
+    console.log("✅ Final processed data:", result);
+    return result;
+  }, [rawSleepData, timePeriod, currentMonth, currentYear]);
+
+  // Use processed data if rawSleepData is available, otherwise use the passed processedData
+  const finalProcessedData = rawSleepData
+    ? processRawSleepData()
+    : processedData;
+
+  // Generate chart data from processed sleep data
+  const generateChartData = useCallback(() => {
+    const processed = finalProcessedData;
+    if (!processed) {
+      console.log("❌ No processed data for chart generation");
+      return null;
+    }
+
+    const { labels, napHours, nightHours, totalSleepHours } = processed;
+
+    // Check if we have any data
+    const hasData = totalSleepHours.some((hours) => hours > 0);
+    if (!hasData) {
+      console.log("❌ No sleep data found for chart");
+      return null;
+    }
+
+    console.log("📊 Generating chart data with:", {
+      labels,
+      totalSleepHours,
+      napHours,
+      nightHours,
+    });
+
+    return {
+      labels,
+      datasets: [
+        {
+          data: napHours,
+          color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`, // Orange for naps
+          strokeWidth: 3,
+        },
+        {
+          data: nightHours,
+          color: (opacity = 1) => `rgba(52, 152, 219, ${opacity})`, // Blue for night sleep
+          strokeWidth: 3,
+        },
+      ],
+    };
+  }, [finalProcessedData]);
+
   const renderCustomSleepChart = useCallback(() => {
     if (isLoading) {
       return (
@@ -108,8 +304,13 @@ const SleepChartComponent = ({
       );
     }
 
-    // Ensure chartData has valid datasets
-    if (!chartData || !chartData.datasets || !chartData.datasets.length) {
+    // Generate chart data from processed sleep data
+    const generatedChartData = generateChartData();
+    if (
+      !generatedChartData ||
+      !generatedChartData.datasets ||
+      !generatedChartData.datasets.length
+    ) {
       return (
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: theme.text }]}>
@@ -152,7 +353,7 @@ const SleepChartComponent = ({
     };
 
     // Remove the datasets legend property if it exists
-    const modifiedChartData = { ...chartData };
+    const modifiedChartData = { ...generatedChartData };
     if (modifiedChartData.datasets) {
       modifiedChartData.datasets = modifiedChartData.datasets.map((dataset) => {
         const newDataset = { ...dataset };
@@ -193,11 +394,11 @@ const SleepChartComponent = ({
   }, [
     isLoading,
     error,
-    chartData,
     theme,
     categoryColor,
     getChartConfig,
     timePeriod,
+    generateChartData,
   ]);
 
   // Month navigation controls
@@ -230,7 +431,7 @@ const SleepChartComponent = ({
   };
 
   const renderDailySleepSummary = useCallback(() => {
-    if (!processedData) return null;
+    if (!finalProcessedData) return null;
 
     const {
       labels,
@@ -239,7 +440,7 @@ const SleepChartComponent = ({
       nightHours,
       totalSleepHours,
       sleepProgress,
-    } = processedData;
+    } = finalProcessedData;
     const sunnyColor = "#FF9500"; // Same color as in SleepScreen.js
 
     // Filter to only include days with actual sleep data
@@ -437,14 +638,14 @@ const SleepChartComponent = ({
         })}
       </View>
     );
-  }, [processedData, theme, timePeriod]);
+  }, [finalProcessedData, theme, timePeriod]);
 
   return (
     <>
       {renderMonthNavigation()}
       {renderCustomSleepChart()}
 
-      {processedData && (
+      {finalProcessedData && (
         <View>
           <View style={[styles.statsContainer, { borderColor: theme.border }]}>
             <View style={styles.statItem}>
@@ -452,7 +653,7 @@ const SleepChartComponent = ({
                 Average Sleep
               </Text>
               <Text style={[styles.statValue, { color: theme.text }]}>
-                {processedData.averageTotalSleepHours} hrs
+                {finalProcessedData.averageTotalSleepHours} hrs
               </Text>
             </View>
             <View style={styles.statItem}>
@@ -460,7 +661,7 @@ const SleepChartComponent = ({
                 Average Progress
               </Text>
               <Text style={[styles.statValue, { color: theme.text }]}>
-                {processedData.averageSleepProgress}%
+                {finalProcessedData.averageSleepProgress}%
               </Text>
             </View>
             <View style={styles.statItem}>
@@ -468,7 +669,7 @@ const SleepChartComponent = ({
                 Trend
               </Text>
               <Text style={[styles.statValue, { color: theme.text }]}>
-                {processedData.trendText}
+                {finalProcessedData.trendText}
               </Text>
             </View>
           </View>
@@ -478,9 +679,9 @@ const SleepChartComponent = ({
               { color: theme.textSecondary, borderColor: theme.border },
             ]}
           >
-            {processedData.trendText.includes("+")
+            {finalProcessedData.trendText.includes("+")
               ? "Your baby is sleeping better than before! Keep up the good work!"
-              : processedData.trendText.includes("-")
+              : finalProcessedData.trendText.includes("-")
               ? "Your baby is sleeping a little less than before. Try to establish a consistent bedtime routine."
               : "Your baby's sleep pattern is stable. Consistency is key!"}
           </Text>

@@ -23,6 +23,7 @@ import {
   updateSleepData,
   getCurrentSleepData,
   getTodaySleepData,
+  getLocalDateTimeString,
 } from "../../../services/sleep-service";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ChildInfoCard from "../../../components/UI/Cards/ChildInfoCard";
@@ -42,9 +43,7 @@ const SleepScreen = () => {
   const [nightHours, setNightHours] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const [currentDate, setCurrentDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [currentDate, setCurrentDate] = useState(getLocalDateTimeString());
   const [customTotalHours, setCustomTotalHours] = useState(0);
   const [showingYesterdayData, setShowingYesterdayData] = useState(false);
   const [isEditMode, setIsEditMode] = useState(true);
@@ -71,7 +70,11 @@ const SleepScreen = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    // Extract just the date part if it's a datetime string
+    const datePart = dateString.includes(" ")
+      ? dateString.split(" ")[0]
+      : dateString;
+    const date = new Date(datePart);
     return date.toLocaleDateString("en-US", {
       month: "2-digit",
       day: "2-digit",
@@ -262,7 +265,7 @@ const SleepScreen = () => {
       if (!Array.isArray(history) || history.length === 0) {
         console.log("No sleep history found, creating default record");
         setIsFirstRecord(true);
-        const today = new Date().toISOString().split("T")[0];
+        const today = getLocalDateTimeString();
 
         const defaultRecord = {
           id: null,
@@ -344,7 +347,7 @@ const SleepScreen = () => {
             setCurrentDate(
               currentData.date ||
                 currentData.targetDate ||
-                new Date().toISOString().split("T")[0]
+                getLocalDateTimeString()
             );
             updateTotalHours(
               currentData.napHours.toString(),
@@ -413,7 +416,7 @@ const SleepScreen = () => {
   };
 
   const resetForm = () => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalDateTimeString();
 
     setNapHours("");
     setNightHours("");
@@ -480,19 +483,37 @@ const SleepScreen = () => {
   };
 
   const handleSaveSleepData = async () => {
+    console.log("=== SAVE SLEEP DATA DEBUG ===");
+    console.log("Current child ID:", currentChildId);
+    console.log("Nap hours:", napHours);
+    console.log("Night hours:", nightHours);
+    console.log("Notes:", notes);
+    console.log("Selected record:", selectedRecord);
+    console.log("Is edit mode:", isEditMode);
+
     if (!currentChildId) {
       Alert.alert("Error", "No child selected");
       return;
     }
 
-    if (
-      isNaN(Number.parseFloat(napHours)) ||
-      isNaN(Number.parseFloat(nightHours))
-    ) {
-      Alert.alert(
-        "Invalid Input",
-        "Please enter valid numbers for sleep hours"
-      );
+    // Validate input values
+    const napValue = Number.parseFloat(napHours) || 0;
+    const nightValue = Number.parseFloat(nightHours) || 0;
+
+    console.log("Parsed values - Nap:", napValue, "Night:", nightValue);
+
+    if (napValue < 0 || nightValue < 0) {
+      Alert.alert("Invalid Input", "Sleep hours cannot be negative");
+      return;
+    }
+
+    if (napValue > 24 || nightValue > 24) {
+      Alert.alert("Invalid Input", "Sleep hours cannot exceed 24 hours");
+      return;
+    }
+
+    if (napValue === 0 && nightValue === 0) {
+      Alert.alert("Invalid Input", "Please enter at least some sleep hours");
       return;
     }
 
@@ -503,39 +524,32 @@ const SleepScreen = () => {
 
     setSaving(true);
     try {
-      console.log("Current child ID:", currentChildId);
-      console.log("Selected record:", selectedRecord);
-
       const currentPercentage = calculateSleepPercentage();
 
       const sleepData = {
         id: selectedRecord?.id,
         childId: currentChildId,
-        napHours: Number.parseFloat(napHours) || 0,
-        nightHours: Number.parseFloat(nightHours) || 0,
-        date: currentDate,
-        notes: notes,
+        napHours: napValue,
+        nightHours: nightValue,
+        notes: notes.trim(),
         sleepProgress: currentPercentage,
       };
 
-      console.log("Sleep data prepared for saving to database:", sleepData);
+      console.log("Sleep data prepared for saving:", sleepData);
 
       let result;
       if (selectedRecord?.id) {
-        console.log(
-          "Updating existing record in database with ID:",
-          selectedRecord.id
-        );
+        console.log("Updating existing record with ID:", selectedRecord.id);
         result = await updateSleepData(sleepData);
       } else {
-        console.log("Creating new sleep record in database");
+        console.log("Creating new sleep record");
         result = await saveSleepData(sleepData);
       }
 
-      console.log("Database save operation completed. Result:", result);
+      console.log("Save operation result:", result);
 
       if (result) {
-        Alert.alert("Success", "Sleep data saved successfully to database");
+        Alert.alert("Success", "Sleep data saved successfully!");
 
         // Store the saved record to use directly instead of fetching
         setJustSaved(true);
@@ -566,13 +580,13 @@ const SleepScreen = () => {
 
         setIsFirstRecord(false);
       } else {
-        Alert.alert("Error", "Failed to save sleep data to database");
+        Alert.alert("Error", "Failed to save sleep data");
       }
     } catch (error) {
       console.error("Error in handleSaveSleepData:", error);
       Alert.alert(
-        "Database Error",
-        "Failed to save sleep data to database. Please check your connection and try again."
+        "Save Error",
+        `Failed to save sleep data: ${error.message || "Unknown error"}`
       );
     } finally {
       setSaving(false);
@@ -853,6 +867,31 @@ const SleepScreen = () => {
                     </View>
                   </View>
                 </View>
+
+                <View style={styles.notesContainer}>
+                  <Text
+                    style={[styles.inputLabel, { color: theme.textSecondary }]}
+                  >
+                    Notes (optional)
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.notesInput,
+                      {
+                        borderColor: theme.borderLight,
+                        backgroundColor: theme.backgroundSecondary,
+                        color: theme.text,
+                      },
+                    ]}
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="Add any notes about sleep..."
+                    placeholderTextColor={theme.textTertiary}
+                    multiline
+                    numberOfLines={3}
+                    editable={isEditMode}
+                  />
+                </View>
               </>
             ) : (
               <>
@@ -918,11 +957,32 @@ const SleepScreen = () => {
                     </View>
                   </View>
                 </View>
+
+                {notes && (
+                  <View style={styles.notesDisplay}>
+                    <Text
+                      style={[
+                        styles.inputLabel,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      Notes:
+                    </Text>
+                    <Text style={[styles.notesText, { color: theme.text }]}>
+                      {notes}
+                    </Text>
+                  </View>
+                )}
               </>
             )}
 
             <TouchableOpacity
-              style={[styles.saveButton, { backgroundColor: theme.primary }]}
+              style={[
+                styles.saveButton,
+                {
+                  backgroundColor: saving ? theme.textSecondary : theme.primary,
+                },
+              ]}
               onPress={handleSaveSleepData}
               disabled={saving}
             >
@@ -1516,6 +1576,29 @@ const styles = StyleSheet.create({
   inputUnit: {
     fontSize: 14,
     marginLeft: 4,
+  },
+  notesContainer: {
+    marginBottom: 16,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 16,
+    textAlignVertical: "top",
+    minHeight: 80,
+  },
+  notesDisplay: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: "rgba(0, 0, 0, 0.03)",
+    borderRadius: 8,
+  },
+  notesText: {
+    fontSize: 14,
+    marginTop: 4,
+    lineHeight: 20,
   },
   saveButton: {
     flexDirection: "row",

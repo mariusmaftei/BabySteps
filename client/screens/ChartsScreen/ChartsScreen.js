@@ -1411,8 +1411,7 @@ export default function ChartsScreen({ navigation }) {
             timePeriod={timePeriod}
             getChartConfig={getChartConfig}
             onMonthChange={handleSleepMonthChange}
-            currentMonth={selectedMonth}
-            currentYear={selectedYear}
+            rawSleepData={sleepData} // Add this line to pass the raw sleep data
           />
         );
       case "Diaper":
