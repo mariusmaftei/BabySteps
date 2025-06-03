@@ -76,10 +76,16 @@ export default function DiaperScreen({ navigation }) {
       const data = await getDiaperChanges(currentChild.id);
 
       if (Array.isArray(data)) {
-        const processedData = data.map((change) => ({
-          ...change,
-          date: new Date(change.date),
-        }));
+        const processedData = data.map((change) => {
+          // Convert UTC date back to Romanian timezone for display (UTC+3 during DST)
+          const utcDate = new Date(change.date);
+          const romanianDate = new Date(utcDate.getTime() + 3 * 60 * 60 * 1000); // Add 3 hours for Romania DST
+
+          return {
+            ...change,
+            date: romanianDate,
+          };
+        });
         setDiaperChanges(processedData);
       } else {
         console.error("Expected array of diaper changes, got:", data);
@@ -250,8 +256,15 @@ export default function DiaperScreen({ navigation }) {
     try {
       setSubmitting(true);
 
+      // Create a date object that represents Romanian local time
+      const romanianDate = new Date(changeDate);
+
+      // Log for debugging
+      console.log("Original date:", changeDate);
+      console.log("Romanian date being sent:", romanianDate);
+
       const diaperData = {
-        date: changeDate,
+        date: romanianDate, // Send as Date object, will be handled in service
         type: selectedType,
         color: needsColorAndConsistency ? selectedColor : null,
         consistency: needsColorAndConsistency ? selectedConsistency : null,
