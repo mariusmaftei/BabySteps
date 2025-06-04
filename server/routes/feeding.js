@@ -4,8 +4,8 @@ import { protect } from "../middleware/auth.js";
 import {
   createFeeding,
   deleteFeeding,
-  getFeedingById,
   getFeedingsByChildId,
+  getFeedingsByDate,
   getFeedingsByDateRange,
   getFeedingSummary,
   getTodayFeedings,
@@ -26,6 +26,8 @@ feedingRoute.get("/child/:childId", getFeedingsByChildId);
 // Get today's feeding records for a specific child
 feedingRoute.get("/child/:childId/today", getTodayFeedings);
 
+feedingRoute.get("/child/:childId/date/:date", getFeedingsByDate);
+
 // Get feeding records for a specific child within a date range
 feedingRoute.get("/child/:childId/date-range", getFeedingsByDateRange);
 
@@ -33,7 +35,6 @@ feedingRoute.get("/child/:childId/date-range", getFeedingsByDateRange);
 feedingRoute.get("/child/:childId/summary", getFeedingSummary);
 
 // Get a specific feeding record
-feedingRoute.get("/:id", getFeedingById);
 
 // Update a feeding record
 feedingRoute.put("/:id", updateFeeding);

@@ -2,6 +2,42 @@ import Feeding from "../models/Feeding.js";
 import Child from "../models/Child.js";
 import { Op } from "sequelize";
 
+// Helper function to get current Romanian datetime
+const getRomaniaDateTime = () => {
+  const now = new Date();
+  const romaniaOffset = 3 * 60 * 60 * 1000; // UTC+3 for Romania (EEST)
+  const romaniaTime = new Date(
+    now.getTime() + now.getTimezoneOffset() * 60 * 1000 + romaniaOffset
+  );
+
+  const year = romaniaTime.getFullYear();
+  const month = String(romaniaTime.getMonth() + 1).padStart(2, "0");
+  const day = String(romaniaTime.getDate()).padStart(2, "0");
+  const hours = String(romaniaTime.getHours()).padStart(2, "0");
+  const minutes = String(romaniaTime.getMinutes()).padStart(2, "0");
+  const seconds = String(romaniaTime.getSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+// Helper function to get Romania date range for a specific date
+const getRomaniaDateRange = (dateStr) => {
+  // If dateStr is just a date (YYYY-MM-DD), create full day range
+  if (dateStr.length === 10) {
+    return {
+      start: `${dateStr} 00:00:00`,
+      end: `${dateStr} 23:59:59`,
+    };
+  }
+
+  // If it's already a datetime, extract the date part and create range
+  const datePart = dateStr.split(" ")[0];
+  return {
+    start: `${datePart} 00:00:00`,
+    end: `${datePart} 23:59:59`,
+  };
+};
+
 // Create a new feeding record
 export const createFeeding = async (req, res) => {
   try {
@@ -46,21 +82,28 @@ export const createFeeding = async (req, res) => {
       });
     }
 
-    // Create feeding record with explicit defaults for non-relevant fields
+    // Use Romania datetime
+    const romaniaDateTime = getRomaniaDateTime();
+
+    // Create feeding record with Romania datetime
     const feedingData = {
       childId,
       type,
-      // Set defaults based on feeding type
       startTime: type === "breast" ? startTime : null,
       endTime: type === "breast" ? endTime : null,
       duration: type === "breast" ? duration : 0,
       side: type === "breast" ? side : null,
       amount: type === "bottle" || type === "solid" ? amount : 0,
       note: note || null,
-      timestamp: new Date(),
+      timestamp: romaniaDateTime,
+      date: romaniaDateTime, // Store Romania datetime
     };
 
     const feeding = await Feeding.create(feedingData);
+
+    console.log(
+      `Created feeding record with Romania datetime: ${romaniaDateTime}`
+    );
 
     return res.status(201).json({
       success: true,
@@ -84,7 +127,6 @@ export const getFeedingsByChildId = async (req, res) => {
 
     console.log(`Getting all feedings for child ID: ${childId}`);
 
-    // Check if child exists and belongs to user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -99,10 +141,9 @@ export const getFeedingsByChildId = async (req, res) => {
       });
     }
 
-    // Get feeding records
     const feedings = await Feeding.findAll({
       where: { childId },
-      order: [["timestamp", "DESC"]],
+      order: [["date", "DESC"]],
     });
 
     console.log(
@@ -124,7 +165,7 @@ export const getFeedingsByChildId = async (req, res) => {
   }
 };
 
-// Get today's feeding records for a child
+// Get today's feeding records for a child (Romania timezone)
 export const getTodayFeedings = async (req, res) => {
   try {
     const { childId } = req.params;
@@ -147,26 +188,31 @@ export const getTodayFeedings = async (req, res) => {
       });
     }
 
-    // Calculate start and end of today
+    // Get today's date in Romania timezone
     const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    console.log(
-      `Searching for feedings between ${startOfDay.toISOString()} and ${endOfDay.toISOString()}`
+    const romaniaOffset = 3 * 60 * 60 * 1000;
+    const romaniaTime = new Date(
+      now.getTime() + now.getTimezoneOffset() * 60 * 1000 + romaniaOffset
     );
 
-    // Get feeding records for today
+    const year = romaniaTime.getFullYear();
+    const month = String(romaniaTime.getMonth() + 1).padStart(2, "0");
+    const day = String(romaniaTime.getDate()).padStart(2, "0");
+    const todayStr = `${year}-${month}-${day}`;
+
+    const { start, end } = getRomaniaDateRange(todayStr);
+
+    console.log(`Fetching today's feedings for Romania date: ${todayStr}`);
+    console.log(`Date range: ${start} to ${end}`);
+
     const feedings = await Feeding.findAll({
       where: {
         childId,
-        timestamp: {
-          [Op.between]: [startOfDay, endOfDay],
+        date: {
+          [Op.between]: [start, end],
         },
       },
-      order: [["timestamp", "DESC"]],
+      order: [["date", "DESC"]],
     });
 
     console.log(`Found ${feedings.length} feedings for today`);
@@ -178,6 +224,58 @@ export const getTodayFeedings = async (req, res) => {
     });
   } catch (error) {
     console.error("Error getting today's feeding records:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+// Get feeding records for a child by specific date
+export const getFeedingsByDate = async (req, res) => {
+  try {
+    const { childId, date } = req.params;
+
+    console.log(`Getting feedings for child ID: ${childId} on date: ${date}`);
+
+    const child = await Child.findOne({
+      where: {
+        id: childId,
+        userId: req.user.id,
+      },
+    });
+
+    if (!child) {
+      return res.status(404).json({
+        success: false,
+        message: "Child not found or does not belong to user",
+      });
+    }
+
+    const { start, end } = getRomaniaDateRange(date);
+
+    console.log(`Searching for feedings between: ${start} and ${end}`);
+
+    const feedings = await Feeding.findAll({
+      where: {
+        childId,
+        date: {
+          [Op.between]: [start, end],
+        },
+      },
+      order: [["date", "DESC"]],
+    });
+
+    console.log(`Found ${feedings.length} feedings for date ${date}`);
+
+    return res.status(200).json({
+      success: true,
+      count: feedings.length,
+      data: feedings,
+    });
+  } catch (error) {
+    console.error("Error getting feeding records by date:", error);
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -203,7 +301,6 @@ export const getFeedingsByDateRange = async (req, res) => {
       `Getting feedings for child ID: ${childId} from ${startDate} to ${endDate}`
     );
 
-    // Check if child exists and belongs to user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -218,15 +315,21 @@ export const getFeedingsByDateRange = async (req, res) => {
       });
     }
 
-    // Get feeding records within date range
+    const { start: startOfRange } = getRomaniaDateRange(startDate);
+    const { end: endOfRange } = getRomaniaDateRange(endDate);
+
+    console.log(
+      `Searching for feedings between: ${startOfRange} and ${endOfRange}`
+    );
+
     const feedings = await Feeding.findAll({
       where: {
         childId,
-        timestamp: {
-          [Op.between]: [new Date(startDate), new Date(endDate)],
+        date: {
+          [Op.between]: [startOfRange, endOfRange],
         },
       },
-      order: [["timestamp", "DESC"]],
+      order: [["date", "DESC"]],
     });
 
     console.log(`Found ${feedings.length} feedings in date range`);
@@ -238,43 +341,6 @@ export const getFeedingsByDateRange = async (req, res) => {
     });
   } catch (error) {
     console.error("Error getting feeding records by date range:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message,
-    });
-  }
-};
-
-// Get a specific feeding record
-export const getFeedingById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Find the feeding record and check if it belongs to a child of the user
-    const feeding = await Feeding.findOne({
-      where: { id },
-      include: [
-        {
-          model: Child,
-          where: { userId: req.user.id },
-        },
-      ],
-    });
-
-    if (!feeding) {
-      return res.status(404).json({
-        success: false,
-        message: "Feeding record not found or does not belong to user",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: feeding,
-    });
-  } catch (error) {
-    console.error("Error getting feeding record:", error);
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -296,7 +362,6 @@ export const getFeedingSummary = async (req, res) => {
       });
     }
 
-    // Check if child exists and belongs to user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -311,22 +376,17 @@ export const getFeedingSummary = async (req, res) => {
       });
     }
 
-    // Calculate start and end of the requested date
-    const requestedDate = new Date(date);
-    const startOfDay = new Date(requestedDate.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(requestedDate.setHours(23, 59, 59, 999));
+    const { start, end } = getRomaniaDateRange(date);
 
-    // Get feeding records for the day
     const feedings = await Feeding.findAll({
       where: {
         childId,
-        timestamp: {
-          [Op.between]: [startOfDay, endOfDay],
+        date: {
+          [Op.between]: [start, end],
         },
       },
     });
 
-    // Calculate summary
     const breastFeedings = feedings.filter((f) => f.type === "breast");
     const bottleFeedings = feedings.filter((f) => f.type === "bottle");
     const solidFeedings = feedings.filter((f) => f.type === "solid");
@@ -378,7 +438,6 @@ export const updateFeeding = async (req, res) => {
     const { id } = req.params;
     const { type, startTime, endTime, duration, side, amount, note } = req.body;
 
-    // Find the feeding record and check if it belongs to a child of the user
     const feeding = await Feeding.findOne({
       where: { id },
       include: [
@@ -399,8 +458,6 @@ export const updateFeeding = async (req, res) => {
     // Update fields based on feeding type
     if (type) {
       feeding.type = type;
-
-      // Reset fields not relevant to the new type
       if (type === "breast") {
         feeding.amount = 0;
       } else {
@@ -421,8 +478,10 @@ export const updateFeeding = async (req, res) => {
       if (amount !== undefined) feeding.amount = amount;
     }
 
-    // Update common fields
     if (note !== undefined) feeding.note = note;
+
+    // Update with Romania datetime
+    feeding.date = getRomaniaDateTime();
 
     await feeding.save();
 
@@ -446,7 +505,6 @@ export const deleteFeeding = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the feeding record first
     const feeding = await Feeding.findByPk(id);
 
     if (!feeding) {
@@ -456,7 +514,6 @@ export const deleteFeeding = async (req, res) => {
       });
     }
 
-    // Then check if the child belongs to the user
     const child = await Child.findOne({
       where: {
         id: feeding.childId,
@@ -471,7 +528,6 @@ export const deleteFeeding = async (req, res) => {
       });
     }
 
-    // If both checks pass, delete the feeding record
     await feeding.destroy();
 
     return res.status(200).json({

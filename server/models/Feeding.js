@@ -51,6 +51,11 @@ const Feeding = sequelize.define(
       allowNull: false,
       defaultValue: DataTypes.NOW,
     },
+    date: {
+      type: DataTypes.DATEONLY,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
   },
   {
     timestamps: true,
