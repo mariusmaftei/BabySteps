@@ -372,24 +372,23 @@ export const getWeeklySleep = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Get the last 7 days
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 6); // 6 days ago + today = 7 days
+    // Get today and 6 days ago (total 7 days)
+    const today = new Date();
+    const sixDaysAgo = new Date();
+    sixDaysAgo.setDate(today.getDate() - 6);
+
+    const todayStr = today.toISOString().split("T")[0];
+    const sixDaysAgoStr = sixDaysAgo.toISOString().split("T")[0];
 
     console.log("Weekly date range:", {
-      startDate: startDate.toISOString().split("T")[0],
-      endDate: endDate.toISOString().split("T")[0],
+      startDate: sixDaysAgoStr,
+      endDate: todayStr,
     });
 
-    // Create array of date strings for the past 7 days
+    // Create array of date strings for the past 7 days (including today)
     const dateStrings = [];
-    for (
-      let d = new Date(startDate);
-      d <= endDate;
-      d.setDate(d.getDate() + 1)
-    ) {
-      const dateStr = d.toISOString().split("T")[0]; // YYYY-MM-DD format
+    for (let d = new Date(sixDaysAgo); d <= today; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split("T")[0];
       dateStrings.push(dateStr);
     }
 
@@ -423,6 +422,67 @@ export const getWeeklySleep = async (req, res) => {
     return res.status(200).json(sleepRecords);
   } catch (error) {
     console.error("Error fetching weekly sleep records:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
+  }
+};
+
+export const getMonthlySleep = async (req, res) => {
+  try {
+    const { childId } = req.params;
+    const { year, month } = req.query; // month should be 1-12
+
+    console.log(
+      `Fetching monthly sleep data for child ${childId}, year: ${year}, month: ${month}`
+    );
+
+    const child = await Child.findOne({
+      where: { id: childId, userId: req.user.id },
+    });
+
+    if (!child) {
+      return res
+        .status(404)
+        .json({ message: "Child not found or doesn't belong to user" });
+    }
+
+    // Validate year and month
+    const targetYear = Number.parseInt(year) || new Date().getFullYear();
+    const targetMonth = Number.parseInt(month) || new Date().getMonth() + 1;
+
+    // Create the date pattern for filtering: YYYY-MM-
+    const datePattern = `${targetYear}-${String(targetMonth).padStart(
+      2,
+      "0"
+    )}-`;
+
+    console.log(`Monthly date pattern for filtering: ${datePattern}`);
+
+    // Filter records where date starts with the pattern (e.g., "2025-06-")
+    const sleepRecords = await Sleep.findAll({
+      where: {
+        childId,
+        date: {
+          [Op.like]: `${datePattern}%`, // This will match "2025-06-01 03:07:23", "2025-06-02 03:07:23", etc.
+        },
+      },
+      order: [["date", "ASC"]],
+    });
+
+    console.log(
+      `Found ${sleepRecords.length} monthly sleep records for ${datePattern}:`,
+      sleepRecords.map((r) => ({
+        id: r.id,
+        date: r.date,
+        napHours: r.napHours,
+        nightHours: r.nightHours,
+      }))
+    );
+
+    return res.status(200).json(sleepRecords);
+  } catch (error) {
+    console.error("Error fetching monthly sleep records:", error);
     return res
       .status(500)
       .json({ message: "Server error", error: error.message });

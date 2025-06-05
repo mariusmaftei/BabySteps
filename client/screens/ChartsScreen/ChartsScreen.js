@@ -17,7 +17,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useChildActivity } from "../../context/child-activity-context";
 import {
   getWeeklySleepData,
-  getMonthlySleepData,
   getYearlySleepData,
   getSleepDataByMonth,
   formatDateForPeriod,
@@ -31,7 +30,6 @@ import {
 } from "../../services/diaper-service";
 import {
   getWeeklyFeedingData,
-  getMonthlyFeedingData,
   getFeedingDataByMonth,
 } from "../../services/feeding-service";
 
@@ -865,35 +863,28 @@ export default function ChartsScreen({ navigation }) {
     };
   }, [diaperData, timePeriod]);
 
-  // Handle month change from the SleepChartComponent
-  const handleSleepMonthChange = async (startDate, endDate) => {
+  // NEW: Function to handle month data fetching from SleepChartComponent
+  const handleSleepMonthDataFetch = async (year, month) => {
     if (noChildren || activeTab !== "Sleep") return;
+
+    console.log(`🔄 ChartsScreen: Fetching sleep data for ${year}-${month}`);
 
     setIsLoading(true);
     setError(null);
 
     try {
+      const data = await getSleepDataByMonth(currentChild.id, year, month);
       console.log(
-        `Fetching sleep data for month: ${
-          startDate.getMonth() + 1
-        }/${startDate.getFullYear()}`
-      );
-      const data = await getSleepDataByMonth(
-        currentChild.id,
-        startDate.getFullYear(),
-        startDate.getMonth()
-      );
-      console.log(
-        `Sleep data fetched for month: ${data ? data.length : 0} records`
+        `✅ ChartsScreen: Sleep data fetched: ${data ? data.length : 0} records`
       );
       setSleepData(data || []);
-      setSelectedMonth(startDate.getMonth());
-      setSelectedYear(startDate.getFullYear());
+
+      // Update the selected month/year state to match what was fetched
+      setSelectedMonth(month - 1); // Convert back to 0-based
+      setSelectedYear(year);
     } catch (err) {
-      console.error(`Error fetching sleep data for month:`, err);
-      setError(
-        `Failed to load sleep data for the selected month. Please try again.`
-      );
+      console.error(`❌ ChartsScreen: Error fetching sleep data:`, err);
+      setError(`Failed to load sleep data. Please try again.`);
     } finally {
       setIsLoading(false);
     }
@@ -950,16 +941,17 @@ export default function ChartsScreen({ navigation }) {
         if (timePeriod === "week") {
           data = await getWeeklySleepData(currentChild.id);
         } else if (timePeriod === "month") {
-          // If in month view, fetch data for the selected month
-          if (selectedMonth !== undefined && selectedYear !== undefined) {
-            data = await getSleepDataByMonth(
-              currentChild.id,
-              selectedYear,
-              selectedMonth
-            );
-          } else {
-            data = await getMonthlySleepData(currentChild.id);
-          }
+          // For month view, fetch data for the currently selected month
+          console.log(
+            `🔄 fetchData: Fetching sleep data for ${selectedYear}-${
+              selectedMonth + 1
+            }`
+          );
+          data = await getSleepDataByMonth(
+            currentChild.id,
+            selectedYear,
+            selectedMonth + 1
+          );
         } else if (timePeriod === "year") {
           const yearData = await getYearlySleepData(currentChild.id);
           data = aggregateSleepDataByMonth(yearData);
@@ -1001,16 +993,20 @@ export default function ChartsScreen({ navigation }) {
             console.log("No feeding data found for this week");
           }
         } else if (timePeriod === "month") {
-          // If in month view, fetch data for the selected month
-          if (selectedMonth !== undefined && selectedYear !== undefined) {
-            data = await getFeedingDataByMonth(
-              currentChild.id,
-              selectedYear,
-              selectedMonth
-            );
-          } else {
-            data = await getMonthlyFeedingData(currentChild.id);
-          }
+          // For month view, always fetch current month initially
+          const now = new Date();
+          const currentMonth = now.getMonth() + 1; // 1-based
+          const currentYear = now.getFullYear();
+
+          data = await getFeedingDataByMonth(
+            currentChild.id,
+            currentYear,
+            currentMonth
+          );
+
+          // Update state to match what we fetched
+          setSelectedMonth(now.getMonth()); // 0-based for state
+          setSelectedYear(currentYear);
         }
         console.log(
           `${timePeriod} feeding data fetched for charts:`,
@@ -1230,7 +1226,15 @@ export default function ChartsScreen({ navigation }) {
 
   // Add a refresh button
   const handleRefresh = () => {
-    fetchData();
+    console.log(`🔄 Refreshing ${activeTab} data for ${timePeriod} view`);
+
+    if (activeTab === "Sleep" && timePeriod === "month") {
+      // For sleep month view, use the dedicated month fetch function
+      handleSleepMonthDataFetch(selectedYear, selectedMonth + 1);
+    } else {
+      // For all other cases, use the general fetch function
+      fetchData();
+    }
   };
 
   const renderTabsMemoized = useCallback(() => {
@@ -1410,7 +1414,7 @@ export default function ChartsScreen({ navigation }) {
             categoryColor={categoryColors.Sleep}
             timePeriod={timePeriod}
             getChartConfig={getChartConfig}
-            onMonthChange={handleSleepMonthChange}
+            onFetchMonthlyData={handleSleepMonthDataFetch} // Changed this line
             rawSleepData={sleepData} // Add this line to pass the raw sleep data
           />
         );
@@ -1461,6 +1465,29 @@ export default function ChartsScreen({ navigation }) {
         return null;
     }
   };
+
+  // Add this useEffect after the existing ones
+  useEffect(() => {
+    // When switching to Sleep tab in month view, ensure we have data
+    if (
+      activeTab === "Sleep" &&
+      timePeriod === "month" &&
+      currentChild &&
+      currentChild.id !== "default"
+    ) {
+      console.log(`🔄 Sleep tab activated in month view, checking data...`);
+
+      // If we don't have sleep data, fetch it
+      if (!sleepData || sleepData.length === 0) {
+        console.log(
+          `📅 No sleep data found, fetching for ${selectedYear}-${
+            selectedMonth + 1
+          }`
+        );
+        handleSleepMonthDataFetch(selectedYear, selectedMonth + 1);
+      }
+    }
+  }, [activeTab, timePeriod, currentChild]);
 
   return (
     <SafeAreaView

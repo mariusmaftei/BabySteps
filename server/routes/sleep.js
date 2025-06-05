@@ -7,6 +7,7 @@ import {
   deleteSleep,
   getSleepByDateRange,
   getWeeklySleep,
+  getMonthlySleep,
   getTodaySleep,
   getCurrentSleepData,
   autoFillSleepRecords,
@@ -38,6 +39,9 @@ sleepRoute.get("/child/:childId/current", getCurrentSleepData);
 
 // Get weekly sleep data for a child (last 7 days)
 sleepRoute.get("/child/:childId/weekly", getWeeklySleep);
+
+// Get monthly sleep data for a child (specific month/year)
+sleepRoute.get("/child/:childId/monthly", getMonthlySleep);
 
 // Get a specific sleep record
 sleepRoute.get("/:id", getSleepById);

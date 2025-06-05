@@ -325,36 +325,85 @@ export const getSleepById = async (sleepId) => {
   }
 };
 
+// Get sleep data for a specific month
 export const getSleepDataByMonth = async (childId, year, month) => {
   try {
     await ensureToken();
 
-    console.log(`Fetching sleep data for month: ${year}-${month + 1}`);
+    // If no year/month provided, use current month
+    const now = new Date();
+    const targetYear = year || now.getFullYear();
+    // month parameter should be 1-based (1-12) as received from the component
+    const targetMonth = month !== undefined ? month : now.getMonth() + 1;
 
-    // Get the first and last day of the month
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
+    console.log(
+      `📅 Sleep Service - Fetching sleep data for month: ${targetYear}-${String(
+        targetMonth
+      ).padStart(2, "0")}`
+    );
 
-    return await getSleepDataByDateRange(childId, firstDay, lastDay);
+    // Log the URL and parameters for debugging
+    const url = `${API_BASE_URL}/child/${childId}/monthly`;
+    const params = { year: targetYear, month: targetMonth };
+    console.log(`📡 API Request: GET ${url}`, params);
+
+    const response = await api.get(url, { params });
+
+    console.log(
+      `✅ Found ${
+        response.data.length
+      } monthly sleep records for ${targetYear}-${String(targetMonth).padStart(
+        2,
+        "0"
+      )}:`,
+      response.data
+    );
+
+    const processedData = response.data.map((record) => {
+      let day = null;
+      if (record.date) {
+        if (record.date.includes("T")) {
+          day = record.date.split("T")[0].split("-")[2];
+        } else if (record.date.includes(" ")) {
+          day = record.date.split(" ")[0].split("-")[2];
+        } else if (record.date.includes("-")) {
+          day = record.date.split("-")[2];
+        }
+
+        day = day ? Number.parseInt(day, 10).toString() : null;
+      }
+
+      return {
+        ...createSleepRecord(record),
+        day,
+      };
+    });
+
+    console.log("🔍 Sleep Service - Processed monthly data:", processedData);
+    return processedData;
   } catch (error) {
-    console.error("Error fetching monthly sleep data:", error);
-    throw error;
+    console.error("❌ Error fetching monthly sleep data:", error);
+    console.error("Error details:", {
+      message: error.message,
+      response: error.response
+        ? {
+            status: error.response.status,
+            data: error.response.data,
+          }
+        : "No response",
+      request: error.request
+        ? "Request made but no response received"
+        : "No request made",
+    });
+
+    // Return empty array instead of throwing to prevent component crashes
+    return [];
   }
 };
 
-export const getMonthlySleepData = async (childId) => {
-  try {
-    console.log("Fetching current month sleep data");
-    const today = new Date();
-    return await getSleepDataByMonth(
-      childId,
-      today.getFullYear(),
-      today.getMonth()
-    );
-  } catch (error) {
-    console.error("Error fetching current monthly sleep data:", error);
-    throw error;
-  }
+// Get current month's sleep data
+export const getMonthlySleepData = async (childId, year, month) => {
+  return await getSleepDataByMonth(childId, year, month);
 };
 
 export const getYearlySleepData = async (childId) => {
@@ -464,5 +513,24 @@ export const fetchSleepRecords = async (childId) => {
   } catch (error) {
     console.error("Error fetching sleep records:", error);
     return [];
+  }
+};
+
+// Helper function to get daily sleep data
+export const getDailySleepData = async (childId) => {
+  try {
+    await ensureToken();
+    console.log(`Fetching daily sleep data for child: ${childId}`);
+
+    // Get current date
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // 1-based month
+
+    // Use the monthly endpoint to get the current month's data
+    return await getMonthlySleepData(childId, year, month);
+  } catch (error) {
+    console.error("Error fetching daily sleep data:", error);
+    throw error;
   }
 };
