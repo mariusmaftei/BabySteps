@@ -294,9 +294,11 @@ export const getSleepByDateRange = async (req, res) => {
     const { childId } = req.params;
     const { startDate, endDate } = req.query;
 
-    console.log(
-      `Fetching sleep records for child ${childId} from ${startDate} to ${endDate}`
-    );
+    console.log("Fetching sleep data for date range:", {
+      childId,
+      startDate,
+      endDate,
+    });
 
     const child = await Child.findOne({
       where: { id: childId, userId: req.user.id },
@@ -308,49 +310,119 @@ export const getSleepByDateRange = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    const dateFilter = {};
-    if (startDate && endDate) {
-      // Ensure we have full datetime strings for comparison
-      const startDateTime =
-        startDate.length === 10 ? `${startDate} 00:00:00` : startDate;
-      const endDateTime =
-        endDate.length === 10 ? `${endDate} 23:59:59` : endDate;
+    // Create array of date strings for the range
+    const dateStrings = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
 
-      console.log(`Using datetime range: ${startDateTime} to ${endDateTime}`);
-
-      dateFilter.date = {
-        [Op.between]: [startDateTime, endDateTime],
-      };
-    } else if (startDate) {
-      const startDateTime =
-        startDate.length === 10 ? `${startDate} 00:00:00` : startDate;
-      dateFilter.date = {
-        [Op.gte]: startDateTime,
-      };
-    } else if (endDate) {
-      const endDateTime =
-        endDate.length === 10 ? `${endDate} 23:59:59` : endDate;
-      dateFilter.date = {
-        [Op.lte]: endDateTime,
-      };
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split("T")[0]; // YYYY-MM-DD format
+      dateStrings.push(dateStr);
     }
+
+    console.log("Looking for sleep records with dates:", dateStrings);
+
+    // Use OR condition with LIKE to match any of the target dates
+    const whereConditions = dateStrings.map((dateStr) => ({
+      date: {
+        [Op.like]: `${dateStr}%`,
+      },
+    }));
 
     const sleepRecords = await Sleep.findAll({
       where: {
         childId,
-        ...dateFilter,
+        [Op.or]: whereConditions,
       },
-      order: [["date", "DESC"]],
+      order: [["date", "ASC"]],
     });
 
     console.log(
-      `Found ${sleepRecords.length} sleep records in date range:`,
-      sleepRecords
+      `Found ${sleepRecords.length} sleep records:`,
+      sleepRecords.map((r) => ({
+        id: r.id,
+        date: r.date,
+        napHours: r.napHours,
+        nightHours: r.nightHours,
+      }))
     );
 
     return res.status(200).json(sleepRecords);
   } catch (error) {
     console.error("Error fetching sleep records by date range:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
+  }
+};
+
+export const getWeeklySleep = async (req, res) => {
+  try {
+    const { childId } = req.params;
+
+    console.log(`Fetching weekly sleep data for child ${childId}`);
+
+    const child = await Child.findOne({
+      where: { id: childId, userId: req.user.id },
+    });
+
+    if (!child) {
+      return res
+        .status(404)
+        .json({ message: "Child not found or doesn't belong to user" });
+    }
+
+    // Get the last 7 days
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 6); // 6 days ago + today = 7 days
+
+    console.log("Weekly date range:", {
+      startDate: startDate.toISOString().split("T")[0],
+      endDate: endDate.toISOString().split("T")[0],
+    });
+
+    // Create array of date strings for the past 7 days
+    const dateStrings = [];
+    for (
+      let d = new Date(startDate);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      const dateStr = d.toISOString().split("T")[0]; // YYYY-MM-DD format
+      dateStrings.push(dateStr);
+    }
+
+    console.log("Looking for weekly sleep records with dates:", dateStrings);
+
+    // Use OR condition with LIKE to match any of the target dates
+    const whereConditions = dateStrings.map((dateStr) => ({
+      date: {
+        [Op.like]: `${dateStr}%`,
+      },
+    }));
+
+    const sleepRecords = await Sleep.findAll({
+      where: {
+        childId,
+        [Op.or]: whereConditions,
+      },
+      order: [["date", "ASC"]],
+    });
+
+    console.log(
+      `Found ${sleepRecords.length} weekly sleep records:`,
+      sleepRecords.map((r) => ({
+        id: r.id,
+        date: r.date,
+        napHours: r.napHours,
+        nightHours: r.nightHours,
+      }))
+    );
+
+    return res.status(200).json(sleepRecords);
+  } catch (error) {
+    console.error("Error fetching weekly sleep records:", error);
     return res
       .status(500)
       .json({ message: "Server error", error: error.message });

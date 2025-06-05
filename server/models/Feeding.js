@@ -49,12 +49,10 @@ const Feeding = sequelize.define(
     timestamp: {
       type: DataTypes.DATE,
       allowNull: false,
-      defaultValue: DataTypes.NOW,
     },
     date: {
-      type: DataTypes.DATEONLY,
+      type: DataTypes.DATE,
       allowNull: false,
-      defaultValue: DataTypes.NOW,
     },
   },
   {

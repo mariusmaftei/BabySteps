@@ -18,7 +18,7 @@ import { useTheme } from "../../../context/theme-context";
 import CustomButton from "../../../components/UI/Button/Button";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  getChildSleepData,
+  getSleepByChild,
   saveSleepData,
   updateSleepData,
   getCurrentSleepData,
@@ -260,7 +260,7 @@ const SleepScreen = () => {
         return;
       }
 
-      const history = await getChildSleepData(currentChildId);
+      const history = await getSleepByChild(currentChildId);
 
       if (!Array.isArray(history) || history.length === 0) {
         console.log("No sleep history found, creating default record");

@@ -2,20 +2,39 @@ import Feeding from "../models/Feeding.js";
 import Child from "../models/Child.js";
 import { Op } from "sequelize";
 
-// Helper function to get current Romanian datetime
+// Helper function to get current Romanian datetime in YYYY-MM-DD HH:MM:SS format
 const getRomaniaDateTime = () => {
   const now = new Date();
-  const romaniaOffset = 3 * 60 * 60 * 1000; // UTC+3 for Romania (EEST)
-  const romaniaTime = new Date(
-    now.getTime() + now.getTimezoneOffset() * 60 * 1000 + romaniaOffset
-  );
 
-  const year = romaniaTime.getFullYear();
-  const month = String(romaniaTime.getMonth() + 1).padStart(2, "0");
-  const day = String(romaniaTime.getDate()).padStart(2, "0");
-  const hours = String(romaniaTime.getHours()).padStart(2, "0");
-  const minutes = String(romaniaTime.getMinutes()).padStart(2, "0");
-  const seconds = String(romaniaTime.getSeconds()).padStart(2, "0");
+  // Romania is UTC+2 (standard time) or UTC+3 (daylight saving time)
+  // For simplicity, we'll use UTC+3 (EEST - Eastern European Summer Time)
+  const romaniaOffset = 3 * 60; // 3 hours in minutes
+
+  // Create a new date object adjusted for Romania timezone
+  const romaniaTime = new Date(now.getTime() + romaniaOffset * 60 * 1000);
+
+  const year = romaniaTime.getUTCFullYear();
+  const month = String(romaniaTime.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(romaniaTime.getUTCDate()).padStart(2, "0");
+  const hours = String(romaniaTime.getUTCHours()).padStart(2, "0");
+  const minutes = String(romaniaTime.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(romaniaTime.getUTCSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+// Helper function to get current Romanian datetime in YYYY-MM-DD HH:MM:SS format
+const getRomaniaDateTimeIntl = () => {
+  const now = new Date();
+  // Add 3 hours for Romania timezone (UTC+3 during DST)
+  const romaniaTime = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+
+  const year = romaniaTime.getUTCFullYear();
+  const month = String(romaniaTime.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(romaniaTime.getUTCDate()).padStart(2, "0");
+  const hours = String(romaniaTime.getUTCHours()).padStart(2, "0");
+  const minutes = String(romaniaTime.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(romaniaTime.getUTCSeconds()).padStart(2, "0");
 
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
@@ -82,10 +101,12 @@ export const createFeeding = async (req, res) => {
       });
     }
 
-    // Use Romania datetime
-    const romaniaDateTime = getRomaniaDateTime();
+    // Use the date provided from client (already converted to Romania time)
+    const feedingDateTime =
+      req.body.date || req.body.timestamp || new Date().toISOString();
 
-    // Create feeding record with Romania datetime
+    console.log(`Received datetime from client: ${feedingDateTime}`);
+
     const feedingData = {
       childId,
       type,
@@ -95,14 +116,14 @@ export const createFeeding = async (req, res) => {
       side: type === "breast" ? side : null,
       amount: type === "bottle" || type === "solid" ? amount : 0,
       note: note || null,
-      timestamp: romaniaDateTime,
-      date: romaniaDateTime, // Store Romania datetime
+      timestamp: feedingDateTime,
+      date: feedingDateTime, // Store exactly what client sent (Romania time)
     };
 
     const feeding = await Feeding.create(feedingData);
 
     console.log(
-      `Created feeding record with Romania datetime: ${romaniaDateTime}`
+      `Created feeding record with Romania datetime: ${feedingDateTime}`
     );
 
     return res.status(201).json({
@@ -190,15 +211,14 @@ export const getTodayFeedings = async (req, res) => {
 
     // Get today's date in Romania timezone
     const now = new Date();
-    const romaniaOffset = 3 * 60 * 60 * 1000;
-    const romaniaTime = new Date(
-      now.getTime() + now.getTimezoneOffset() * 60 * 1000 + romaniaOffset
-    );
+    const romaniaTime = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Bucharest",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
 
-    const year = romaniaTime.getFullYear();
-    const month = String(romaniaTime.getMonth() + 1).padStart(2, "0");
-    const day = String(romaniaTime.getDate()).padStart(2, "0");
-    const todayStr = `${year}-${month}-${day}`;
+    const todayStr = romaniaTime; // This will be in YYYY-MM-DD format
 
     const { start, end } = getRomaniaDateRange(todayStr);
 
@@ -480,8 +500,10 @@ export const updateFeeding = async (req, res) => {
 
     if (note !== undefined) feeding.note = note;
 
-    // Update with Romania datetime
-    feeding.date = getRomaniaDateTime();
+    // Update with Romania datetime - keep full timestamp
+    const romaniaDateTime = getRomaniaDateTimeIntl();
+    feeding.date = romaniaDateTime;
+    feeding.timestamp = romaniaDateTime;
 
     await feeding.save();
 

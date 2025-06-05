@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -26,6 +28,7 @@ import ColumnChart from "../../../components/UI/Charts/ColumnChart";
 import RecentActivityCard from "../../../components/UI/Cards/RecentActivityCard";
 import * as feedingService from "../../../services/feeding-service";
 import SummaryCards from "../../../components/UI/Cards/SummaryCards";
+import { getCurrentDateTimeString } from "../../../services/feeding-service";
 
 export default function FeedingScreen({ navigation }) {
   const { theme } = useTheme();
@@ -160,8 +163,8 @@ export default function FeedingScreen({ navigation }) {
           duration: durationInMinutes,
           side: activeBreast,
           notes: currentFeeding.note || "",
-          date: new Date().toISOString().split("T")[0],
-          timestamp: endTime.toISOString(),
+          // Use full datetime format
+          timestamp: getCurrentDateTimeString(),
         };
 
         await feedingService.saveBreastfeedingData(feedingData);
@@ -210,8 +213,8 @@ export default function FeedingScreen({ navigation }) {
               duration: durationInMinutes,
               side: activeBreast,
               notes: currentFeeding.note || "Auto-stopped after 45 minutes",
-              date: new Date().toISOString().split("T")[0],
-              timestamp: endTime.toISOString(),
+              // Use full datetime format
+              timestamp: getCurrentDateTimeString(),
             };
 
             setTimeout(async () => {
@@ -267,11 +270,12 @@ export default function FeedingScreen({ navigation }) {
       return;
     }
 
+    const now = new Date();
     const newFeeding = {
       ...currentFeeding,
       type: "bottle",
       amount: Number.parseInt(currentFeeding.amount),
-      timestamp: new Date().toISOString(),
+      timestamp: now.toISOString(),
     };
 
     setBottleFeedings([...bottleFeedings, newFeeding]);
@@ -288,8 +292,8 @@ export default function FeedingScreen({ navigation }) {
         amount: Number.parseInt(currentFeeding.amount),
         unit: "ml",
         notes: currentFeeding.note || "",
-        date: new Date().toISOString().split("T")[0],
-        timestamp: new Date().toISOString(),
+        // Use full datetime format
+        timestamp: getCurrentDateTimeString(),
       };
 
       await feedingService.saveBottleFeedingData(feedingData);
@@ -319,11 +323,12 @@ export default function FeedingScreen({ navigation }) {
       return;
     }
 
+    const now = new Date();
     const newFeeding = {
       ...currentFeeding,
       type: "solid",
       amount: Number.parseInt(currentFeeding.amount),
-      timestamp: new Date().toISOString(),
+      timestamp: now.toISOString(),
     };
 
     setSolidFoodFeedings([...solidFoodFeedings, newFeeding]);
@@ -341,8 +346,8 @@ export default function FeedingScreen({ navigation }) {
         amount: Number.parseInt(currentFeeding.amount),
         unit: "g",
         notes: currentFeeding.note || "",
-        date: new Date().toISOString().split("T")[0],
-        timestamp: new Date().toISOString(),
+        // Use full datetime format
+        timestamp: getCurrentDateTimeString(),
       };
 
       await feedingService.saveSolidFoodData(feedingData);

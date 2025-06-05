@@ -1,9 +1,5 @@
 import api, { ensureToken } from "./api";
-import {
-  getLocalDateString,
-  isLocalToday,
-  getCurrentWeekDates,
-} from "../utils/date-utils";
+import { getLocalDateString, isLocalToday } from "../utils/date-utils";
 
 const createSleepRecord = (data) => {
   console.log("Creating sleep record from data:", data);
@@ -69,90 +65,262 @@ export const isToday = (dateString) => {
   return isLocalToday(datePart);
 };
 
-export const getChildSleepData = async (childId) => {
+const API_BASE_URL = "/sleep";
+
+// Get all sleep records for a child
+export const getSleepByChild = async (childId) => {
   try {
     await ensureToken();
-    console.log(`Fetching all sleep data for child ${childId}`);
-    const response = await api.get(`/sleep/child/${childId}`);
-    console.log("Raw sleep data from API:", response.data);
-    const processedData = response.data.map((item) => createSleepRecord(item));
-    console.log("Processed sleep data:", processedData);
-    return processedData;
+    console.log(`Fetching all sleep records for child: ${childId}`);
+    const response = await api.get(`${API_BASE_URL}/child/${childId}`);
+    console.log(`Found ${response.data.length} sleep records:`, response.data);
+    return response.data.map((item) => createSleepRecord(item));
   } catch (error) {
-    console.error("Error fetching child sleep data:", error);
+    console.error("Error fetching sleep records:", error);
     throw error;
   }
 };
 
-export const getTodaySleepData = async (childId) => {
-  try {
-    await ensureToken();
-    const response = await api.get(`/sleep/child/${childId}/today`);
-    return response.data ? createSleepRecord(response.data) : null;
-  } catch (error) {
-    if (error.response && error.response.status === 404) {
-      const today = getLocalDateTimeString();
-
-      return {
-        id: null,
-        childId: childId,
-        napHours: 0,
-        nightHours: 0,
-        date: today,
-        notes: "",
-        totalHours: "0",
-        isDefaultData: true,
-        sleepProgress: 0,
-      };
-    }
-    throw error;
-  }
-};
-
-export const getSleepDataByDateRange = async (
-  childId,
-  startDateStr,
-  endDateStr
-) => {
+// Get sleep records by date range
+export const getSleepDataByDateRange = async (childId, startDate, endDate) => {
   try {
     await ensureToken();
 
-    console.log(`Fetching sleep data from ${startDateStr} to ${endDateStr}`);
+    console.log(
+      `Fetching sleep data for child ${childId} from ${startDate} to ${endDate}`
+    );
 
-    // For date range queries, we need to handle both date and datetime formats
-    // If we receive date-only strings, convert them to datetime ranges
-    let startDateTime, endDateTime;
+    // Format dates properly
+    let formattedStartDate, formattedEndDate;
 
-    if (startDateStr.length === 10) {
-      // Date only format (YYYY-MM-DD)
-      startDateTime = `${startDateStr} 00:00:00`;
+    if (startDate instanceof Date) {
+      formattedStartDate = startDate.toISOString().split("T")[0];
     } else {
-      startDateTime = startDateStr;
+      formattedStartDate =
+        startDate.length === 10 ? startDate : startDate.split("T")[0];
     }
 
-    if (endDateStr.length === 10) {
-      // Date only format (YYYY-MM-DD)
-      endDateTime = `${endDateStr} 23:59:59`;
+    if (endDate instanceof Date) {
+      formattedEndDate = endDate.toISOString().split("T")[0];
     } else {
-      endDateTime = endDateStr;
+      formattedEndDate =
+        endDate.length === 10 ? endDate : endDate.split("T")[0];
     }
 
     console.log(
-      `Converted to datetime range: ${startDateTime} to ${endDateTime}`
+      `🔍 Sleep Service - Formatted dates: ${formattedStartDate} to ${formattedEndDate}`
+    );
+    const response = await api.get(`${API_BASE_URL}/child/${childId}/range`, {
+      params: {
+        startDate: formattedStartDate,
+        endDate: formattedEndDate,
+      },
+    });
+    console.log(
+      `Found ${response.data.length} sleep records in date range:`,
+      response.data
     );
 
-    const response = await api.get(
-      `/sleep/child/${childId}/range?startDate=${encodeURIComponent(
-        startDateTime
-      )}&endDate=${encodeURIComponent(endDateTime)}`
-    );
+    const processedData = response.data.map((record) => {
+      let day = null;
+      if (record.date) {
+        if (record.date.includes("T")) {
+          day = record.date.split("T")[0].split("-")[2];
+        } else if (record.date.includes(" ")) {
+          day = record.date.split(" ")[0].split("-")[2];
+        } else if (record.date.includes("-")) {
+          day = record.date.split("-")[2];
+        }
 
-    console.log("Sleep data range response:", response.data);
-    const processedData = response.data.map((item) => createSleepRecord(item));
-    console.log("Processed range data:", processedData);
+        day = day ? Number.parseInt(day, 10).toString() : null;
+      }
+
+      return {
+        ...createSleepRecord(record),
+        day,
+      };
+    });
+
+    console.log("🔍 Sleep Service - Processed range data:", processedData);
     return processedData;
   } catch (error) {
     console.error("Error fetching sleep data by date range:", error);
+    throw error;
+  }
+};
+
+// Get weekly sleep data (last 7 days)
+export const getWeeklySleepData = async (childId) => {
+  try {
+    await ensureToken();
+    console.log(`Fetching weekly sleep data for child: ${childId}`);
+    const response = await api.get(`${API_BASE_URL}/child/${childId}/weekly`);
+    console.log(
+      `Found ${response.data.length} weekly sleep records:`,
+      response.data
+    );
+
+    const processedData = response.data.map((record) => {
+      let day = null;
+      if (record.date) {
+        if (record.date.includes("T")) {
+          day = record.date.split("T")[0].split("-")[2];
+        } else if (record.date.includes(" ")) {
+          day = record.date.split(" ")[0].split("-")[2];
+        } else if (record.date.includes("-")) {
+          day = record.date.split("-")[2];
+        }
+
+        day = day ? Number.parseInt(day, 10).toString() : null;
+      }
+
+      return {
+        ...createSleepRecord(record),
+        day,
+      };
+    });
+
+    console.log("🔍 Sleep Service - Processed weekly data:", processedData);
+    return processedData;
+  } catch (error) {
+    console.error("Error fetching weekly sleep data:", error);
+    throw error;
+  }
+};
+
+// Get today's sleep record
+export const getTodaySleepData = async (childId) => {
+  try {
+    await ensureToken();
+    console.log(`Fetching today's sleep data for child: ${childId}`);
+    const response = await api.get(`${API_BASE_URL}/child/${childId}/today`);
+    console.log("Today's sleep data:", response.data);
+    return response.data ? createSleepRecord(response.data) : null;
+  } catch (error) {
+    console.error("Error fetching today's sleep data:", error);
+    throw error;
+  }
+};
+
+// Get current sleep data (today or yesterday based on time)
+export const getCurrentSleepData = async (childId) => {
+  try {
+    await ensureToken();
+    console.log(`Fetching current sleep data for child: ${childId}`);
+    const response = await api.get(`${API_BASE_URL}/child/${childId}/current`);
+    console.log("Current sleep data:", response.data);
+
+    return {
+      ...createSleepRecord(response.data),
+      isBeforeNoon: response.data.isBeforeNoon,
+      targetDate: response.data.targetDate,
+    };
+  } catch (error) {
+    const today = getLocalDateTimeString();
+    let targetDate = today;
+    let isBeforeNoon = false;
+
+    if (error.response && error.response.status === 404) {
+      if (error.response.data) {
+        targetDate = error.response.data.targetDate || today;
+        isBeforeNoon = error.response.data.isBeforeNoon || false;
+      }
+    }
+
+    return {
+      id: null,
+      childId,
+      napHours: 0,
+      nightHours: 0,
+      date: targetDate,
+      notes: "",
+      totalHours: "0",
+      isBeforeNoon: isBeforeNoon,
+      targetDate: targetDate,
+      isDefaultData: true,
+      sleepProgress: 0,
+    };
+  }
+};
+
+// Create a new sleep record
+export const createSleepRecordApi = async (sleepData) => {
+  try {
+    await ensureToken();
+    console.log("Creating sleep record with data:", sleepData);
+
+    // Get current Romanian datetime
+    const romaniaDatetime = getLocalDateTimeString();
+
+    const formattedData = {
+      childId: sleepData.childId,
+      napHours: Number.parseFloat(sleepData.napHours) || 0,
+      nightHours: Number.parseFloat(sleepData.nightHours) || 0,
+      date: romaniaDatetime,
+      notes: sleepData.notes || "",
+      sleepProgress: sleepData.sleepProgress || 0,
+    };
+
+    const response = await api.post(API_BASE_URL, formattedData);
+    console.log("Sleep record created successfully:", response.data);
+    return createSleepRecord(response.data);
+  } catch (error) {
+    console.error("Error creating sleep record:", error);
+    throw error;
+  }
+};
+
+// Update a sleep record
+export const updateSleepRecord = async (sleepId, sleepData) => {
+  try {
+    await ensureToken();
+    console.log(`Updating sleep record ${sleepId} with data:`, sleepData);
+
+    // Get current Romanian datetime
+    const romaniaDatetime = getLocalDateTimeString();
+
+    const formattedData = {
+      childId: sleepData.childId,
+      napHours: Number.parseFloat(sleepData.napHours) || 0,
+      nightHours: Number.parseFloat(sleepData.nightHours) || 0,
+      date: romaniaDatetime,
+      notes: sleepData.notes || "",
+      sleepProgress: sleepData.sleepProgress || 0,
+    };
+
+    const response = await api.put(`${API_BASE_URL}/${sleepId}`, formattedData);
+    console.log("Sleep record updated successfully:", response.data);
+    return createSleepRecord(response.data);
+  } catch (error) {
+    console.error("Error updating sleep record:", error);
+    throw error;
+  }
+};
+
+// Delete a sleep record
+export const deleteSleepRecord = async (sleepId) => {
+  try {
+    await ensureToken();
+    console.log(`Deleting sleep record: ${sleepId}`);
+    const response = await api.delete(`${API_BASE_URL}/${sleepId}`);
+    console.log("Sleep record deleted successfully");
+    return response.data;
+  } catch (error) {
+    console.error("Error deleting sleep record:", error);
+    throw error;
+  }
+};
+
+// Get a specific sleep record by ID
+export const getSleepById = async (sleepId) => {
+  try {
+    await ensureToken();
+    console.log(`Fetching sleep record: ${sleepId}`);
+    const response = await api.get(`${API_BASE_URL}/${sleepId}`);
+    console.log("Sleep record found:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching sleep record:", error);
     throw error;
   }
 };
@@ -167,30 +335,9 @@ export const getSleepDataByMonth = async (childId, year, month) => {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
 
-    const startDate = `${firstDay.getFullYear()}-${String(
-      firstDay.getMonth() + 1
-    ).padStart(2, "0")}-${String(firstDay.getDate()).padStart(2, "0")}`;
-    const endDate = `${lastDay.getFullYear()}-${String(
-      lastDay.getMonth() + 1
-    ).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
-
-    console.log(`Month range: ${startDate} to ${endDate}`);
-
-    return await getSleepDataByDateRange(childId, startDate, endDate);
+    return await getSleepDataByDateRange(childId, firstDay, lastDay);
   } catch (error) {
     console.error("Error fetching monthly sleep data:", error);
-    throw error;
-  }
-};
-
-export const getWeeklySleepData = async (childId) => {
-  try {
-    console.log("Fetching weekly sleep data");
-    const { startDate, endDate } = getCurrentWeekDates();
-    console.log(`Week range: ${startDate} to ${endDate}`);
-    return await getSleepDataByDateRange(childId, startDate, endDate);
-  } catch (error) {
-    console.error("Error fetching weekly sleep data:", error);
     throw error;
   }
 };
@@ -284,101 +431,14 @@ export const aggregateSleepDataByMonth = (sleepData) => {
   return result;
 };
 
-export const getCurrentSleepData = async (childId) => {
-  try {
-    await ensureToken();
-
-    const response = await api.get(`/sleep/child/${childId}/current`);
-
-    return {
-      ...createSleepRecord(response.data),
-      isBeforeNoon: response.data.isBeforeNoon,
-      targetDate: response.data.targetDate,
-    };
-  } catch (error) {
-    const today = getLocalDateTimeString();
-    let targetDate = today;
-    let isBeforeNoon = false;
-
-    if (error.response && error.response.status === 404) {
-      if (error.response.data) {
-        targetDate = error.response.data.targetDate || today;
-        isBeforeNoon = error.response.data.isBeforeNoon || false;
-      }
-    }
-
-    return {
-      id: null,
-      childId,
-      napHours: 0,
-      nightHours: 0,
-      date: targetDate,
-      notes: "",
-      totalHours: "0",
-      isBeforeNoon: isBeforeNoon,
-      targetDate: targetDate,
-      isDefaultData: true,
-      sleepProgress: 0,
-    };
-  }
-};
-
 export const saveSleepData = async (sleepData) => {
   try {
-    await ensureToken();
-
     if (sleepData.id) {
-      return await updateSleepData(sleepData);
+      return await updateSleepRecord(sleepData.id, sleepData);
     }
-
-    // Get current Romanian datetime
-    const romaniaDatetime = getLocalDateTimeString();
-
-    const formattedData = {
-      childId: sleepData.childId,
-      napHours: Number.parseFloat(sleepData.napHours) || 0,
-      nightHours: Number.parseFloat(sleepData.nightHours) || 0,
-      date: romaniaDatetime,
-      notes: sleepData.notes || "",
-      sleepProgress: sleepData.sleepProgress || 0,
-    };
-
-    console.log(`Saving sleep data with Romanian datetime: ${romaniaDatetime}`);
-
-    const response = await api.post("/sleep", formattedData);
-
-    return createSleepRecord(response.data);
+    return await createSleepRecordApi(sleepData);
   } catch (error) {
     console.error("Error saving sleep data:", error);
-    throw error;
-  }
-};
-
-export const updateSleepData = async (sleepData) => {
-  try {
-    await ensureToken();
-
-    // Get current Romanian datetime
-    const romaniaDatetime = getLocalDateTimeString();
-
-    const formattedData = {
-      childId: sleepData.childId,
-      napHours: Number.parseFloat(sleepData.napHours) || 0,
-      nightHours: Number.parseFloat(sleepData.nightHours) || 0,
-      date: romaniaDatetime,
-      notes: sleepData.notes || "",
-      sleepProgress: sleepData.sleepProgress || 0,
-    };
-
-    console.log(
-      `Updating sleep data with Romanian datetime: ${romaniaDatetime}`
-    );
-
-    const response = await api.put(`/sleep/${sleepData.id}`, formattedData);
-
-    return createSleepRecord(response.data);
-  } catch (error) {
-    console.error("Error updating sleep data:", error);
     throw error;
   }
 };

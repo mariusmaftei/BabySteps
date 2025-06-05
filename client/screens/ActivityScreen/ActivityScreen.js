@@ -21,7 +21,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import defaultChildImage from "../../assets/images/default-child.png";
 import happyChildImage from "../../assets/images/happy-child.png";
 import sadChildImage from "../../assets/images/sad-child.png";
-import { fetchSleepRecords } from "../../services/sleep-service";
+import {
+  getTodaySleepData,
+  getCurrentSleepData,
+} from "../../services/sleep-service";
 import { getDiaperChanges } from "../../services/diaper-service";
 import * as feedingService from "../../services/feeding-service";
 
@@ -267,30 +270,36 @@ function ActivityScreen({ navigation }) {
         feeding: { breast: 0, bottle: 0, solid: 0 },
       }));
 
-      // Fetch sleep data
-      const sleepRecords = await fetchSleepRecords(childId);
-      console.log("📊 ActivityScreen - Sleep records fetched:", sleepRecords);
-      const today = new Date().toISOString().split("T")[0];
-      console.log("📊 ActivityScreen - Today's date:", today);
+      // Fetch sleep data - use the same method as SleepScreen
+      let sleepPercentage = 0;
+      try {
+        const todayData = await getTodaySleepData(childId);
 
-      // Extract date from datetime string for comparison
-      const todayRecord = sleepRecords.find((record) => {
-        const recordDate = record.date ? record.date.split(" ")[0] : null;
+        if (todayData && !todayData.isDefaultData) {
+          sleepPercentage = todayData.sleepProgress || 0;
+          console.log(
+            "📊 ActivityScreen - Today's sleep data found:",
+            todayData
+          );
+        } else {
+          // Try to get current sleep data if no today data
+          const currentData = await getCurrentSleepData(childId);
+          if (currentData && !currentData.isDefaultData) {
+            sleepPercentage = currentData.sleepProgress || 0;
+            console.log(
+              "📊 ActivityScreen - Current sleep data found:",
+              currentData
+            );
+          }
+        }
+
         console.log(
-          "📊 ActivityScreen - Comparing record date:",
-          recordDate,
-          "with today:",
-          today
+          "📊 ActivityScreen - Final sleep percentage:",
+          sleepPercentage
         );
-        return recordDate === today;
-      });
-
-      console.log(
-        "📊 ActivityScreen - Today's sleep record found:",
-        todayRecord
-      );
-      const sleepPercentage = todayRecord?.sleepProgress || 0;
-      console.log("📊 ActivityScreen - Sleep percentage:", sleepPercentage);
+      } catch (error) {
+        console.error("Error fetching sleep data:", error);
+      }
 
       // Fetch vaccination data
       const vaccProgress = await VaccinationService.getVaccinationProgress(
@@ -328,8 +337,8 @@ function ActivityScreen({ navigation }) {
       // Update all data at once
       setActivityData({
         sleep: {
-          records: sleepRecords,
-          percentage: sleepPercentage,
+          records: [],
+          percentage: sleepPercentage, // Use the fetched sleep percentage instead of 0
         },
         vaccination: {
           progress: vaccProgress?.percentage || 0,

@@ -1,6 +1,25 @@
 import api, { ensureToken } from "./api";
 
+// Helper function to get current datetime string in Romania timezone (YYYY-MM-DD HH:MM:SS format)
+export const getCurrentDateTimeString = () => {
+  const now = new Date();
+  // Add 3 hours for Romania timezone (UTC+3 during DST)
+  const romaniaTime = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+
+  const year = romaniaTime.getUTCFullYear();
+  const month = String(romaniaTime.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(romaniaTime.getUTCDate()).padStart(2, "0");
+  const hours = String(romaniaTime.getUTCHours()).padStart(2, "0");
+  const minutes = String(romaniaTime.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(romaniaTime.getUTCSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
 const createFeedingRecord = (data) => {
+  // Get current datetime for defaults
+  const currentDateTime = getCurrentDateTimeString();
+
   return {
     id: data.id || null,
     childId: data.childId,
@@ -13,8 +32,9 @@ const createFeedingRecord = (data) => {
     unit: data.unit || null,
     foodType: data.foodType || null,
     notes: data.notes || data.note || "",
-    date: data.date || new Date().toISOString().split("T")[0],
-    timestamp: data.timestamp || new Date().toISOString(),
+    // Always include time component in date
+    date: data.date || currentDateTime,
+    timestamp: data.timestamp || currentDateTime,
   };
 };
 
@@ -410,36 +430,6 @@ export const formatDateForPeriod = (dateString, period) => {
   }
 };
 
-export const debugFeedingData = (feedingData) => {
-  if (!feedingData || feedingData.length === 0) {
-    return;
-  }
-
-  const dateGroups = {};
-  feedingData.forEach((item) => {
-    const day = getDayFromTimestamp(item.timestamp);
-    const dateKey = day || item.date;
-
-    if (!dateGroups[dateKey]) {
-      dateGroups[dateKey] = [];
-    }
-    dateGroups[dateKey].push(item);
-  });
-
-  Object.keys(dateGroups)
-    .sort()
-    .forEach((date) => {
-      const items = dateGroups[date];
-
-      const breastCount = items.filter((i) => i.type === "breast").length;
-      const bottleCount = items.filter((i) => i.type === "bottle").length;
-      const solidCount = items.filter((i) => i.type === "solid").length;
-
-      if (items.length > 0) {
-      }
-    });
-};
-
 export const getFeedingSummary = async (childId, date) => {
   try {
     await ensureToken();
@@ -475,6 +465,16 @@ export const saveBreastfeedingData = async (feedingData) => {
   try {
     await ensureToken();
 
+    // Convert date to Romanian timezone before sending (same as diaper-service.js)
+    const romanianDate = new Date(feedingData.date || new Date());
+    // Romania is UTC+2 (EET) or UTC+3 (EEST during DST) - currently DST is active
+    const targetOffset = 3; // Romania daylight saving time offset (UTC+3)
+
+    // Adjust for Romanian timezone
+    const adjustedDate = new Date(
+      romanianDate.getTime() + targetOffset * 60 * 60 * 1000
+    );
+
     const formattedData = {
       childId: feedingData.childId,
       type: "breast",
@@ -484,9 +484,15 @@ export const saveBreastfeedingData = async (feedingData) => {
       side: feedingData.side,
       amount: 0,
       notes: feedingData.notes || "",
-      date: feedingData.date || new Date().toISOString().split("T")[0],
-      timestamp: feedingData.timestamp || new Date().toISOString(),
+      // Use the adjusted Romania time
+      date: adjustedDate.toISOString(),
+      timestamp: adjustedDate.toISOString(),
     };
+
+    console.log(
+      "Saving breastfeeding data with Romania datetime:",
+      formattedData.date
+    );
 
     if (feedingData.id) {
       const response = await api.put(
@@ -508,6 +514,16 @@ export const saveBottleFeedingData = async (feedingData) => {
   try {
     await ensureToken();
 
+    // Convert date to Romanian timezone before sending (same as diaper-service.js)
+    const romanianDate = new Date(feedingData.date || new Date());
+    // Romania is UTC+2 (EET) or UTC+3 (EEST during DST) - currently DST is active
+    const targetOffset = 3; // Romania daylight saving time offset (UTC+3)
+
+    // Adjust for Romanian timezone
+    const adjustedDate = new Date(
+      romanianDate.getTime() + targetOffset * 60 * 60 * 1000
+    );
+
     const formattedData = {
       childId: feedingData.childId,
       type: "bottle",
@@ -518,9 +534,15 @@ export const saveBottleFeedingData = async (feedingData) => {
       amount: feedingData.amount,
       unit: feedingData.unit || "ml",
       notes: feedingData.notes || "",
-      date: feedingData.date || new Date().toISOString().split("T")[0],
-      timestamp: feedingData.timestamp || new Date().toISOString(),
+      // Use the adjusted Romania time
+      date: adjustedDate.toISOString(),
+      timestamp: adjustedDate.toISOString(),
     };
+
+    console.log(
+      "Saving bottle feeding data with Romania datetime:",
+      formattedData.date
+    );
 
     if (feedingData.id) {
       const response = await api.put(
@@ -542,6 +564,16 @@ export const saveSolidFoodData = async (feedingData) => {
   try {
     await ensureToken();
 
+    // Convert date to Romanian timezone before sending (same as diaper-service.js)
+    const romanianDate = new Date(feedingData.date || new Date());
+    // Romania is UTC+2 (EET) or UTC+3 (EEST during DST) - currently DST is active
+    const targetOffset = 3; // Romania daylight saving time offset (UTC+3)
+
+    // Adjust for Romanian timezone
+    const adjustedDate = new Date(
+      romanianDate.getTime() + targetOffset * 60 * 60 * 1000
+    );
+
     const formattedData = {
       childId: feedingData.childId,
       type: "solid",
@@ -553,9 +585,15 @@ export const saveSolidFoodData = async (feedingData) => {
       unit: feedingData.unit || "g",
       foodType: feedingData.foodType,
       notes: feedingData.notes || "",
-      date: feedingData.date || new Date().toISOString().split("T")[0],
-      timestamp: feedingData.timestamp || new Date().toISOString(),
+      // Use the adjusted Romania time
+      date: adjustedDate.toISOString(),
+      timestamp: adjustedDate.toISOString(),
     };
+
+    console.log(
+      "Saving solid food data with Romania datetime:",
+      formattedData.date
+    );
 
     if (feedingData.id) {
       const response = await api.put(
@@ -585,103 +623,3 @@ export const deleteFeedingData = async (feedingId) => {
     throw error;
   }
 };
-
-// Add this debug function at the end of the file
-export const debugWeeklyFeedingData = async (childId) => {
-  try {
-    console.log("=== DEBUG: Weekly Feeding Data Flow ===");
-
-    const today = new Date();
-    console.log(`Today's date: ${today.toISOString()}`);
-
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - 6);
-    startDate.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(today);
-    endDate.setHours(23, 59, 59, 999);
-
-    console.log(
-      `Weekly date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
-    );
-
-    // Get the day names for the last 7 days
-    const dayNames = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(today.getDate() - i);
-      const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
-      const dateStr = date.toISOString().split("T")[0];
-      dayNames.push({ day: dayName, date: dateStr });
-    }
-
-    console.log("Expected days in weekly view:", dayNames);
-
-    // Get the actual data
-    const result = await getFeedingDataByDateRange(childId, startDate, endDate);
-    console.log(`Raw weekly feeding data (${result.length} records):`, result);
-
-    // Check which days have data
-    const dataByDay = {};
-    result.forEach((record) => {
-      let recordDate = null;
-
-      if (record.date) {
-        recordDate = record.date;
-      } else if (record.timestamp) {
-        recordDate = record.timestamp.split("T")[0];
-      }
-
-      if (recordDate) {
-        if (!dataByDay[recordDate]) {
-          dataByDay[recordDate] = [];
-        }
-        dataByDay[recordDate].push(record);
-      }
-    });
-
-    console.log("Data grouped by date:", dataByDay);
-
-    // Check if any of the expected days match the data
-    dayNames.forEach(({ day, date }) => {
-      const hasData = dataByDay[date] && dataByDay[date].length > 0;
-      console.log(
-        `${day} (${date}): ${
-          hasData ? dataByDay[date].length + " records" : "No data"
-        }`
-      );
-    });
-
-    // If no data found, try getting all data as a fallback
-    if (result.length === 0) {
-      console.log("No weekly data found, trying to get all feeding data");
-      const allData = await getChildFeedingData(childId);
-      console.log(
-        `Total feeding records for child: ${allData ? allData.length : 0}`
-      );
-
-      if (allData && allData.length > 0) {
-        console.log("Sample of available feeding records:");
-        allData.slice(0, 3).forEach((record, index) => {
-          console.log(`Record ${index + 1}:`, {
-            id: record.id,
-            type: record.type,
-            date: record.date,
-            timestamp: record.timestamp,
-          });
-        });
-      }
-    }
-
-    return result;
-  } catch (error) {
-    console.error("Error in debugWeeklyFeedingData:", error);
-    return [];
-  }
-};
-
-// Make it available globally for console testing
-if (typeof window !== "undefined") {
-  window.debugWeeklyFeedingData = debugWeeklyFeedingData;
-  window.getChildFeedingData = getChildFeedingData;
-}

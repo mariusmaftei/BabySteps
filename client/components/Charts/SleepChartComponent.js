@@ -118,10 +118,16 @@ const SleepChartComponent = ({
       labels = [];
 
     if (timePeriod === "week") {
-      // Get current week (last 7 days)
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - 6);
+      // For weekly view, the server already filtered the data for the last 7 days
+      // We just need to generate the same date range the server used
       endDate = new Date(now);
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 6); // 6 days ago + today = 7 days
+
+      console.log("📅 Weekly range (client-side for labels):", {
+        startDate: startDate.toISOString().split("T")[0],
+        endDate: endDate.toISOString().split("T")[0],
+      });
 
       // Generate labels for the week
       for (let i = 0; i < 7; i++) {
@@ -142,24 +148,14 @@ const SleepChartComponent = ({
       }
     }
 
-    console.log("📅 Date range:", { startDate, endDate, labels });
-
-    // Filter data for the current period
-    const filteredData = rawSleepData.filter((item) => {
-      const itemDate = extractDateFromDateTime(item.date);
-      if (!itemDate) return false;
-
-      const date = new Date(itemDate);
-      return date >= startDate && date <= endDate;
-    });
-
-    console.log("🔍 Filtered sleep data:", filteredData);
+    console.log("📅 Generated labels:", labels);
 
     // Initialize arrays for chart data
     const napHours = new Array(labels.length).fill(0);
     const nightHours = new Array(labels.length).fill(0);
     const totalSleepHours = new Array(labels.length).fill(0);
     const sleepProgress = new Array(labels.length).fill(0);
+    const recordCounts = new Array(labels.length).fill(0);
     const dates = [];
 
     // Generate date strings for each label
@@ -167,7 +163,8 @@ const SleepChartComponent = ({
       for (let i = 0; i < 7; i++) {
         const date = new Date(startDate);
         date.setDate(startDate.getDate() + i);
-        dates.push(date.toISOString().split("T")[0]);
+        const dateStr = date.toISOString().split("T")[0];
+        dates.push(dateStr);
       }
     } else {
       for (let i = 1; i <= labels.length; i++) {
@@ -176,25 +173,93 @@ const SleepChartComponent = ({
       }
     }
 
-    // Map filtered data to chart arrays
-    filteredData.forEach((item) => {
+    console.log("📅 Generated dates array:", dates);
+
+    // For weekly view, the data is already filtered by the server
+    // For monthly view, we still need to filter
+    let dataToProcess = rawSleepData;
+
+    if (timePeriod === "month") {
+      // Filter data for monthly view
+      dataToProcess = rawSleepData.filter((item) => {
+        const itemDate = extractDateFromDateTime(item.date);
+        if (!itemDate) return false;
+
+        const itemDateObj = new Date(itemDate + "T00:00:00");
+        const startDateObj = new Date(
+          startDate.toISOString().split("T")[0] + "T00:00:00"
+        );
+        const endDateObj = new Date(
+          endDate.toISOString().split("T")[0] + "T23:59:59"
+        );
+
+        return itemDateObj >= startDateObj && itemDateObj <= endDateObj;
+      });
+    }
+
+    console.log("🔍 Data to process:", dataToProcess);
+
+    // Map data to chart arrays
+    dataToProcess.forEach((item, index) => {
+      // Extract just the date part from the datetime string
       const itemDate = extractDateFromDateTime(item.date);
-      const dateIndex = dates.findIndex((date) => date === itemDate);
+
+      // Find the index in our dates array that matches this record's date
+      const dateIndex = dates.findIndex((date) => {
+        // Compare just the date parts (YYYY-MM-DD)
+        return date === itemDate;
+      });
+
+      console.log(`📊 Mapping item ${index}:`, {
+        itemDate,
+        itemFullDate: item.date,
+        dateIndex,
+        napHours: item.napHours,
+        nightHours: item.nightHours,
+        totalHours: item.totalHours,
+        sleepProgress: item.sleepProgress,
+        availableDates: dates,
+      });
 
       if (dateIndex !== -1) {
+        // For sleep data, we typically want to replace rather than accumulate per day
+        // since there should only be one sleep record per day
         napHours[dateIndex] = Number.parseFloat(item.napHours) || 0;
         nightHours[dateIndex] = Number.parseFloat(item.nightHours) || 0;
-        totalSleepHours[dateIndex] = Number.parseFloat(item.totalHours) || 0;
+        totalSleepHours[dateIndex] =
+          Number.parseFloat(item.totalHours) ||
+          napHours[dateIndex] + nightHours[dateIndex];
         sleepProgress[dateIndex] = Number.parseInt(item.sleepProgress) || 0;
+        recordCounts[dateIndex] = 1;
 
-        console.log(`📊 Mapped data for ${itemDate} (index ${dateIndex}):`, {
+        console.log(`📊 Set data for ${itemDate} (index ${dateIndex}):`, {
           nap: napHours[dateIndex],
           night: nightHours[dateIndex],
           total: totalSleepHours[dateIndex],
           progress: sleepProgress[dateIndex],
         });
+      } else {
+        console.log(
+          `❌ Could not find date index for ${itemDate}. Available dates:`,
+          dates
+        );
+        console.log(`❌ Date comparison details:`, {
+          itemDate,
+          dates,
+          dateMatches: dates.map((d) => ({ date: d, matches: d === itemDate })),
+        });
       }
     });
+
+    // Average the accumulated values for days with multiple records
+    for (let i = 0; i < labels.length; i++) {
+      if (recordCounts[i] > 1) {
+        napHours[i] = napHours[i] / recordCounts[i];
+        nightHours[i] = nightHours[i] / recordCounts[i];
+        totalSleepHours[i] = totalSleepHours[i] / recordCounts[i];
+        sleepProgress[i] = Math.round(sleepProgress[i] / recordCounts[i]);
+      }
+    }
 
     // Calculate averages
     const totalDaysWithData = totalSleepHours.filter(
@@ -448,13 +513,24 @@ const SleepChartComponent = ({
       .map((label, i) => ({
         label,
         date: dates[i],
-        nap: napHours[i],
-        night: nightHours[i],
-        total: totalSleepHours[i],
+        nap: Number.parseFloat(napHours[i]) || 0,
+        night: Number.parseFloat(nightHours[i]) || 0,
+        total: Number.parseFloat(totalSleepHours[i]) || 0,
         progress: sleepProgress[i],
         index: i,
       }))
-      .filter((day) => day.nap > 0 || day.night > 0);
+      .filter((day) => {
+        const hasData = day.nap > 0 || day.night > 0 || day.total > 0;
+        console.log(`📊 Day ${day.label} (${day.date}):`, {
+          nap: day.nap,
+          night: day.night,
+          total: day.total,
+          hasData,
+        });
+        return hasData;
+      });
+
+    console.log(`📊 Days with data for ${timePeriod} view:`, daysWithData);
 
     // If no data for this month/week, show a message
     if (daysWithData.length === 0) {

@@ -6,6 +6,7 @@ import {
   updateSleep,
   deleteSleep,
   getSleepByDateRange,
+  getWeeklySleep,
   getTodaySleep,
   getCurrentSleepData,
   autoFillSleepRecords,
@@ -20,28 +21,31 @@ sleepRoute.use(protect);
 // Create a new sleep record
 sleepRoute.post("/", createSleep);
 
+// Update a sleep record
+sleepRoute.put("/:id", updateSleep);
+
 // Get all sleep records for a child
 sleepRoute.get("/child/:childId", getSleepByChild);
 
-// Get sleep records for a child within a date range
+// Get sleep records by date range
 sleepRoute.get("/child/:childId/range", getSleepByDateRange);
 
 // Get today's sleep record for a child
 sleepRoute.get("/child/:childId/today", getTodaySleep);
 
-// Get current sleep data (yesterday before noon, today after noon)
+// Get current sleep data (today or yesterday based on time of day)
 sleepRoute.get("/child/:childId/current", getCurrentSleepData);
+
+// Get weekly sleep data for a child (last 7 days)
+sleepRoute.get("/child/:childId/weekly", getWeeklySleep);
 
 // Get a specific sleep record
 sleepRoute.get("/:id", getSleepById);
 
-// Update a sleep record
-sleepRoute.put("/:id", updateSleep);
-
 // Delete a sleep record
 sleepRoute.delete("/:id", deleteSleep);
 
-// Auto-fill missing sleep records (for cron job)
+// Auto-fill missing sleep records
 sleepRoute.post("/auto-fill", autoFillSleepRecords);
 
 export default sleepRoute;
