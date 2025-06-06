@@ -32,29 +32,46 @@ const createFeedingRecord = (data) => {
     unit: data.unit || null,
     foodType: data.foodType || null,
     notes: data.notes || data.note || "",
-    // Always include time component in date
+    // Always use date field for consistency
     date: data.date || currentDateTime,
     timestamp: data.timestamp || currentDateTime,
   };
 };
 
-export const getDayFromTimestamp = (timestamp) => {
-  if (!timestamp) return null;
+// New function to handle aggregated daily data from weekly/monthly endpoints
+const createAggregatedDayRecord = (data) => {
+  return {
+    date: data.date,
+    breastFeedings: data.breastFeedings || {
+      count: 0,
+      totalMinutes: 0,
+      leftSide: 0,
+      rightSide: 0,
+    },
+    bottleFeedings: data.bottleFeedings || { count: 0, totalMl: 0 },
+    solidFeedings: data.solidFeedings || { count: 0, totalGrams: 0 },
+    totalFeedings: data.totalFeedings || 0,
+  };
+};
+
+export const getDayFromTimestamp = (dateString) => {
+  if (!dateString) return null;
 
   try {
-    if (timestamp.includes("T")) {
-      return timestamp.split("T")[0].split("-")[2];
+    // Use date field instead of timestamp for day extraction
+    if (dateString.includes("T")) {
+      return dateString.split("T")[0].split("-")[2];
     }
 
-    if (timestamp.includes(" ")) {
-      return timestamp.split(" ")[0].split("-")[2];
+    if (dateString.includes(" ")) {
+      return dateString.split(" ")[0].split("-")[2];
     }
 
-    if (timestamp.includes("-")) {
-      return timestamp.split("-")[2];
+    if (dateString.includes("-")) {
+      return dateString.split("-")[2];
     }
 
-    const date = new Date(timestamp);
+    const date = new Date(dateString);
     if (!isNaN(date.getTime())) {
       return date.getDate().toString();
     }
@@ -193,9 +210,9 @@ export const getFeedingDataByDateRange = async (
     } catch (dateRangeError) {
       console.error("Error with date-range endpoint:", dateRangeError);
 
-      // Fallback: Get all feeding data and filter manually
+      // Fallback: Get all feeding data and filter manually by date field
       console.log(
-        "Falling back to getting all feeding data and filtering manually"
+        "Falling back to getting all feeding data and filtering manually by date field"
       );
       const allData = await getChildFeedingData(childId);
 
@@ -212,14 +229,15 @@ export const getFeedingDataByDateRange = async (
       const startTimestamp = new Date(startDate).getTime();
       const endTimestamp = new Date(endDate).getTime();
 
-      // Filter records that fall within the date range
+      // Filter records that fall within the date range using date field
       const filteredData = allData.filter((record) => {
         let recordDate;
 
-        if (record.timestamp) {
-          recordDate = new Date(record.timestamp);
-        } else if (record.date) {
+        // Use date field first, fallback to timestamp if needed
+        if (record.date) {
           recordDate = new Date(record.date);
+        } else if (record.timestamp) {
+          recordDate = new Date(record.timestamp);
         } else {
           return false;
         }
@@ -244,6 +262,43 @@ export const getFeedingDataByDateRange = async (
 export const getWeeklyFeedingData = async (childId) => {
   try {
     console.log("Getting weekly feeding data");
+    await ensureToken();
+
+    // Try the new weekly endpoint first (returns aggregated daily data)
+    try {
+      const response = await api.get(`/feeding/child/${childId}/weekly`);
+
+      if (response.data && response.data.data) {
+        console.log(
+          `Weekly endpoint returned ${response.data.data.length} aggregated days`
+        );
+
+        // Process the aggregated data into the format expected by the chart component
+        const processedData = {
+          dailyFeedings: response.data.data.map((day) => ({
+            date: day.date,
+            day: day.date.split("-")[2], // Extract day number from YYYY-MM-DD
+            breastDuration: day.breastFeedings.totalMinutes,
+            bottleAmount: day.bottleFeedings.totalMl,
+            solidAmount: day.solidFeedings.totalGrams,
+            // Keep the original data too
+            breastFeedings: day.breastFeedings,
+            bottleFeedings: day.bottleFeedings,
+            solidFeedings: day.solidFeedings,
+            totalFeedings: day.totalFeedings,
+          })),
+        };
+
+        console.log("Processed weekly data:", processedData);
+        return processedData.dailyFeedings;
+      }
+
+      console.log("Weekly endpoint returned no data");
+    } catch (weeklyError) {
+      console.error("Error with weekly endpoint:", weeklyError);
+    }
+
+    // Fallback to date range approach (returns individual records)
     const today = new Date();
     console.log(`Today is: ${today.toISOString()}`);
 
@@ -257,13 +312,15 @@ export const getWeeklyFeedingData = async (childId) => {
     endDate.setHours(23, 59, 59, 999);
 
     console.log(
-      `Weekly date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
+      `Weekly date range fallback: ${startDate.toISOString()} to ${endDate.toISOString()}`
     );
 
     // Try to get data for this date range
     const result = await getFeedingDataByDateRange(childId, startDate, endDate);
     console.log(
-      `Weekly feeding data retrieved: ${result ? result.length : 0} records`
+      `Weekly feeding data retrieved via fallback: ${
+        result ? result.length : 0
+      } records`
     );
 
     // If no data found, try getting all data as a fallback
@@ -277,11 +334,11 @@ export const getWeeklyFeedingData = async (childId) => {
         console.log(
           `Got ${allData.length} total feeding records, returning most recent ones`
         );
-        // Sort by date descending and take the most recent ones (up to 10)
+        // Sort by date field descending and take the most recent ones (up to 10)
         return allData
           .sort((a, b) => {
-            const dateA = new Date(a.timestamp || a.date);
-            const dateB = new Date(b.timestamp || b.date);
+            const dateA = new Date(a.date || a.timestamp);
+            const dateB = new Date(b.date || b.timestamp);
             return dateB - dateA;
           })
           .slice(0, 10);
@@ -295,72 +352,75 @@ export const getWeeklyFeedingData = async (childId) => {
   }
 };
 
-export const getMonthlyFeedingData = async (childId) => {
+export const getMonthlyFeedingData = async (childId, year, month) => {
   try {
-    console.log("Getting monthly feeding data");
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 30);
-    startDate.setHours(0, 0, 0, 0);
+    console.log(`Getting monthly feeding data for ${year}-${month + 1}`);
+    await ensureToken();
 
-    console.log(
-      `Monthly date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
-    );
+    // Format month parameter for API
+    const monthParam = `${year}-${String(month + 1).padStart(2, "0")}`;
 
-    const result = await getFeedingDataByDateRange(childId, startDate, endDate);
-    console.log(
-      `Monthly feeding data retrieved: ${result ? result.length : 0} records`
-    );
-
-    // If no data found, try getting all data as a fallback
-    if (!result || result.length === 0) {
-      console.log(
-        "No monthly data found, trying to get all feeding data as fallback"
+    // Try the new monthly endpoint first (returns aggregated daily data)
+    try {
+      const response = await api.get(
+        `/feeding/child/${childId}/monthly?month=${monthParam}`
       );
-      const allData = await getChildFeedingData(childId);
 
-      if (allData && allData.length > 0) {
+      if (response.data && response.data.data) {
         console.log(
-          `Got ${allData.length} total feeding records, returning most recent ones`
+          `Monthly endpoint returned ${response.data.data.length} aggregated days for ${monthParam}`
         );
-        // Sort by date descending and take the most recent ones (up to 30)
-        return allData
-          .sort((a, b) => {
-            const dateA = new Date(a.timestamp || a.date);
-            const dateB = new Date(b.timestamp || b.date);
-            return dateB - dateA;
-          })
-          .slice(0, 30);
+
+        // Process the aggregated data into the format expected by the chart component
+        const processedData = {
+          dailyFeedings: response.data.data.map((day) => ({
+            date: day.date,
+            day: day.date.split("-")[2], // Extract day number from YYYY-MM-DD
+            breastDuration: day.breastFeedings.totalMinutes,
+            bottleAmount: day.bottleFeedings.totalMl,
+            solidAmount: day.solidFeedings.totalGrams,
+            // Keep the original data too
+            breastFeedings: day.breastFeedings,
+            bottleFeedings: day.bottleFeedings,
+            solidFeedings: day.solidFeedings,
+            totalFeedings: day.totalFeedings,
+          })),
+        };
+
+        console.log("Processed monthly data:", processedData);
+        return processedData.dailyFeedings;
       }
+
+      console.log(`Monthly endpoint returned no data for ${monthParam}`);
+    } catch (monthlyError) {
+      console.error(
+        `Error with monthly endpoint for ${monthParam}:`,
+        monthlyError
+      );
     }
 
-    return result || [];
-  } catch (error) {
-    console.error("Error in getMonthlyFeedingData:", error);
-    return [];
-  }
-};
-
-export const getFeedingDataByMonth = async (childId, year, month) => {
-  try {
-    console.log(`Getting feeding data for ${year}-${month + 1}`);
+    // Fallback to date range approach (returns individual records)
     const startDate = new Date(year, month, 1);
     const endDate = new Date(year, month + 1, 0);
     endDate.setHours(23, 59, 59, 999);
 
     console.log(
-      `Month date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
+      `Month date range fallback: ${startDate.toISOString()} to ${endDate.toISOString()}`
     );
 
     const result = await getFeedingDataByDateRange(childId, startDate, endDate);
     console.log(
-      `Month feeding data retrieved: ${result ? result.length : 0} records`
+      `Month feeding data retrieved via fallback: ${
+        result ? result.length : 0
+      } records`
     );
 
     // If no data found, try getting all data as a fallback
     if (!result || result.length === 0) {
       console.log(
-        "No data found for this month, trying to get all feeding data as fallback"
+        `No data found for month ${
+          month + 1
+        }/${year}, trying to get all feeding data as fallback`
       );
       const allData = await getChildFeedingData(childId);
 
@@ -371,14 +431,15 @@ export const getFeedingDataByMonth = async (childId, year, month) => {
           }/${year}`
         );
 
-        // Filter records for the specified month and year
+        // Filter records for the specified month and year using date field
         const filteredData = allData.filter((record) => {
           let recordDate;
 
-          if (record.timestamp) {
-            recordDate = new Date(record.timestamp);
-          } else if (record.date) {
+          // Use date field first, fallback to timestamp if needed
+          if (record.date) {
             recordDate = new Date(record.date);
+          } else if (record.timestamp) {
+            recordDate = new Date(record.timestamp);
           } else {
             return false;
           }
@@ -399,9 +460,16 @@ export const getFeedingDataByMonth = async (childId, year, month) => {
 
     return result || [];
   } catch (error) {
-    console.error("Error in getFeedingDataByMonth:", error);
+    console.error(
+      `Error in getMonthlyFeedingData for ${month + 1}/${year}:`,
+      error
+    );
     return [];
   }
+};
+
+export const getFeedingDataByMonth = async (childId, year, month) => {
+  return getMonthlyFeedingData(childId, year, month);
 };
 
 export const formatDateForPeriod = (dateString, period) => {
@@ -484,7 +552,7 @@ export const saveBreastfeedingData = async (feedingData) => {
       side: feedingData.side,
       amount: 0,
       notes: feedingData.notes || "",
-      // Use the adjusted Romania time
+      // Use the adjusted Romania time for both date and timestamp
       date: adjustedDate.toISOString(),
       timestamp: adjustedDate.toISOString(),
     };
@@ -534,7 +602,7 @@ export const saveBottleFeedingData = async (feedingData) => {
       amount: feedingData.amount,
       unit: feedingData.unit || "ml",
       notes: feedingData.notes || "",
-      // Use the adjusted Romania time
+      // Use the adjusted Romania time for both date and timestamp
       date: adjustedDate.toISOString(),
       timestamp: adjustedDate.toISOString(),
     };
@@ -585,7 +653,7 @@ export const saveSolidFoodData = async (feedingData) => {
       unit: feedingData.unit || "g",
       foodType: feedingData.foodType,
       notes: feedingData.notes || "",
-      // Use the adjusted Romania time
+      // Use the adjusted Romania time for both date and timestamp
       date: adjustedDate.toISOString(),
       timestamp: adjustedDate.toISOString(),
     };

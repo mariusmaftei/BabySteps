@@ -10,6 +10,8 @@ import {
   getFeedingSummary,
   getTodayFeedings,
   updateFeeding,
+  getWeeklyFeedings,
+  getMonthlyFeedings,
 } from "../controllers/FeedingController.js";
 
 const feedingRoute = express.Router();
@@ -19,6 +21,12 @@ feedingRoute.use(protect);
 
 // Create a new feeding record
 feedingRoute.post("/", createFeeding);
+
+// Get weekly feeding records for a specific child
+feedingRoute.get("/child/:childId/weekly", getWeeklyFeedings);
+
+// Get monthly feeding records for a specific child
+feedingRoute.get("/child/:childId/monthly", getMonthlyFeedings);
 
 // Get all feeding records for a specific child
 feedingRoute.get("/child/:childId", getFeedingsByChildId);
