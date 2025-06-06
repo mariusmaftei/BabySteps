@@ -25,10 +25,21 @@ import ChildRecommendationCard from "../../../components/UI/Cards/ChildRecommend
 import BirthDataCard from "../../../components/UI/Cards/BirthDataCard";
 import AreaChart from "../../../components/UI/Charts/AreaChart";
 
-import {
-  getWHOStandards,
-  getGrowthRecommendations,
-} from "../../../utils/growth-utils";
+import { getGrowthRecommendations } from "../../../utils/growth-utils";
+
+// Define one-year growth targets outside the component to prevent re-creation on every render
+const ONE_YEAR_TARGETS = {
+  male: {
+    weight: 9600, // grams
+    height: 74, // cm (Updated as requested)
+    headCirc: 46, // cm
+  },
+  female: {
+    weight: 8900, // grams
+    height: 76, // cm
+    headCirc: 46, // cm
+  },
+};
 
 export default function GrowthScreen({ navigation }) {
   const { theme } = useTheme();
@@ -54,6 +65,7 @@ export default function GrowthScreen({ navigation }) {
     headCircProgress: 0,
   });
 
+  // Initialize current measurement inputs to empty strings
   const [currentWeight, setCurrentWeight] = useState("");
   const [previousWeight, setPreviousWeight] = useState("");
   const [currentHeight, setCurrentHeight] = useState("");
@@ -163,11 +175,11 @@ export default function GrowthScreen({ navigation }) {
     if (isNaN(birthHeadCircValue)) {
       birthHeadCircValue = 0;
     }
-    const hasPreviousRecord =
+    const hasPreviousRecordCheck =
       previousRecord !== null || previousHeadCirc !== "";
     const currentHeadCircValue = Number.parseFloat(currentHeadCirc) || 0;
 
-    if (!hasPreviousRecord) {
+    if (!hasPreviousRecordCheck) {
       return {
         labels: ["Birth", "New Measurement"],
         datasets: [
@@ -208,7 +220,7 @@ export default function GrowthScreen({ navigation }) {
     childAgeUnit === "months" ? childAgeNum : childAgeNum * 12;
   const childGender = currentChild.gender
     ? currentChild.gender.toLowerCase()
-    : "boys";
+    : "boys"; // Default to 'boys' if not specified
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -219,27 +231,18 @@ export default function GrowthScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    const currentStandards = getWHOStandards(childAgeInMonths, childGender);
-    const nextMonthStandards = getWHOStandards(
-      childAgeInMonths + 1,
-      childGender
-    );
+    // Normalize gender to 'male' or 'female' for target lookup
+    const genderForTargets =
+      currentChild.gender?.toLowerCase() === "girl" ? "female" : "male";
+    const targets = ONE_YEAR_TARGETS[genderForTargets];
 
-    const whoWeightTarget = Math.round(
-      (nextMonthStandards.weight - currentStandards.weight) * 1000
-    );
-    setTargetWeight(whoWeightTarget > 0 ? whoWeightTarget : 500);
-
-    const whoHeightTarget = Math.round(
-      (nextMonthStandards.height - currentStandards.height) * 10
-    );
-    setTargetHeight(whoHeightTarget > 0 ? whoHeightTarget : 10);
-
-    const whoHeadCircTarget = Math.round(
-      (nextMonthStandards.headCirc - currentStandards.headCirc) * 10
-    );
-    setTargetHeadCirc(whoHeadCircTarget > 0 ? whoHeadCircTarget : 5);
-  }, [childAgeInMonths, childGender]);
+    if (targets) {
+      setTargetWeight(targets.weight); // Already in grams
+      setTargetHeight(targets.height * 10); // Convert cm to mm for internal state
+      setTargetHeadCirc(targets.headCirc * 10); // Convert cm to mm for internal state
+    }
+    // Removed the WHO standards fallback to ensure only the one-year targets are used
+  }, [currentChild.gender]); // Only depend on currentChild.gender for target updates
 
   const loadGrowthData = useCallback(async () => {
     try {
@@ -421,33 +424,56 @@ export default function GrowthScreen({ navigation }) {
         );
         setLatestRecord(latest);
 
-        if (latest.weight) {
-          setCurrentWeight(latest.weight.toString());
-          setHasWeightMeasurement(true);
-        }
+        if (latest) {
+          // Only set if latest record exists
+          if (latest.weight) {
+            setCurrentWeight(latest.weight.toString());
+            setHasWeightMeasurement(true);
+          } else {
+            setCurrentWeight("");
+            setHasWeightMeasurement(false);
+          }
 
-        if (latest.height) {
-          setCurrentHeight(latest.height.toString());
-          setHasHeightMeasurement(true);
-        }
+          if (latest.height) {
+            // Convert height from mm to cm for display
+            setCurrentHeight((latest.height / 10).toString());
+            setHasHeightMeasurement(true);
+          } else {
+            setCurrentHeight("");
+            setHasHeightMeasurement(false);
+          }
 
-        if (latest.headCircumference) {
-          setCurrentHeadCirc(latest.headCircumference.toString());
-          setHasHeadCircMeasurement(true);
-        }
+          if (latest.headCircumference) {
+            // Convert head circumference from mm to cm for display
+            setCurrentHeadCirc((latest.headCircumference / 10).toString());
+            setHasHeadCircMeasurement(true);
+          } else {
+            setCurrentHeadCirc("");
+            setHasHeadCircMeasurement(false);
+          }
 
-        setHasExistingMeasurements(true);
+          setHasExistingMeasurements(true);
 
-        if (
-          latest.weightProgress !== undefined &&
-          latest.heightProgress !== undefined &&
-          latest.headCircumferenceProgress !== undefined
-        ) {
-          setProgressValues({
-            weightProgress: latest.weightProgress,
-            heightProgress: latest.heightProgress,
-            headCircProgress: latest.headCircProgress,
-          });
+          if (
+            latest.weightProgress !== undefined &&
+            latest.heightProgress !== undefined &&
+            latest.headCircumferenceProgress !== undefined
+          ) {
+            setProgressValues({
+              weightProgress: latest.weightProgress,
+              heightProgress: latest.heightProgress,
+              headCircProgress: latest.headCircProgress,
+            });
+          }
+        } else {
+          // No latest record, ensure inputs are empty
+          setCurrentWeight("");
+          setCurrentHeight("");
+          setCurrentHeadCirc("");
+          setHasWeightMeasurement(false);
+          setHasHeightMeasurement(false);
+          setHasHeadCircMeasurement(false);
+          setHasExistingMeasurements(false);
         }
       } catch (error) {
         setLatestRecord(null);
@@ -465,9 +491,17 @@ export default function GrowthScreen({ navigation }) {
           currentChild.id
         );
         setPreviousRecord(previous);
-        setPreviousWeight(previous.weight.toString());
-        setPreviousHeight(previous.height.toString());
-        setPreviousHeadCirc(previous.headCircumference.toString());
+        if (previous) {
+          setPreviousWeight(previous.weight.toString());
+          // Convert previous height from mm to cm for display
+          setPreviousHeight((previous.height / 10).toString());
+          // Convert previous head circumference from mm to cm for display
+          setPreviousHeadCirc((previous.headCircumference / 10).toString());
+        } else {
+          setPreviousWeight("");
+          setPreviousHeight("");
+          setPreviousHeadCirc("");
+        }
       } catch (error) {
         setPreviousRecord(null);
         setPreviousWeight("");
@@ -538,15 +572,15 @@ export default function GrowthScreen({ navigation }) {
   );
 
   const handleWeightChange = (type, value) => {
+    // Allow up to 5 digits for grams (e.g., 20000g)
     const validatedValue = value.replace(/[^0-9]/g, "");
 
-    if (validatedValue.length > 3) {
+    if (validatedValue.length > 5) {
       return;
     }
 
     if (type === "current") {
       setCurrentWeight(validatedValue);
-      // Update the hasWeightMeasurement flag based on whether there's a value
       setHasWeightMeasurement(validatedValue !== "");
     } else {
       setPreviousWeight(validatedValue);
@@ -554,14 +588,14 @@ export default function GrowthScreen({ navigation }) {
   };
 
   const handleMeasurementChange = (type, value, setter, setHasMeasurement) => {
+    // Allow up to 3 digits for centimeters (e.g., 999cm)
     const validatedValue = value.replace(/[^0-9]/g, "");
 
-    if (validatedValue.length > 2) {
+    if (validatedValue.length > 3) {
       return;
     }
 
     setter(validatedValue);
-    // Update the corresponding measurement flag
     setHasMeasurement(validatedValue !== "");
   };
 
@@ -588,7 +622,7 @@ export default function GrowthScreen({ navigation }) {
       if (!currentWeight || !currentHeight || !currentHeadCirc) {
         Alert.alert(
           "Missing Information",
-          "Please enter values for weight, height, and head circumference. These fields are required.",
+          "Please enter values for weight (g), height (cm), and head circumference (cm). These fields are required.",
           [{ text: "OK" }]
         );
         return;
@@ -597,9 +631,13 @@ export default function GrowthScreen({ navigation }) {
       setLoading(true);
 
       const weightInGrams = Math.round(Number.parseFloat(currentWeight || "0"));
-      const heightInMm = Math.round(Number.parseFloat(currentHeight || "0"));
+      // Convert height from cm to mm before saving
+      const heightInMm = Math.round(
+        Number.parseFloat(currentHeight || "0") * 10
+      );
+      // Convert head circumference from cm to mm before saving
       const headCircInMm = Math.round(
-        Number.parseFloat(currentHeadCirc || "0")
+        Number.parseFloat(currentHeadCirc || "0") * 10
       );
 
       if (isNaN(weightInGrams) || isNaN(heightInMm) || isNaN(headCircInMm)) {

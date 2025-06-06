@@ -29,16 +29,8 @@ export const getGrowthRecords = async (childId) => {
     return response.data;
   } catch (error) {
     console.error("Error in getGrowthRecords:", error);
-    return [
-      {
-        id: 1,
-        childId: 1,
-        weight: 50,
-        height: 1,
-        headCircumference: 1,
-        recordDate: "2025-05-19 20:00:05",
-      },
-    ];
+    // Return an empty array instead of hardcoded data on error
+    return [];
   }
 };
 
@@ -48,14 +40,8 @@ export const getLatestGrowthRecord = async (childId) => {
     const response = await api.get(`/growth/child/${childId}/latest`);
     return response.data;
   } catch (error) {
-    return {
-      id: 1,
-      childId: 1,
-      weight: 50,
-      height: 1,
-      headCircumference: 1,
-      recordDate: "2025-05-19 20:00:05",
-    };
+    // Return null instead of hardcoded data on error or 404
+    return handle404Error(error, "No latest growth record found", null);
   }
 };
 

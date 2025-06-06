@@ -113,18 +113,19 @@ const AreaCharts = ({
       case "weight":
         return Math.round(targetWeight);
       case "height":
-        return Math.round(targetHeight);
+        // Convert from mm to cm for display
+        return Math.round(targetHeight / 10);
       case "headCirc":
-        return Math.round(targetHeadCirc);
+        // Convert from mm to cm for display
+        return Math.round(targetHeadCirc / 10);
       default:
         return Math.round(targetWeight);
     }
   };
 
   const getTotalTargetValue = (type) => {
-    const birth = getBirthValue(type);
-    const target = getTargetValue(type);
-    return birth + target;
+    // Return just the target value without adding the birth value
+    return getTargetValue(type);
   };
 
   const getSmoothProgress = (type) => {

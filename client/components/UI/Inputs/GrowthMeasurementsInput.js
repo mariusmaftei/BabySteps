@@ -31,6 +31,7 @@ const GrowthMeasurementsInput = memo(
     headCircGain,
     loading,
     saveGrowthData,
+    showTodayOnly = false,
   }) => {
     const formatValue = (value) => {
       if (!value) return 0;
@@ -89,7 +90,7 @@ const GrowthMeasurementsInput = memo(
                       { color: theme.text, marginLeft: 5 },
                     ]}
                   >
-                    Weight (kg) <Text style={{ color: theme.danger }}>*</Text>
+                    Weight (g) <Text style={{ color: theme.danger }}>*</Text>
                   </Text>
                 </View>
                 <TextInput
@@ -110,7 +111,8 @@ const GrowthMeasurementsInput = memo(
                   value={currentWeight}
                   onChangeText={(text) => {
                     const validatedText = text.replace(/[^0-9]/g, "");
-                    if (validatedText.length <= 3) {
+                    if (validatedText.length <= 5) {
+                      // Adjusted for grams
                       handleWeightChange("current", validatedText);
                     }
                   }}
@@ -147,7 +149,8 @@ const GrowthMeasurementsInput = memo(
                   value={currentHeight}
                   onChangeText={(text) => {
                     const validatedText = text.replace(/[^0-9]/g, "");
-                    if (validatedText.length <= 2) {
+                    if (validatedText.length <= 3) {
+                      // Adjusted for cm
                       handleMeasurementChange(
                         "current",
                         validatedText,
@@ -192,7 +195,8 @@ const GrowthMeasurementsInput = memo(
                   value={currentHeadCirc}
                   onChangeText={(text) => {
                     const validatedText = text.replace(/[^0-9]/g, "");
-                    if (validatedText.length <= 2) {
+                    if (validatedText.length <= 3) {
+                      // Adjusted for cm
                       handleMeasurementChange(
                         "current",
                         validatedText,
@@ -256,7 +260,7 @@ const GrowthMeasurementsInput = memo(
                   Weight
                 </Text>
                 <Text style={[styles.summaryValue, { color: theme.text }]}>
-                  {formatValue(currentWeight)} kg
+                  {formatValue(currentWeight)} g
                 </Text>
               </View>
               <View style={styles.summaryChangeContainer}>
@@ -271,11 +275,12 @@ const GrowthMeasurementsInput = memo(
                 <Text
                   style={[
                     styles.summaryChangeValue,
-                    { color: weightGain >= 0 ? theme.success : theme.danger },
+                    { color: theme.textSecondary },
                   ]}
                 >
-                  {weightGain > 0 ? "+" : ""}
-                  {weightGain} kg
+                  {showTodayOnly
+                    ? "today"
+                    : `${weightGain > 0 ? "+" : ""}${weightGain} g`}
                 </Text>
               </View>
             </View>
@@ -311,11 +316,12 @@ const GrowthMeasurementsInput = memo(
                 <Text
                   style={[
                     styles.summaryChangeValue,
-                    { color: heightGain >= 0 ? theme.success : theme.danger },
+                    { color: theme.textSecondary },
                   ]}
                 >
-                  {heightGain > 0 ? "+" : ""}
-                  {heightGain} cm
+                  {showTodayOnly
+                    ? "today"
+                    : `${heightGain > 0 ? "+" : ""}${heightGain} cm`}
                 </Text>
               </View>
             </View>
@@ -346,13 +352,12 @@ const GrowthMeasurementsInput = memo(
                 <Text
                   style={[
                     styles.summaryChangeValue,
-                    {
-                      color: headCircGain >= 0 ? theme.success : theme.danger,
-                    },
+                    { color: theme.textSecondary },
                   ]}
                 >
-                  {headCircGain > 0 ? "+" : ""}
-                  {headCircGain} cm
+                  {showTodayOnly
+                    ? "today"
+                    : `${headCircGain > 0 ? "+" : ""}${headCircGain} cm`}
                 </Text>
               </View>
             </View>
