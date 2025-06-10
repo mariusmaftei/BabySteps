@@ -425,34 +425,46 @@ export default function GrowthScreen({ navigation }) {
         setLatestRecord(latest);
 
         if (latest) {
-          // Only set if latest record exists
-          if (latest.weight) {
-            setCurrentWeight(latest.weight.toString());
-            setHasWeightMeasurement(true);
+          // Check if the latest record is from today
+          const today = new Date();
+          const recordDate = new Date(latest.createdAt || latest.recordDate);
+
+          const isToday =
+            today.getDate() === recordDate.getDate() &&
+            today.getMonth() === recordDate.getMonth() &&
+            today.getFullYear() === recordDate.getFullYear();
+
+          if (isToday) {
+            // Record is from today - show in edit mode
+            if (latest.weight) {
+              setCurrentWeight(latest.weight.toString());
+              setHasWeightMeasurement(true);
+            }
+            if (latest.height) {
+              setCurrentHeight((latest.height / 10).toString());
+              setHasHeightMeasurement(true);
+            }
+            if (latest.headCircumference) {
+              setCurrentHeadCirc((latest.headCircumference / 10).toString());
+              setHasHeadCircMeasurement(true);
+            }
+            if (latest.notes) {
+              setNotes(latest.notes);
+            }
+            setHasExistingMeasurements(true);
+            setIsEditMode(false); // Start in view mode, can click edit
           } else {
+            // Record is from previous day - reset for new record
             setCurrentWeight("");
-            setHasWeightMeasurement(false);
-          }
-
-          if (latest.height) {
-            // Convert height from mm to cm for display
-            setCurrentHeight((latest.height / 10).toString());
-            setHasHeightMeasurement(true);
-          } else {
             setCurrentHeight("");
-            setHasHeightMeasurement(false);
-          }
-
-          if (latest.headCircumference) {
-            // Convert head circumference from mm to cm for display
-            setCurrentHeadCirc((latest.headCircumference / 10).toString());
-            setHasHeadCircMeasurement(true);
-          } else {
             setCurrentHeadCirc("");
+            setNotes("");
+            setHasWeightMeasurement(false);
+            setHasHeightMeasurement(false);
             setHasHeadCircMeasurement(false);
+            setHasExistingMeasurements(false);
+            setIsEditMode(false);
           }
-
-          setHasExistingMeasurements(true);
 
           if (
             latest.weightProgress !== undefined &&
@@ -470,20 +482,24 @@ export default function GrowthScreen({ navigation }) {
           setCurrentWeight("");
           setCurrentHeight("");
           setCurrentHeadCirc("");
+          setNotes("");
           setHasWeightMeasurement(false);
           setHasHeightMeasurement(false);
           setHasHeadCircMeasurement(false);
           setHasExistingMeasurements(false);
+          setIsEditMode(false);
         }
       } catch (error) {
         setLatestRecord(null);
         setCurrentWeight("");
         setCurrentHeight("");
         setCurrentHeadCirc("");
+        setNotes("");
         setHasWeightMeasurement(false);
         setHasHeightMeasurement(false);
         setHasHeadCircMeasurement(false);
         setHasExistingMeasurements(false);
+        setIsEditMode(false);
       }
 
       try {
@@ -1002,6 +1018,7 @@ export default function GrowthScreen({ navigation }) {
           headCircGain={headCircGain}
           loading={loading}
           saveGrowthData={saveGrowthData}
+          showTodayOnly={hasExistingMeasurements}
         />
       </ScrollView>
     </SafeAreaView>
