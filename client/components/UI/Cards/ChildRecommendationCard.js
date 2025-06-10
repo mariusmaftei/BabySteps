@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,7 +24,7 @@ const ChildRecommendationCard = ({
 
   // Convert age to months if in years for more precise recommendations
   const childAgeInMonths =
-    childAgeUnit === "months" ? childAgeNum : childAgeNum * 12;
+    childAgeUnit === "months" ? childAgeNum : childAgeNum * 1;
 
   // Get age group based on months
   const getAgeGroup = (ageInMonths) => {
@@ -142,13 +144,13 @@ const ChildRecommendationCard = ({
     if (customRecommendation) return customRecommendation;
 
     if (ageInMonths < 6) {
-      return "Expect weight gain of 5-7 oz per week. Length increases about 1 inch per month. Head circumference increases about 0.5 inch per month.";
+      return "Expect weight gain of 140-200 grams per week. Length increases about 2.5 cm per month. Head circumference increases about 1.3 cm per month.";
     } else if (ageInMonths < 12) {
-      return "Weight gain slows to 3-5 oz per week. Length increases about 0.5 inch per month. Birth weight typically doubles by 5-6 months and triples by 12 months.";
+      return "Weight gain slows to 85-140 grams per week. Length increases about 1.3 cm per month. Birth weight typically doubles by 5-6 months and triples by 12 months.";
     } else if (ageInMonths < 24) {
-      return "Weight gain of about 3-5 pounds per year. Height increases about 3-5 inches per year. Birth weight typically quadruples by 2 years.";
+      return "Weight gain of about 1.4-2.3 kg per year. Height increases about 7.5-12.5 cm per year. Birth weight typically quadruples by 2 years.";
     } else {
-      return "Weight gain of about 4-6 pounds per year. Height increases about 2-3 inches per year.";
+      return "Weight gain of about 1.8-2.7 kg per year. Height increases about 5-7.5 cm per year.";
     }
   };
 

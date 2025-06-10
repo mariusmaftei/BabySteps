@@ -26,12 +26,8 @@ const GrowthMeasurementsInput = memo(
     setCurrentHeadCirc,
     notes,
     setNotes,
-    weightGain,
-    heightGain,
-    headCircGain,
     loading,
     saveGrowthData,
-    showTodayOnly = false,
   }) => {
     const formatValue = (value) => {
       if (!value) return 0;
@@ -266,21 +262,11 @@ const GrowthMeasurementsInput = memo(
               <View style={styles.summaryChangeContainer}>
                 <Text
                   style={[
-                    styles.summaryChangeLabel,
-                    { color: theme.textSecondary },
-                  ]}
-                >
-                  Change
-                </Text>
-                <Text
-                  style={[
                     styles.summaryChangeValue,
                     { color: theme.textSecondary },
                   ]}
                 >
-                  {showTodayOnly
-                    ? "today"
-                    : `${weightGain > 0 ? "+" : ""}${weightGain} g`}
+                  Today
                 </Text>
               </View>
             </View>
@@ -307,21 +293,11 @@ const GrowthMeasurementsInput = memo(
               <View style={styles.summaryChangeContainer}>
                 <Text
                   style={[
-                    styles.summaryChangeLabel,
-                    { color: theme.textSecondary },
-                  ]}
-                >
-                  Change
-                </Text>
-                <Text
-                  style={[
                     styles.summaryChangeValue,
                     { color: theme.textSecondary },
                   ]}
                 >
-                  {showTodayOnly
-                    ? "today"
-                    : `${heightGain > 0 ? "+" : ""}${heightGain} cm`}
+                  Today
                 </Text>
               </View>
             </View>
@@ -343,21 +319,11 @@ const GrowthMeasurementsInput = memo(
               <View style={styles.summaryChangeContainer}>
                 <Text
                   style={[
-                    styles.summaryChangeLabel,
-                    { color: theme.textSecondary },
-                  ]}
-                >
-                  Change
-                </Text>
-                <Text
-                  style={[
                     styles.summaryChangeValue,
                     { color: theme.textSecondary },
                   ]}
                 >
-                  {showTodayOnly
-                    ? "today"
-                    : `${headCircGain > 0 ? "+" : ""}${headCircGain} cm`}
+                  Today
                 </Text>
               </View>
             </View>
