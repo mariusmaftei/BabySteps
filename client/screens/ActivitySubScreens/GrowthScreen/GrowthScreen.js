@@ -435,7 +435,7 @@ export default function GrowthScreen({ navigation }) {
             today.getFullYear() === recordDate.getFullYear();
 
           if (isToday) {
-            // Record is from today - show in edit mode
+            // Record is from today - show in view mode with edit capability
             if (latest.weight) {
               setCurrentWeight(latest.weight.toString());
               setHasWeightMeasurement(true);
@@ -478,7 +478,7 @@ export default function GrowthScreen({ navigation }) {
             });
           }
         } else {
-          // No latest record, ensure inputs are empty
+          // No latest record - first time setup
           setCurrentWeight("");
           setCurrentHeight("");
           setCurrentHeadCirc("");

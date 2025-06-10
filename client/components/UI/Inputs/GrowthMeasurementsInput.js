@@ -56,7 +56,8 @@ const GrowthMeasurementsInput = memo(
             : "Enter your child's first growth measurements"}
         </Text>
 
-        {latestRecord && !isEditMode && (
+        {/* ONLY show Edit button if there are existing measurements for TODAY and not in edit mode */}
+        {hasExistingMeasurements && !isEditMode && (
           <TouchableOpacity
             style={[
               styles.editButton,
@@ -74,6 +75,7 @@ const GrowthMeasurementsInput = memo(
           </TouchableOpacity>
         )}
 
+        {/* Show input fields and Save button if in edit mode OR no existing measurements for TODAY */}
         {isEditMode || !hasExistingMeasurements ? (
           <>
             <View style={styles.inputRow}>
@@ -349,6 +351,7 @@ const GrowthMeasurementsInput = memo(
           </View>
         )}
 
+        {/* Required fields note and Save button are shown under the same conditions as inputs */}
         {(isEditMode || !hasExistingMeasurements) && (
           <Text
             style={[styles.requiredFieldsNote, { color: theme.textSecondary }]}
