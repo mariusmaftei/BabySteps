@@ -30,22 +30,20 @@ const ProgressBar = ({ progress, color, width }) => {
 
 const AreaCharts = ({
   theme,
-  getBarChartData,
-  getHeightChartData,
-  getHeadCircChartData,
   onProgressCalculated,
   targetWeight,
   targetHeight,
   targetHeadCirc,
-  currentWeight,
-  currentHeight,
-  currentHeadCirc,
+  currentWeight, // This is the current input/latest today's record
+  currentHeight, // This is the current input/latest today's record
+  currentHeadCirc, // This is the current input/latest today's record
   birthWeight,
   birthHeight,
   birthHeadCirc,
-  hasWeightMeasurement = false,
+  hasWeightMeasurement = false, // Indicates if currentWeight is populated (today's record or new input)
   hasHeightMeasurement = false,
   hasHeadCircMeasurement = false,
+  allGrowthRecords, // All historical growth records from DB
 }) => {
   console.log("AreaChart props:", {
     birthWeight,
@@ -57,10 +55,9 @@ const AreaCharts = ({
     hasWeightMeasurement,
     hasHeightMeasurement,
     hasHeadCircMeasurement,
+    allGrowthRecords,
   });
 
-  // This function should NOT convert mm to cm - the values are already in their correct units
-  // We'll just return the value as is, or 0 if it's falsy
   const ensureNumber = (value) => {
     if (!value) return 0;
     const num = Number.parseFloat(value);
@@ -80,34 +77,6 @@ const AreaCharts = ({
     }
   };
 
-  const getAdditionalValue = (type) => {
-    switch (type) {
-      case "weight":
-        // Only return a value if weight measurement exists
-        return hasWeightMeasurement ? ensureNumber(currentWeight) : 0;
-      case "height":
-        // Only return a value if height measurement exists
-        return hasHeightMeasurement ? ensureNumber(currentHeight) : 0;
-      case "headCirc":
-        // Only return a value if head circumference measurement exists
-        return hasHeadCircMeasurement ? ensureNumber(currentHeadCirc) : 0;
-      default:
-        return 0;
-    }
-  };
-
-  const getTotalValue = (type) => {
-    const birth = getBirthValue(type);
-    const additional = getAdditionalValue(type);
-
-    // If additional value is 0 or not set, return birth value
-    if (additional === 0) {
-      return birth;
-    }
-
-    return birth + additional;
-  };
-
   const getTargetValue = (type) => {
     switch (type) {
       case "weight":
@@ -124,25 +93,49 @@ const AreaCharts = ({
   };
 
   const getTotalTargetValue = (type) => {
-    // Return just the target value without adding the birth value
     return getTargetValue(type);
   };
 
   const getSmoothProgress = (type) => {
     const birth = getBirthValue(type);
-    const additional = getAdditionalValue(type);
     const totalTarget = getTotalTargetValue(type);
 
-    if (birth >= totalTarget) return 100;
+    // Determine the latest actual measurement for progress calculation
+    let latestActualMeasurementForProgress;
+    if (
+      (type === "weight" && hasWeightMeasurement) ||
+      (type === "height" && hasHeightMeasurement) ||
+      (type === "headCirc" && hasHeadCircMeasurement)
+    ) {
+      // Use current input if available (meaning a record for today or new input)
+      latestActualMeasurementForProgress =
+        type === "weight"
+          ? ensureNumber(currentWeight)
+          : type === "height"
+          ? ensureNumber(currentHeight)
+          : ensureNumber(currentHeadCirc);
+    } else if (allGrowthRecords && allGrowthRecords.length > 0) {
+      // Otherwise, use the latest record from the database
+      const lastRecord = allGrowthRecords[allGrowthRecords.length - 1];
+      latestActualMeasurementForProgress =
+        type === "weight"
+          ? ensureNumber(lastRecord.weight)
+          : type === "height"
+          ? ensureNumber(lastRecord.height / 10) // Convert mm to cm
+          : ensureNumber(lastRecord.headCircumference / 10); // Convert mm to cm
+    } else {
+      // If no records at all, progress starts from birth value
+      latestActualMeasurementForProgress = birth;
+    }
 
-    const totalGrowthNeeded = totalTarget - birth;
-    const actualGrowth = additional;
-    const percentage = Math.min(
-      Math.round((actualGrowth / totalGrowthNeeded) * 100),
-      100
-    );
+    // Handle edge cases for target
+    if (totalTarget <= 0) return 100; // Avoid division by zero or negative target
 
-    return Math.max(percentage, 0);
+    // NEW CALCULATION: (current_total_value / target_total_value) * 100
+    const percentage = (latestActualMeasurementForProgress / totalTarget) * 100;
+
+    // Ensure progress is between 0 and 100
+    return Math.round(Math.min(Math.max(percentage, 0), 100));
   };
 
   const calculateProgressValues = useMemo(() => {
@@ -164,6 +157,7 @@ const AreaCharts = ({
     hasWeightMeasurement,
     hasHeightMeasurement,
     hasHeadCircMeasurement,
+    allGrowthRecords, // Added allGrowthRecords to dependencies for progress calculation
   ]);
 
   useEffect(() => {
@@ -173,106 +167,47 @@ const AreaCharts = ({
   }, [calculateProgressValues, onProgressCalculated]);
 
   const createCustomChartData = (type) => {
-    let baseData;
-
-    switch (type) {
-      case "weight":
-        baseData = getBarChartData();
-        break;
-      case "height":
-        baseData = getHeightChartData();
-        break;
-      case "headCirc":
-        baseData = getHeadCircChartData();
-        break;
-      default:
-        baseData = getBarChartData();
-    }
-
-    if (!baseData.datasets || !baseData.datasets[0]) {
-      return {
-        labels: [],
-        datasets: [
-          {
-            data: [],
-            color: () => "rgba(0,0,0,0)",
-          },
-        ],
-        yMax: 100,
-      };
-    }
-
     const birthValue = getBirthValue(type);
-
-    // Check if this specific measurement type has a value
-    const hasMeasurement =
-      (type === "weight" && hasWeightMeasurement) ||
-      (type === "height" && hasHeightMeasurement) ||
-      (type === "headCirc" && hasHeadCircMeasurement);
-
-    // If no measurement for this specific type, use birth value as current value
-    const totalValue = !hasMeasurement ? birthValue : getTotalValue(type);
     const targetValue = getTotalTargetValue(type);
-    const hasPreviousRecord =
-      baseData.labels && baseData.labels.includes("Previous");
 
-    const maxValue = Math.max(birthValue, totalValue, targetValue) * 1.1;
+    // Calculate the value for the second dot based on the progress percentage
+    const progressPercentage = calculateProgressValues[type + "Progress"];
+    const progressBasedValue = (progressPercentage / 100) * targetValue;
 
-    if (hasPreviousRecord) {
-      let previousValue;
+    const labels = ["Birth", "Latest", "Target"];
+    const data = [birthValue, progressBasedValue, targetValue]; // MODIFIED LINE
 
-      switch (type) {
-        case "weight":
-          previousValue = baseData.datasets[0].data[1];
-          break;
-        case "height":
-          previousValue = ensureNumber(
-            getHeightChartData().datasets[0].data[1]
-          );
-          break;
-        case "headCirc":
-          previousValue = ensureNumber(
-            getHeadCircChartData().datasets[0].data[1]
-          );
-          break;
-        default:
-          previousValue = 0;
-      }
+    // --- ADDED CONSOLE LOG FOR DEBUGGING ---
+    console.log(`DEBUG: Chart Data for ${type}:`, {
+      labels,
+      data,
+      progressPercentage,
+      progressBasedValue,
+    });
+    // ---------------------------------------
 
-      return {
-        labels: ["Birth", "Prev", "Now", "Target"],
-        datasets: [
-          {
-            data: [birthValue, previousValue, totalValue, targetValue],
-            color: (opacity = 1) =>
-              type === "weight"
-                ? `rgba(65, 105, 225, ${opacity})`
-                : type === "height"
-                ? `rgba(255, 140, 0, ${opacity})`
-                : `rgba(220, 20, 60, ${opacity})`,
-            strokeWidth: 2,
-          },
-        ],
-        yMax: maxValue,
-      };
-    } else {
-      return {
-        labels: ["Birth", "Now", "Target"],
-        datasets: [
-          {
-            data: [birthValue, totalValue, targetValue],
-            color: (opacity = 1) =>
-              type === "weight"
-                ? `rgba(65, 105, 225, ${opacity})`
-                : type === "height"
-                ? `rgba(255, 140, 0, ${opacity})`
-                : `rgba(220, 20, 60, ${opacity})`,
-            strokeWidth: 2,
-          },
-        ],
-        yMax: maxValue,
-      };
-    }
+    // Calculate max and min for Y-axis dynamically based on these three points
+    const allValues = [...data];
+    const maxValue = Math.max(...allValues) * 1.1; // 10% buffer
+    const minValue = Math.min(...allValues) * 0.95; // 5% buffer
+
+    return {
+      labels: labels,
+      datasets: [
+        {
+          data: data,
+          color: (opacity = 1) =>
+            type === "weight"
+              ? `rgba(65, 105, 225, ${opacity})`
+              : type === "height"
+              ? `rgba(255, 140, 0, ${opacity})`
+              : `rgba(220, 20, 60, ${opacity})`,
+          strokeWidth: 2,
+        },
+      ],
+      yMax: maxValue,
+      yMin: minValue,
+    };
   };
 
   const getChartConfig = (type) => {
@@ -291,6 +226,8 @@ const AreaCharts = ({
       default:
         color = (opacity = 1) => `rgba(65, 105, 225, ${opacity})`;
     }
+
+    const chartData = createCustomChartData(type); // Get data to extract yMin/yMax
 
     return {
       backgroundGradientFrom: theme.cardBackground,
@@ -311,8 +248,8 @@ const AreaCharts = ({
             ? "#FF8C00"
             : "#DC143C",
       },
-      yAxisMin: getBirthValue(type) * 0.95,
-      yAxisMax: createCustomChartData(type).yMax,
+      yAxisMin: chartData.yMin, // Use calculated min
+      yAxisMax: chartData.yMax, // Use calculated max
       propsForLabels: {
         fontSize: 8,
       },
@@ -387,16 +324,37 @@ const AreaCharts = ({
     const progress = getSmoothProgress(type);
     const typeColor = getTypeColor(type);
 
-    // Check if this specific measurement type has a value
-    const hasMeasurement =
+    // Get the latest actual measurement for display below the chart
+    // This should be the current input if available, otherwise the latest from DB, otherwise birth
+    let displayValue;
+    let isDisplayValueBirth = false;
+
+    if (
       (type === "weight" && hasWeightMeasurement) ||
       (type === "height" && hasHeightMeasurement) ||
-      (type === "headCirc" && hasHeadCircMeasurement);
-
-    // Get the correct current value to display
-    const displayValue = !hasMeasurement
-      ? getBirthValue(type)
-      : getTotalValue(type);
+      (type === "headCirc" && hasHeadCircMeasurement)
+    ) {
+      // Use current input if available (meaning a record for today or new input)
+      displayValue =
+        type === "weight"
+          ? ensureNumber(currentWeight)
+          : type === "height"
+          ? ensureNumber(currentHeight)
+          : ensureNumber(currentHeadCirc);
+    } else if (allGrowthRecords && allGrowthRecords.length > 0) {
+      // Otherwise, use the latest record from the database
+      const lastRecord = allGrowthRecords[allGrowthRecords.length - 1];
+      displayValue =
+        type === "weight"
+          ? ensureNumber(lastRecord.weight)
+          : type === "height"
+          ? ensureNumber(lastRecord.height / 10)
+          : ensureNumber(lastRecord.headCircumference / 10);
+    } else {
+      // If no records at all, use birth value
+      displayValue = getBirthValue(type);
+      isDisplayValueBirth = true;
+    }
 
     return (
       <View style={styles.chartSection} key={type}>
@@ -418,7 +376,7 @@ const AreaCharts = ({
               height={96}
               yAxisSuffix={getYAxisSuffix(type)}
               chartConfig={getChartConfig(type)}
-              bezier
+              // Removed bezier to ensure dots are plotted precisely at their coordinates
               style={styles.lineChart}
               withDots={true}
               withShadow={false}
@@ -461,7 +419,7 @@ const AreaCharts = ({
               {displayValue}
               {getUnit(type)}
             </Text>
-            {!hasMeasurement && (
+            {isDisplayValueBirth && (
               <Text
                 style={[styles.growthStatNote, { color: theme.textSecondary }]}
               >

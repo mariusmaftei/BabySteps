@@ -83,6 +83,11 @@ export default function GrowthScreen({ navigation }) {
   const [hasHeightMeasurement, setHasHeightMeasurement] = useState(false);
   const [hasHeadCircMeasurement, setHasHeadCircMeasurement] = useState(false);
 
+  // NEW STATE: To store all historical growth records for the chart
+  const [allGrowthRecords, setAllGrowthRecords] = useState([]);
+
+  // These chart data functions are no longer needed here as AreaChart will generate its own data
+  // based on allGrowthRecords. They are removed from props passed to AreaChart.
   const getBarChartData = useCallback(() => {
     let birthWeightValue = birthWeight ? Number.parseFloat(birthWeight) : 0;
     if (isNaN(birthWeightValue)) {
@@ -403,82 +408,49 @@ export default function GrowthScreen({ navigation }) {
         console.error("Error fetching child details:", error);
       }
 
-      try {
-        const records = await growthService.getGrowthRecords(currentChild.id);
-        if (records && records.length > 0) {
-          setHasExistingMeasurements(true);
-        }
-      } catch (error) {
-        setHasExistingMeasurements(false);
-        setCurrentWeight("");
-        setCurrentHeight("");
-        setCurrentHeadCirc("");
-        setHasWeightMeasurement(false);
-        setHasHeightMeasurement(false);
-        setHasHeadCircMeasurement(false);
-      }
+      // Fetch ALL growth records for the chart
+      const records = await growthService.getGrowthRecords(currentChild.id);
+      // Sort records by date to ensure chronological order for chart display
+      const sortedRecords = records.sort(
+        (a, b) =>
+          new Date(a.createdAt || a.recordDate) -
+          new Date(b.createdAt || b.recordDate)
+      );
+      setAllGrowthRecords(sortedRecords); // Store all records for the chart
 
-      try {
-        const latest = await growthService.getLatestGrowthRecord(
-          currentChild.id
-        );
-        setLatestRecord(latest);
+      if (sortedRecords && sortedRecords.length > 0) {
+        setHasExistingMeasurements(true);
+        const latest = sortedRecords[sortedRecords.length - 1]; // Latest record is the last one after sorting
 
-        if (latest) {
-          // Check if the latest record is from today
-          const today = new Date();
-          const recordDate = new Date(latest.createdAt || latest.recordDate);
+        // Check if the latest record is from today
+        const today = new Date();
+        const recordDate = new Date(latest.createdAt || latest.recordDate);
+        const isToday =
+          today.getDate() === recordDate.getDate() &&
+          today.getMonth() === recordDate.getMonth() &&
+          today.getFullYear() === recordDate.getFullYear();
 
-          const isToday =
-            today.getDate() === recordDate.getDate() &&
-            today.getMonth() === recordDate.getMonth() &&
-            today.getFullYear() === recordDate.getFullYear();
-
-          if (isToday) {
-            // Record is from today - show in view mode with edit capability
-            if (latest.weight) {
-              setCurrentWeight(latest.weight.toString());
-              setHasWeightMeasurement(true);
-            }
-            if (latest.height) {
-              setCurrentHeight((latest.height / 10).toString());
-              setHasHeightMeasurement(true);
-            }
-            if (latest.headCircumference) {
-              setCurrentHeadCirc((latest.headCircumference / 10).toString());
-              setHasHeadCircMeasurement(true);
-            }
-            if (latest.notes) {
-              setNotes(latest.notes);
-            }
-            setHasExistingMeasurements(true);
-            setIsEditMode(false); // Start in view mode, can click edit
-          } else {
-            // Record is from previous day - reset for new record
-            setCurrentWeight("");
-            setCurrentHeight("");
-            setCurrentHeadCirc("");
-            setNotes("");
-            setHasWeightMeasurement(false);
-            setHasHeightMeasurement(false);
-            setHasHeadCircMeasurement(false);
-            setHasExistingMeasurements(false);
-            setIsEditMode(false);
+        if (isToday) {
+          // Record is from today - show in view mode with edit capability
+          if (latest.weight) {
+            setCurrentWeight(latest.weight.toString());
+            setHasWeightMeasurement(true);
           }
-
-          if (
-            latest.weightProgress !== undefined &&
-            latest.heightProgress !== undefined &&
-            latest.headCircumferenceProgress !== undefined
-          ) {
-            setProgressValues({
-              weightProgress: latest.weightProgress,
-              heightProgress: latest.heightProgress,
-              headCircProgress: latest.headCircProgress,
-            });
+          if (latest.height) {
+            setCurrentHeight((latest.height / 10).toString());
+            setHasHeightMeasurement(true);
           }
+          if (latest.headCircumference) {
+            setCurrentHeadCirc((latest.headCircumference / 10).toString());
+            setHasHeadCircMeasurement(true);
+          }
+          if (latest.notes) {
+            setNotes(latest.notes);
+          }
+          setLatestRecord(latest); // Set latest record for edit mode
+          setIsEditMode(false); // Start in view mode, can click edit
         } else {
-          // No latest record - first time setup
+          // Record is from previous day - reset for new record
           setCurrentWeight("");
           setCurrentHeight("");
           setCurrentHeadCirc("");
@@ -486,11 +458,43 @@ export default function GrowthScreen({ navigation }) {
           setHasWeightMeasurement(false);
           setHasHeightMeasurement(false);
           setHasHeadCircMeasurement(false);
-          setHasExistingMeasurements(false);
+          setLatestRecord(null); // No latest record for today
+          setHasExistingMeasurements(false); // No existing measurement for today
           setIsEditMode(false);
         }
-      } catch (error) {
+
+        // Set previous record if available (second to last)
+        if (sortedRecords.length >= 2) {
+          const previous = sortedRecords[sortedRecords.length - 2];
+          setPreviousRecord(previous);
+          setPreviousWeight(previous.weight.toString());
+          setPreviousHeight((previous.height / 10).toString());
+          setPreviousHeadCirc((previous.headCircumference / 10).toString());
+        } else {
+          setPreviousRecord(null);
+          setPreviousWeight("");
+          setPreviousHeight("");
+          setPreviousHeadCirc("");
+        }
+
+        // Update progress values from the latest record if available
+        if (
+          latest &&
+          latest.weightProgress !== undefined &&
+          latest.heightProgress !== undefined &&
+          latest.headCircumferenceProgress !== undefined
+        ) {
+          setProgressValues({
+            weightProgress: latest.weightProgress,
+            heightProgress: latest.heightProgress,
+            headCircProgress: latest.headCircProgress,
+          });
+        }
+      } else {
+        // No records at all
+        setHasExistingMeasurements(false);
         setLatestRecord(null);
+        setPreviousRecord(null);
         setCurrentWeight("");
         setCurrentHeight("");
         setCurrentHeadCirc("");
@@ -498,31 +502,7 @@ export default function GrowthScreen({ navigation }) {
         setHasWeightMeasurement(false);
         setHasHeightMeasurement(false);
         setHasHeadCircMeasurement(false);
-        setHasExistingMeasurements(false);
         setIsEditMode(false);
-      }
-
-      try {
-        const previous = await growthService.getPreviousGrowthRecord(
-          currentChild.id
-        );
-        setPreviousRecord(previous);
-        if (previous) {
-          setPreviousWeight(previous.weight.toString());
-          // Convert previous height from mm to cm for display
-          setPreviousHeight((previous.height / 10).toString());
-          // Convert previous head circumference from mm to cm for display
-          setPreviousHeadCirc((previous.headCircumference / 10).toString());
-        } else {
-          setPreviousWeight("");
-          setPreviousHeight("");
-          setPreviousHeadCirc("");
-        }
-      } catch (error) {
-        setPreviousRecord(null);
-        setPreviousWeight("");
-        setPreviousHeight("");
-        setPreviousHeadCirc("");
       }
 
       setLoading(false);
@@ -530,8 +510,21 @@ export default function GrowthScreen({ navigation }) {
       console.error("Error loading growth data:", error);
       setError("Failed to load growth data");
       setLoading(false);
+      // Ensure states are reset on error if no data was loaded
+      setAllGrowthRecords([]);
+      setLatestRecord(null);
+      setPreviousRecord(null);
+      setCurrentWeight("");
+      setCurrentHeight("");
+      setCurrentHeadCirc("");
+      setNotes("");
+      setHasWeightMeasurement(false);
+      setHasHeightMeasurement(false);
+      setHasHeadCircMeasurement(false);
+      setHasExistingMeasurements(false);
+      setIsEditMode(false);
     }
-  }, [currentChild.id, currentChild]);
+  }, [currentChild.id, currentChild]); // Dependencies for useCallback
 
   useFocusEffect(
     useCallback(() => {
@@ -789,7 +782,12 @@ export default function GrowthScreen({ navigation }) {
     });
   }, [navigation, notificationsEnabled, theme, currentChild]);
 
-  if (loading && !latestRecord && !previousRecord) {
+  if (
+    loading &&
+    !latestRecord &&
+    !previousRecord &&
+    allGrowthRecords.length === 0
+  ) {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.background }]}
@@ -804,7 +802,12 @@ export default function GrowthScreen({ navigation }) {
     );
   }
 
-  if (error && !latestRecord && !previousRecord) {
+  if (
+    error &&
+    !latestRecord &&
+    !previousRecord &&
+    allGrowthRecords.length === 0
+  ) {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.background }]}
@@ -834,6 +837,12 @@ export default function GrowthScreen({ navigation }) {
     hasWeightMeasurement,
     hasHeightMeasurement,
     hasHeadCircMeasurement,
+    allGrowthRecords: allGrowthRecords.map((rec) => ({
+      weight: rec.weight,
+      height: rec.height,
+      headCircumference: rec.headCircumference,
+      createdAt: rec.createdAt,
+    })), // Log simplified records
     currentChild: {
       id: currentChild.id,
       name: currentChild.name,
@@ -940,9 +949,7 @@ export default function GrowthScreen({ navigation }) {
 
         <AreaChart
           theme={theme}
-          getBarChartData={getBarChartData}
-          getHeightChartData={getHeightChartData}
-          getHeadCircChartData={getHeadCircChartData}
+          // Removed getBarChartData, getHeightChartData, getHeadCircChartData as they are no longer used
           weightGain={weightGain}
           heightGain={heightGain}
           headCircGain={headCircGain}
@@ -963,6 +970,7 @@ export default function GrowthScreen({ navigation }) {
           hasWeightMeasurement={hasWeightMeasurement}
           hasHeightMeasurement={hasHeightMeasurement}
           hasHeadCircMeasurement={hasHeadCircMeasurement}
+          allGrowthRecords={allGrowthRecords} // Pass all historical records
         />
 
         <View
