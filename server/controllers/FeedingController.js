@@ -2,15 +2,11 @@ import Feeding from "../models/Feeding.js";
 import Child from "../models/Child.js";
 import { Op } from "sequelize";
 
-// Helper function to get current Romanian datetime in YYYY-MM-DD HH:MM:SS format
 const getRomaniaDateTime = () => {
   const now = new Date();
 
-  // Romania is UTC+2 (standard time) or UTC+3 (daylight saving time)
-  // For simplicity, we'll use UTC+3 (EEST - Eastern European Summer Time)
-  const romaniaOffset = 3 * 60; // 3 hours in minutes
+  const romaniaOffset = 3 * 60;
 
-  // Create a new date object adjusted for Romania timezone
   const romaniaTime = new Date(now.getTime() + romaniaOffset * 60 * 1000);
 
   const year = romaniaTime.getUTCFullYear();
@@ -23,10 +19,8 @@ const getRomaniaDateTime = () => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
-// Helper function to get current Romanian datetime in YYYY-MM-DD HH:MM:SS format
 const getRomaniaDateTimeIntl = () => {
   const now = new Date();
-  // Add 3 hours for Romania timezone (UTC+3 during DST)
   const romaniaTime = new Date(now.getTime() + 3 * 60 * 60 * 1000);
 
   const year = romaniaTime.getUTCFullYear();
@@ -39,9 +33,7 @@ const getRomaniaDateTimeIntl = () => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
-// Helper function to get Romania date range for a specific date
 const getRomaniaDateRange = (dateStr) => {
-  // If dateStr is just a date (YYYY-MM-DD), create full day range
   if (dateStr.length === 10) {
     return {
       start: `${dateStr} 00:00:00`,
@@ -49,7 +41,6 @@ const getRomaniaDateRange = (dateStr) => {
     };
   }
 
-  // If it's already a datetime, extract the date part and create range
   const datePart = dateStr.split(" ")[0];
   return {
     start: `${datePart} 00:00:00`,
@@ -57,7 +48,6 @@ const getRomaniaDateRange = (dateStr) => {
   };
 };
 
-// Helper function to safely extract date from feeding record
 const extractDateKey = (feeding) => {
   try {
     if (!feeding || !feeding.date) {
@@ -67,7 +57,6 @@ const extractDateKey = (feeding) => {
 
     let dateStr = feeding.date;
 
-    // Handle different date formats
     if (typeof dateStr === "object" && dateStr instanceof Date) {
       dateStr = dateStr.toISOString();
     }
@@ -77,7 +66,6 @@ const extractDateKey = (feeding) => {
       return null;
     }
 
-    // Extract YYYY-MM-DD part
     if (dateStr.includes("T")) {
       return dateStr.split("T")[0];
     } else if (dateStr.includes(" ")) {
@@ -93,13 +81,11 @@ const extractDateKey = (feeding) => {
   }
 };
 
-// Create a new feeding record
 export const createFeeding = async (req, res) => {
   try {
     const { childId, type, startTime, endTime, duration, side, amount, note } =
       req.body;
 
-    // Validate required fields based on feeding type
     if (!childId || !type) {
       return res.status(400).json({
         success: false,
@@ -107,7 +93,6 @@ export const createFeeding = async (req, res) => {
       });
     }
 
-    // Type-specific validation
     if (type === "breast" && (!duration || !side)) {
       return res.status(400).json({
         success: false,
@@ -122,7 +107,6 @@ export const createFeeding = async (req, res) => {
       });
     }
 
-    // Check if child exists and belongs to user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -137,7 +121,6 @@ export const createFeeding = async (req, res) => {
       });
     }
 
-    // Use the date provided from client (already converted to Romania time)
     const feedingDateTime =
       req.body.date || req.body.timestamp || new Date().toISOString();
 
@@ -153,7 +136,7 @@ export const createFeeding = async (req, res) => {
       amount: type === "bottle" || type === "solid" ? amount : 0,
       note: note || null,
       timestamp: feedingDateTime,
-      date: feedingDateTime, // Store exactly what client sent (Romania time) - THIS IS WHAT WE FILTER BY
+      date: feedingDateTime,
     };
 
     const feeding = await Feeding.create(feedingData);
@@ -177,7 +160,6 @@ export const createFeeding = async (req, res) => {
   }
 };
 
-// Get all feeding records for a child
 export const getFeedingsByChildId = async (req, res) => {
   try {
     const { childId } = req.params;
@@ -200,7 +182,7 @@ export const getFeedingsByChildId = async (req, res) => {
 
     const feedings = await Feeding.findAll({
       where: { childId },
-      order: [["date", "DESC"]], // Order by date field
+      order: [["date", "DESC"]],
     });
 
     console.log(
@@ -222,14 +204,12 @@ export const getFeedingsByChildId = async (req, res) => {
   }
 };
 
-// Get today's feeding records for a child (Romania timezone)
 export const getTodayFeedings = async (req, res) => {
   try {
     const { childId } = req.params;
 
     console.log(`Getting today's feedings for child ID: ${childId}`);
 
-    // Check if child exists and belongs to user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -245,7 +225,6 @@ export const getTodayFeedings = async (req, res) => {
       });
     }
 
-    // Get today's date in Romania timezone
     const now = new Date();
     const romaniaTime = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Europe/Bucharest",
@@ -254,7 +233,7 @@ export const getTodayFeedings = async (req, res) => {
       day: "2-digit",
     }).format(now);
 
-    const todayStr = romaniaTime; // This will be in YYYY-MM-DD format
+    const todayStr = romaniaTime;
 
     const { start, end } = getRomaniaDateRange(todayStr);
 
@@ -265,11 +244,10 @@ export const getTodayFeedings = async (req, res) => {
       where: {
         childId,
         date: {
-          // Filter by date field
           [Op.between]: [start, end],
         },
       },
-      order: [["date", "DESC"]], // Order by date field
+      order: [["date", "DESC"]],
     });
 
     console.log(`Found ${feedings.length} feedings for today`);
@@ -289,7 +267,6 @@ export const getTodayFeedings = async (req, res) => {
   }
 };
 
-// Get feeding records for a child by specific date
 export const getFeedingsByDate = async (req, res) => {
   try {
     const { childId, date } = req.params;
@@ -318,11 +295,10 @@ export const getFeedingsByDate = async (req, res) => {
       where: {
         childId,
         date: {
-          // Filter by date field
           [Op.between]: [start, end],
         },
       },
-      order: [["date", "DESC"]], // Order by date field
+      order: [["date", "DESC"]],
     });
 
     console.log(`Found ${feedings.length} feedings for date ${date}`);
@@ -342,7 +318,6 @@ export const getFeedingsByDate = async (req, res) => {
   }
 };
 
-// Get feeding records for a child by date range
 export const getFeedingsByDateRange = async (req, res) => {
   try {
     const { childId } = req.params;
@@ -384,11 +359,10 @@ export const getFeedingsByDateRange = async (req, res) => {
       where: {
         childId,
         date: {
-          // Filter by date field
           [Op.between]: [startOfRange, endOfRange],
         },
       },
-      order: [["date", "DESC"]], // Order by date field
+      order: [["date", "DESC"]],
     });
 
     console.log(`Found ${feedings.length} feedings in date range`);
@@ -408,7 +382,6 @@ export const getFeedingsByDateRange = async (req, res) => {
   }
 };
 
-// Get feeding summary for a child (daily totals)
 export const getFeedingSummary = async (req, res) => {
   try {
     const { childId } = req.params;
@@ -441,7 +414,6 @@ export const getFeedingSummary = async (req, res) => {
       where: {
         childId,
         date: {
-          // Filter by date field
           [Op.between]: [start, end],
         },
       },
@@ -492,7 +464,6 @@ export const getFeedingSummary = async (req, res) => {
   }
 };
 
-// Update a feeding record
 export const updateFeeding = async (req, res) => {
   try {
     const { id } = req.params;
@@ -515,7 +486,6 @@ export const updateFeeding = async (req, res) => {
       });
     }
 
-    // Update fields based on feeding type
     if (type) {
       feeding.type = type;
       if (type === "breast") {
@@ -528,7 +498,6 @@ export const updateFeeding = async (req, res) => {
       }
     }
 
-    // Update type-specific fields
     if (feeding.type === "breast") {
       if (startTime) feeding.startTime = startTime;
       if (endTime) feeding.endTime = endTime;
@@ -540,9 +509,8 @@ export const updateFeeding = async (req, res) => {
 
     if (note !== undefined) feeding.note = note;
 
-    // Update with Romania datetime - keep full timestamp
     const romaniaDateTime = getRomaniaDateTimeIntl();
-    feeding.date = romaniaDateTime; // Update date field
+    feeding.date = romaniaDateTime;
     feeding.timestamp = romaniaDateTime;
 
     await feeding.save();
@@ -562,7 +530,6 @@ export const updateFeeding = async (req, res) => {
   }
 };
 
-// Delete a feeding record
 export const deleteFeeding = async (req, res) => {
   try {
     const { id } = req.params;
@@ -606,14 +573,12 @@ export const deleteFeeding = async (req, res) => {
   }
 };
 
-// Get weekly feeding data (today + 6 days in the past = 7 days total) - AGGREGATED BY DAY
 export const getWeeklyFeedings = async (req, res) => {
   try {
     const { childId } = req.params;
 
     console.log(`Getting weekly feeding data for child ID: ${childId}`);
 
-    // Check if child exists and belongs to user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -628,16 +593,14 @@ export const getWeeklyFeedings = async (req, res) => {
       });
     }
 
-    // Calculate date range: today + 6 days in the past
     const today = new Date();
     const startDate = new Date(today);
-    startDate.setDate(today.getDate() - 6); // 6 days ago
+    startDate.setDate(today.getDate() - 6);
     startDate.setHours(0, 0, 0, 0);
 
     const endDate = new Date(today);
     endDate.setHours(23, 59, 59, 999);
 
-    // Format dates for database query (Romania timezone)
     const startDateStr =
       new Intl.DateTimeFormat("sv-SE", {
         timeZone: "Europe/Bucharest",
@@ -664,12 +627,10 @@ export const getWeeklyFeedings = async (req, res) => {
 
     console.log(`Found ${feedings.length} feeding records for weekly data`);
 
-    // Aggregate data by day
     const aggregatedData = {};
 
     feedings.forEach((feeding) => {
       try {
-        // Extract date part (YYYY-MM-DD) from the feeding date
         const dateKey = extractDateKey(feeding);
 
         if (!dateKey) {
@@ -701,13 +662,10 @@ export const getWeeklyFeedings = async (req, res) => {
           };
         }
 
-        // Increment total count
         aggregatedData[dateKey].totalFeedings++;
 
-        // Aggregate by feeding type with proper totals
         if (feeding.type === "breast") {
           aggregatedData[dateKey].breastFeedings.count++;
-          // Sum up all durations for breast feeding
           aggregatedData[dateKey].breastFeedings.totalMinutes +=
             Number(feeding.duration) || 0;
           if (feeding.side === "left") {
@@ -717,12 +675,10 @@ export const getWeeklyFeedings = async (req, res) => {
           }
         } else if (feeding.type === "bottle") {
           aggregatedData[dateKey].bottleFeedings.count++;
-          // Sum up all amounts for bottle feeding
           aggregatedData[dateKey].bottleFeedings.totalMl +=
             Number(feeding.amount) || 0;
         } else if (feeding.type === "solid") {
           aggregatedData[dateKey].solidFeedings.count++;
-          // Sum up all amounts for solid feeding
           aggregatedData[dateKey].solidFeedings.totalGrams +=
             Number(feeding.amount) || 0;
         }
@@ -731,7 +687,6 @@ export const getWeeklyFeedings = async (req, res) => {
       }
     });
 
-    // Convert to array and sort by date
     const aggregatedArray = Object.values(aggregatedData).sort(
       (a, b) => new Date(a.date) - new Date(b.date)
     );
@@ -755,11 +710,10 @@ export const getWeeklyFeedings = async (req, res) => {
   }
 };
 
-// Get monthly feeding data (e.g., 2025-06 returns all June 2025 data) - AGGREGATED BY DAY
 export const getMonthlyFeedings = async (req, res) => {
   try {
     const { childId } = req.params;
-    const { month } = req.query; // Expected format: "2025-06"
+    const { month } = req.query;
 
     console.log(
       `Getting monthly feeding data for child ID: ${childId}, month: ${month}`
@@ -772,7 +726,6 @@ export const getMonthlyFeedings = async (req, res) => {
       });
     }
 
-    // Validate month format
     const monthRegex = /^\d{4}-\d{2}$/;
     if (!monthRegex.test(month)) {
       return res.status(400).json({
@@ -781,7 +734,6 @@ export const getMonthlyFeedings = async (req, res) => {
       });
     }
 
-    // Check if child exists and belongs to user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -796,11 +748,9 @@ export const getMonthlyFeedings = async (req, res) => {
       });
     }
 
-    // Calculate start and end of the month
     const [year, monthNum] = month.split("-");
     const startDate = `${year}-${monthNum}-01 00:00:00`;
 
-    // Get last day of the month
     const lastDay = new Date(
       Number.parseInt(year),
       Number.parseInt(monthNum),
@@ -826,12 +776,10 @@ export const getMonthlyFeedings = async (req, res) => {
 
     console.log(`Found ${feedings.length} feeding records for month ${month}`);
 
-    // Aggregate data by day
     const aggregatedData = {};
 
     feedings.forEach((feeding) => {
       try {
-        // Extract date part (YYYY-MM-DD) from the feeding date
         const dateKey = extractDateKey(feeding);
 
         if (!dateKey) {
@@ -863,13 +811,10 @@ export const getMonthlyFeedings = async (req, res) => {
           };
         }
 
-        // Increment total count
         aggregatedData[dateKey].totalFeedings++;
 
-        // Aggregate by feeding type with proper totals
         if (feeding.type === "breast") {
           aggregatedData[dateKey].breastFeedings.count++;
-          // Sum up all durations for breast feeding
           aggregatedData[dateKey].breastFeedings.totalMinutes +=
             Number(feeding.duration) || 0;
           if (feeding.side === "left") {
@@ -879,12 +824,10 @@ export const getMonthlyFeedings = async (req, res) => {
           }
         } else if (feeding.type === "bottle") {
           aggregatedData[dateKey].bottleFeedings.count++;
-          // Sum up all amounts for bottle feeding
           aggregatedData[dateKey].bottleFeedings.totalMl +=
             Number(feeding.amount) || 0;
         } else if (feeding.type === "solid") {
           aggregatedData[dateKey].solidFeedings.count++;
-          // Sum up all amounts for solid feeding
           aggregatedData[dateKey].solidFeedings.totalGrams +=
             Number(feeding.amount) || 0;
         }
@@ -893,7 +836,6 @@ export const getMonthlyFeedings = async (req, res) => {
       }
     });
 
-    // Convert to array and sort by date
     const aggregatedArray = Object.values(aggregatedData).sort(
       (a, b) => new Date(a.date) - new Date(b.date)
     );

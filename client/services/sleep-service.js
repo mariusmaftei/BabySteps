@@ -19,10 +19,9 @@ const createSleepRecord = (data) => {
   };
 };
 
-// Helper function to get current Romanian datetime string (YYYY-MM-DD HH:MM:SS)
 export const getLocalDateTimeString = () => {
   const now = new Date();
-  const romaniaOffset = 3 * 60 * 60 * 1000; // UTC+3 for Romania (EEST)
+  const romaniaOffset = 3 * 60 * 60 * 1000;
   const romaniaTime = new Date(
     now.getTime() + now.getTimezoneOffset() * 60 * 1000 + romaniaOffset
   );
@@ -37,7 +36,6 @@ export const getLocalDateTimeString = () => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
-// Helper function to extract just the date part from a datetime string
 export const extractDateFromDateTime = (dateTimeString) => {
   if (!dateTimeString) return "";
   return dateTimeString.split(" ")[0];
@@ -45,7 +43,6 @@ export const extractDateFromDateTime = (dateTimeString) => {
 
 export const formatDate = (dateString) => {
   if (!dateString) return "";
-  // Extract just the date part if it's a datetime string
   const datePart = dateString.includes(" ")
     ? dateString.split(" ")[0]
     : dateString;
@@ -58,7 +55,6 @@ export const formatDate = (dateString) => {
 };
 
 export const isToday = (dateString) => {
-  // Extract just the date part if it's a datetime string
   const datePart = dateString.includes(" ")
     ? dateString.split(" ")[0]
     : dateString;
@@ -67,7 +63,6 @@ export const isToday = (dateString) => {
 
 const API_BASE_URL = "/sleep";
 
-// Get all sleep records for a child
 export const getSleepByChild = async (childId) => {
   try {
     await ensureToken();
@@ -81,7 +76,6 @@ export const getSleepByChild = async (childId) => {
   }
 };
 
-// Get sleep records by date range
 export const getSleepDataByDateRange = async (childId, startDate, endDate) => {
   try {
     await ensureToken();
@@ -90,7 +84,6 @@ export const getSleepDataByDateRange = async (childId, startDate, endDate) => {
       `Fetching sleep data for child ${childId} from ${startDate} to ${endDate}`
     );
 
-    // Format dates properly
     let formattedStartDate, formattedEndDate;
 
     if (startDate instanceof Date) {
@@ -149,7 +142,6 @@ export const getSleepDataByDateRange = async (childId, startDate, endDate) => {
   }
 };
 
-// Get weekly sleep data (last 7 days)
 export const getWeeklySleepData = async (childId) => {
   try {
     await ensureToken();
@@ -188,7 +180,6 @@ export const getWeeklySleepData = async (childId) => {
   }
 };
 
-// Get today's sleep record
 export const getTodaySleepData = async (childId) => {
   try {
     await ensureToken();
@@ -197,12 +188,15 @@ export const getTodaySleepData = async (childId) => {
     console.log("Today's sleep data:", response.data);
     return response.data ? createSleepRecord(response.data) : null;
   } catch (error) {
+    if (error.response && error.response.status === 404) {
+      console.log("No sleep data found for today (404). Returning null.");
+      return null;
+    }
     console.error("Error fetching today's sleep data:", error);
     throw error;
   }
 };
 
-// Get current sleep data (today or yesterday based on time)
 export const getCurrentSleepData = async (childId) => {
   try {
     await ensureToken();
@@ -243,13 +237,11 @@ export const getCurrentSleepData = async (childId) => {
   }
 };
 
-// Create a new sleep record
 export const createSleepRecordApi = async (sleepData) => {
   try {
     await ensureToken();
     console.log("Creating sleep record with data:", sleepData);
 
-    // Get current Romanian datetime
     const romaniaDatetime = getLocalDateTimeString();
 
     const formattedData = {
@@ -257,7 +249,7 @@ export const createSleepRecordApi = async (sleepData) => {
       napHours: Number.parseFloat(sleepData.napHours) || 0,
       nightHours: Number.parseFloat(sleepData.nightHours) || 0,
       date: romaniaDatetime,
-      notes: sleepData.notes || "",
+      notes: sleepData.notes.trim(),
       sleepProgress: sleepData.sleepProgress || 0,
     };
 
@@ -270,13 +262,11 @@ export const createSleepRecordApi = async (sleepData) => {
   }
 };
 
-// Update a sleep record
 export const updateSleepRecord = async (sleepId, sleepData) => {
   try {
     await ensureToken();
     console.log(`Updating sleep record ${sleepId} with data:`, sleepData);
 
-    // Get current Romanian datetime
     const romaniaDatetime = getLocalDateTimeString();
 
     const formattedData = {
@@ -284,7 +274,7 @@ export const updateSleepRecord = async (sleepId, sleepData) => {
       napHours: Number.parseFloat(sleepData.napHours) || 0,
       nightHours: Number.parseFloat(sleepData.nightHours) || 0,
       date: romaniaDatetime,
-      notes: sleepData.notes || "",
+      notes: sleepData.notes.trim(),
       sleepProgress: sleepData.sleepProgress || 0,
     };
 
@@ -297,7 +287,6 @@ export const updateSleepRecord = async (sleepId, sleepData) => {
   }
 };
 
-// Delete a sleep record
 export const deleteSleepRecord = async (sleepId) => {
   try {
     await ensureToken();
@@ -311,7 +300,6 @@ export const deleteSleepRecord = async (sleepId) => {
   }
 };
 
-// Get a specific sleep record by ID
 export const getSleepById = async (sleepId) => {
   try {
     await ensureToken();
@@ -325,15 +313,12 @@ export const getSleepById = async (sleepId) => {
   }
 };
 
-// Get sleep data for a specific month
 export const getSleepDataByMonth = async (childId, year, month) => {
   try {
     await ensureToken();
 
-    // If no year/month provided, use current month
     const now = new Date();
     const targetYear = year || now.getFullYear();
-    // month parameter should be 1-based (1-12) as received from the component
     const targetMonth = month !== undefined ? month : now.getMonth() + 1;
 
     console.log(
@@ -342,7 +327,6 @@ export const getSleepDataByMonth = async (childId, year, month) => {
       ).padStart(2, "0")}`
     );
 
-    // Log the URL and parameters for debugging
     const url = `${API_BASE_URL}/child/${childId}/monthly`;
     const params = { year: targetYear, month: targetMonth };
     console.log(`📡 API Request: GET ${url}`, params);
@@ -396,12 +380,10 @@ export const getSleepDataByMonth = async (childId, year, month) => {
         : "No request made",
     });
 
-    // Return empty array instead of throwing to prevent component crashes
     return [];
   }
 };
 
-// Get current month's sleep data
 export const getMonthlySleepData = async (childId, year, month) => {
   return await getSleepDataByMonth(childId, year, month);
 };
@@ -425,7 +407,6 @@ export const getYearlySleepData = async (childId) => {
 };
 
 export const formatDateForPeriod = (date, period) => {
-  // Extract just the date part if it's a datetime string
   const datePart = date.includes(" ") ? date.split(" ")[0] : date;
 
   if (period === "week") {
@@ -447,7 +428,6 @@ export const aggregateSleepDataByMonth = (sleepData) => {
   const monthlyData = {};
 
   sleepData.forEach((record) => {
-    // Extract just the date part if it's a datetime string
     const datePart = record.date.includes(" ")
       ? record.date.split(" ")[0]
       : record.date;
@@ -516,18 +496,15 @@ export const fetchSleepRecords = async (childId) => {
   }
 };
 
-// Helper function to get daily sleep data
 export const getDailySleepData = async (childId) => {
   try {
     await ensureToken();
     console.log(`Fetching daily sleep data for child: ${childId}`);
 
-    // Get current date
     const now = new Date();
     const year = now.getFullYear();
-    const month = now.getMonth() + 1; // 1-based month
+    const month = now.getMonth() + 1;
 
-    // Use the monthly endpoint to get the current month's data
     return await getMonthlySleepData(childId, year, month);
   } catch (error) {
     console.error("Error fetching daily sleep data:", error);

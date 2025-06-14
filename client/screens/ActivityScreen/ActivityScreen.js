@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
@@ -35,14 +33,14 @@ import * as VaccinationService from "../../services/vaccination-service";
 import * as GrowthService from "../../services/growth-service";
 import { getProgressColor } from "../../utils/growth-utils";
 
+import SleepScreenImage from "../../assets/images/activity-screen-images/sleep-screen-image.jpg";
+
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const isSmallDevice = SCREEN_WIDTH < 375;
 
-// Constants for icon sizes
 const ICON_SIZE = isSmallDevice ? 9 : 11;
 const SMALL_ICON_SIZE = isSmallDevice ? 8 : 9;
 
-// Extracted component for child switcher item
 const ChildSwitcherItem = React.memo(
   ({ child, currentChildId, theme, onSelect, getChildImageSource }) => {
     const isSelected = String(child.id) === String(currentChildId);
@@ -86,7 +84,6 @@ const ChildSwitcherItem = React.memo(
   }
 );
 
-// Extracted component for activity card
 const ActivityCard = React.memo(({ item, index, onPress, renderContent }) => {
   return (
     <TouchableOpacity
@@ -101,18 +98,15 @@ const ActivityCard = React.memo(({ item, index, onPress, renderContent }) => {
 });
 
 function ActivityScreen({ navigation }) {
-  console.log("ActivityScreen - Component initializing");
   const { theme } = useTheme();
   const { currentChild, currentChildId, children, switchChild } =
     useChildActivity();
   const { updateCurrentScreen } = useNotification();
 
-  // State management
   const [showChildSwitcherModal, setShowChildSwitcherModal] = useState(false);
   const [localChildren, setLocalChildren] = useState([]);
   const [showAddChildPrompt, setShowAddChildPrompt] = useState(false);
 
-  // Activity data state - consolidated into a single object
   const [activityData, setActivityData] = useState({
     sleep: {
       records: [],
@@ -140,10 +134,8 @@ function ActivityScreen({ navigation }) {
     },
   });
 
-  // Derived state
   const noChildren = !currentChild || currentChild.id === "default";
 
-  // Memoized functions
   const getChildImageSource = useCallback((child) => {
     if (!child) return defaultChildImage;
     if (child.imageSrc && child.imageSrc !== "default") {
@@ -154,7 +146,6 @@ function ActivityScreen({ navigation }) {
     return defaultChildImage;
   }, []);
 
-  // Count red icons for mood determination
   const countRedIcons = useMemo(() => {
     let count = 0;
     const { sleep, growth, diaper, feeding } = activityData;
@@ -175,7 +166,6 @@ function ActivityScreen({ navigation }) {
     [isHappyMood]
   );
 
-  // Activity cards data
   const activityCards = useMemo(
     () => [
       {
@@ -248,7 +238,6 @@ function ActivityScreen({ navigation }) {
     []
   );
 
-  // Handlers
   const handleCardPress = useCallback(
     (item) => {
       if (item.screen) {
@@ -260,7 +249,6 @@ function ActivityScreen({ navigation }) {
 
   const fetchDataForChild = useCallback(async (childId) => {
     try {
-      // Reset data first
       setActivityData((prev) => ({
         ...prev,
         sleep: { ...prev.sleep, percentage: 0 },
@@ -270,49 +258,31 @@ function ActivityScreen({ navigation }) {
         feeding: { breast: 0, bottle: 0, solid: 0 },
       }));
 
-      // Fetch sleep data - use the same method as SleepScreen
       let sleepPercentage = 0;
       try {
         const todayData = await getTodaySleepData(childId);
 
         if (todayData && !todayData.isDefaultData) {
           sleepPercentage = todayData.sleepProgress || 0;
-          console.log(
-            "📊 ActivityScreen - Today's sleep data found:",
-            todayData
-          );
         } else {
-          // Try to get current sleep data if no today data
           const currentData = await getCurrentSleepData(childId);
           if (currentData && !currentData.isDefaultData) {
             sleepPercentage = currentData.sleepProgress || 0;
-            console.log(
-              "📊 ActivityScreen - Current sleep data found:",
-              currentData
-            );
           }
         }
-
-        console.log(
-          "📊 ActivityScreen - Final sleep percentage:",
-          sleepPercentage
-        );
       } catch (error) {
         console.error("Error fetching sleep data:", error);
       }
 
-      // Fetch vaccination data
       const vaccProgress = await VaccinationService.getVaccinationProgress(
         childId
       );
 
-      // Fetch growth data
       const latestRecord = await GrowthService.getLatestGrowthRecord(childId);
       const heightProgress = latestRecord?.heightProgress || 0;
       const weightProgress = latestRecord?.weightProgress || 0;
       const headCircProgress = latestRecord?.headCircumferenceProgress || 0;
 
-      // Fetch diaper data
       const diaperChanges = await getDiaperChanges(childId);
       const today2 = new Date();
       today2.setHours(0, 0, 0, 0);
@@ -322,7 +292,6 @@ function ActivityScreen({ navigation }) {
         return diaperDate.getTime() === today2.getTime();
       });
 
-      // Fetch feeding data
       const feedingData = await feedingService.getTodayFeedingData(childId);
       const breastData = feedingData.filter(
         (item) => item.type === "breast"
@@ -334,11 +303,10 @@ function ActivityScreen({ navigation }) {
         (item) => item.type === "solid"
       ).length;
 
-      // Update all data at once
       setActivityData({
         sleep: {
           records: [],
-          percentage: sleepPercentage, // Use the fetched sleep percentage instead of 0
+          percentage: sleepPercentage,
         },
         vaccination: {
           progress: vaccProgress?.percentage || 0,
@@ -358,7 +326,7 @@ function ActivityScreen({ navigation }) {
           solid: solidData,
         },
         music: {
-          percentage: 75, // Default value
+          percentage: 75,
         },
       });
     } catch (error) {
@@ -373,7 +341,6 @@ function ActivityScreen({ navigation }) {
       );
       if (!childExists) return;
 
-      // Reset activity data
       setActivityData((prev) => ({
         ...prev,
         sleep: { ...prev.sleep, percentage: 0 },
@@ -393,7 +360,6 @@ function ActivityScreen({ navigation }) {
     [switchChild, localChildren, fetchDataForChild]
   );
 
-  // Render activity card content - extracted for better organization
   const renderActivityCardContent = useCallback(
     (item) => {
       const { sleep, vaccination, growth, diaper, feeding, music } =
@@ -690,7 +656,6 @@ function ActivityScreen({ navigation }) {
         );
       }
 
-      // Default image card
       return (
         <ImageBackground
           source={{ uri: item.image }}
@@ -710,7 +675,6 @@ function ActivityScreen({ navigation }) {
     [activityData, theme, ICON_SIZE, SMALL_ICON_SIZE]
   );
 
-  // Child switcher modal - memoized to prevent re-renders
   const childSwitcherModal = useMemo(
     () => (
       <Modal
@@ -797,7 +761,6 @@ function ActivityScreen({ navigation }) {
     ]
   );
 
-  // Effects
   useEffect(() => {
     if (children && Array.isArray(children)) {
       setLocalChildren(children);
@@ -826,12 +789,10 @@ function ActivityScreen({ navigation }) {
       if (currentChild && currentChild.id !== "default") {
         fetchDataForChild(currentChild.id);
       }
-      console.log("ActivityScreen - Focus listener activated");
     });
     return unsubscribe;
   }, [navigation, children, currentChild, fetchDataForChild]);
 
-  // Header configuration
   React.useLayoutEffect(() => {
     const title = noChildren
       ? "Add a Child"
@@ -860,8 +821,6 @@ function ActivityScreen({ navigation }) {
     updateCurrentScreen("Activity");
   }, [navigation, theme, currentChild, noChildren, updateCurrentScreen]);
 
-  // Render
-  console.log("ActivityScreen - Rendering UI");
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
@@ -945,7 +904,6 @@ function ActivityScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  // Layout styles
   container: {
     flex: 1,
   },
@@ -958,7 +916,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  // Header styles
   headerContainer: {
     alignItems: "center",
     marginBottom: 20,
@@ -983,7 +940,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Profile image styles
   profileImageContainer: {
     position: "relative",
     width: 100,
@@ -1022,8 +978,6 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
   },
-
-  // Card styles
   card: {
     width: "48%",
     aspectRatio: 1,
@@ -1082,7 +1036,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
 
-  // Icon and badge styles
   trendIconContainer: {
     position: "absolute",
     top: 8,
@@ -1188,7 +1141,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
 
-  // Modal styles
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
@@ -1221,7 +1173,6 @@ const styles = StyleSheet.create({
     maxHeight: 300,
   },
 
-  // Child switcher styles
   childSwitcherItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -1256,7 +1207,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // No child styles
   noChildContainer: {
     flex: 1,
     justifyContent: "center",
@@ -1283,7 +1233,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  // Button styles
   addChildButton: {
     flexDirection: "row",
     alignItems: "center",

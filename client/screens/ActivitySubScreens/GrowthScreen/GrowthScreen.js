@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
@@ -27,17 +25,16 @@ import AreaChart from "../../../components/UI/Charts/AreaChart";
 
 import { getGrowthRecommendations } from "../../../utils/growth-utils";
 
-// Define one-year growth targets outside the component to prevent re-creation on every render
 const ONE_YEAR_TARGETS = {
   male: {
-    weight: 9600, // grams
-    height: 74, // cm (Updated as requested)
-    headCirc: 46, // cm
+    weight: 9600,
+    height: 74,
+    headCirc: 46,
   },
   female: {
-    weight: 8900, // grams
-    height: 76, // cm
-    headCirc: 46, // cm
+    weight: 8900,
+    height: 76,
+    headCirc: 46,
   },
 };
 
@@ -65,7 +62,6 @@ export default function GrowthScreen({ navigation }) {
     headCircProgress: 0,
   });
 
-  // Initialize current measurement inputs to empty strings
   const [currentWeight, setCurrentWeight] = useState("");
   const [previousWeight, setPreviousWeight] = useState("");
   const [currentHeight, setCurrentHeight] = useState("");
@@ -78,16 +74,12 @@ export default function GrowthScreen({ navigation }) {
   const [heightGain, setHeightGain] = useState(0);
   const [headCircGain, setHeadCircGain] = useState(0);
 
-  // Track if each specific measurement has been entered
   const [hasWeightMeasurement, setHasWeightMeasurement] = useState(false);
   const [hasHeightMeasurement, setHasHeightMeasurement] = useState(false);
   const [hasHeadCircMeasurement, setHasHeadCircMeasurement] = useState(false);
 
-  // NEW STATE: To store all historical growth records for the chart
   const [allGrowthRecords, setAllGrowthRecords] = useState([]);
 
-  // These chart data functions are no longer needed here as AreaChart will generate its own data
-  // based on allGrowthRecords. They are removed from props passed to AreaChart.
   const getBarChartData = useCallback(() => {
     let birthWeightValue = birthWeight ? Number.parseFloat(birthWeight) : 0;
     if (isNaN(birthWeightValue)) {
@@ -225,7 +217,7 @@ export default function GrowthScreen({ navigation }) {
     childAgeUnit === "months" ? childAgeNum : childAgeNum * 12;
   const childGender = currentChild.gender
     ? currentChild.gender.toLowerCase()
-    : "boys"; // Default to 'boys' if not specified
+    : "boys";
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -236,39 +228,26 @@ export default function GrowthScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    // Normalize gender to 'male' or 'female' for target lookup
     const genderForTargets =
       currentChild.gender?.toLowerCase() === "girl" ? "female" : "male";
     const targets = ONE_YEAR_TARGETS[genderForTargets];
 
     if (targets) {
-      setTargetWeight(targets.weight); // Already in grams
-      setTargetHeight(targets.height * 10); // Convert cm to mm for internal state
-      setTargetHeadCirc(targets.headCirc * 10); // Convert cm to mm for internal state
+      setTargetWeight(targets.weight);
+      setTargetHeight(targets.height * 10);
+      setTargetHeadCirc(targets.headCirc * 10);
     }
-    // Removed the WHO standards fallback to ensure only the one-year targets are used
-  }, [currentChild.gender]); // Only depend on currentChild.gender for target updates
+  }, [currentChild.gender]);
 
   const loadGrowthData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // First, directly access birth measurements from currentChild
-      console.log("Current child in loadGrowthData:", currentChild);
-
-      // Check for birth measurements with different possible property names
-      // First check birthWeight/birthHeight/birthHeadCircumference
       if (currentChild.birthWeight) {
         setBirthWeight(currentChild.birthWeight);
-        console.log(
-          "Setting birth weight from birthWeight:",
-          currentChild.birthWeight
-        );
       } else if (currentChild.weight) {
-        // Then check weight/height/headCircumference
         setBirthWeight(currentChild.weight);
-        console.log("Setting birth weight from weight:", currentChild.weight);
       }
 
       if (currentChild.birthHeight) {
@@ -296,7 +275,6 @@ export default function GrowthScreen({ navigation }) {
         );
       }
 
-      // Also check if birth measurements exist in the activities.growth object
       if (currentChild.activities && currentChild.activities.growth) {
         if (!birthWeight) {
           if (currentChild.activities.growth.birthWeight) {
@@ -349,13 +327,11 @@ export default function GrowthScreen({ navigation }) {
         }
       }
 
-      // Then try to get more detailed data from API
       try {
         const childDetails = await childService.getChildById(currentChild.id);
         console.log("Child details fetched:", childDetails);
 
         if (childDetails) {
-          // Check for birth measurements with different possible property names in API response
           if (!birthWeight) {
             if (childDetails.birthWeight) {
               setBirthWeight(childDetails.birthWeight);
@@ -408,21 +384,17 @@ export default function GrowthScreen({ navigation }) {
         console.error("Error fetching child details:", error);
       }
 
-      // Fetch ALL growth records for the chart
       const records = await growthService.getGrowthRecords(currentChild.id);
-      // Sort records by date to ensure chronological order for chart display
       const sortedRecords = records.sort(
         (a, b) =>
           new Date(a.createdAt || a.recordDate) -
           new Date(b.createdAt || b.recordDate)
       );
-      setAllGrowthRecords(sortedRecords); // Store all records for the chart
+      setAllGrowthRecords(sortedRecords);
 
       if (sortedRecords && sortedRecords.length > 0) {
         setHasExistingMeasurements(true);
-        const latest = sortedRecords[sortedRecords.length - 1]; // Latest record is the last one after sorting
-
-        // Check if the latest record is from today
+        const latest = sortedRecords[sortedRecords.length - 1];
         const today = new Date();
         const recordDate = new Date(latest.createdAt || latest.recordDate);
         const isToday =
@@ -431,7 +403,6 @@ export default function GrowthScreen({ navigation }) {
           today.getFullYear() === recordDate.getFullYear();
 
         if (isToday) {
-          // Record is from today - show in view mode with edit capability
           if (latest.weight) {
             setCurrentWeight(latest.weight.toString());
             setHasWeightMeasurement(true);
@@ -447,10 +418,9 @@ export default function GrowthScreen({ navigation }) {
           if (latest.notes) {
             setNotes(latest.notes);
           }
-          setLatestRecord(latest); // Set latest record for edit mode
-          setIsEditMode(false); // Start in view mode, can click edit
+          setLatestRecord(latest);
+          setIsEditMode(false);
         } else {
-          // Record is from previous day - reset for new record
           setCurrentWeight("");
           setCurrentHeight("");
           setCurrentHeadCirc("");
@@ -458,12 +428,11 @@ export default function GrowthScreen({ navigation }) {
           setHasWeightMeasurement(false);
           setHasHeightMeasurement(false);
           setHasHeadCircMeasurement(false);
-          setLatestRecord(null); // No latest record for today
-          setHasExistingMeasurements(false); // No existing measurement for today
+          setLatestRecord(null);
+          setHasExistingMeasurements(false);
           setIsEditMode(false);
         }
 
-        // Set previous record if available (second to last)
         if (sortedRecords.length >= 2) {
           const previous = sortedRecords[sortedRecords.length - 2];
           setPreviousRecord(previous);
@@ -477,7 +446,6 @@ export default function GrowthScreen({ navigation }) {
           setPreviousHeadCirc("");
         }
 
-        // Update progress values from the latest record if available
         if (
           latest &&
           latest.weightProgress !== undefined &&
@@ -491,7 +459,6 @@ export default function GrowthScreen({ navigation }) {
           });
         }
       } else {
-        // No records at all
         setHasExistingMeasurements(false);
         setLatestRecord(null);
         setPreviousRecord(null);
@@ -510,7 +477,6 @@ export default function GrowthScreen({ navigation }) {
       console.error("Error loading growth data:", error);
       setError("Failed to load growth data");
       setLoading(false);
-      // Ensure states are reset on error if no data was loaded
       setAllGrowthRecords([]);
       setLatestRecord(null);
       setPreviousRecord(null);
@@ -524,7 +490,7 @@ export default function GrowthScreen({ navigation }) {
       setHasExistingMeasurements(false);
       setIsEditMode(false);
     }
-  }, [currentChild.id, currentChild]); // Dependencies for useCallback
+  }, [currentChild.id, currentChild]);
 
   useFocusEffect(
     useCallback(() => {
@@ -581,7 +547,6 @@ export default function GrowthScreen({ navigation }) {
   );
 
   const handleWeightChange = (type, value) => {
-    // Allow up to 5 digits for grams (e.g., 20000g)
     const validatedValue = value.replace(/[^0-9]/g, "");
 
     if (validatedValue.length > 5) {
@@ -597,7 +562,6 @@ export default function GrowthScreen({ navigation }) {
   };
 
   const handleMeasurementChange = (type, value, setter, setHasMeasurement) => {
-    // Allow up to 3 digits for centimeters (e.g., 999cm)
     const validatedValue = value.replace(/[^0-9]/g, "");
 
     if (validatedValue.length > 3) {
@@ -640,11 +604,9 @@ export default function GrowthScreen({ navigation }) {
       setLoading(true);
 
       const weightInGrams = Math.round(Number.parseFloat(currentWeight || "0"));
-      // Convert height from cm to mm before saving
       const heightInMm = Math.round(
         Number.parseFloat(currentHeight || "0") * 10
       );
-      // Convert head circumference from cm to mm before saving
       const headCircInMm = Math.round(
         Number.parseFloat(currentHeadCirc || "0") * 10
       );
@@ -826,7 +788,6 @@ export default function GrowthScreen({ navigation }) {
     );
   }
 
-  // Add this right before the return statement, after the if (error && !latestRecord && !previousRecord) block
   console.log("GrowthScreen RENDER STATE:", {
     birthWeight,
     birthHeight,
@@ -842,7 +803,7 @@ export default function GrowthScreen({ navigation }) {
       height: rec.height,
       headCircumference: rec.headCircumference,
       createdAt: rec.createdAt,
-    })), // Log simplified records
+    })),
     currentChild: {
       id: currentChild.id,
       name: currentChild.name,
@@ -868,7 +829,6 @@ export default function GrowthScreen({ navigation }) {
     },
   });
 
-  // Hardcode the birth measurements for testing if they're still not available
   const finalBirthWeight =
     birthWeight || currentChild.weight || currentChild.birthWeight || "3500";
   const finalBirthHeight =
@@ -949,7 +909,6 @@ export default function GrowthScreen({ navigation }) {
 
         <AreaChart
           theme={theme}
-          // Removed getBarChartData, getHeightChartData, getHeadCircChartData as they are no longer used
           weightGain={weightGain}
           heightGain={heightGain}
           headCircGain={headCircGain}
@@ -970,7 +929,7 @@ export default function GrowthScreen({ navigation }) {
           hasWeightMeasurement={hasWeightMeasurement}
           hasHeightMeasurement={hasHeightMeasurement}
           hasHeadCircMeasurement={hasHeadCircMeasurement}
-          allGrowthRecords={allGrowthRecords} // Pass all historical records
+          allGrowthRecords={allGrowthRecords}
         />
 
         <View

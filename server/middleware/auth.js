@@ -12,13 +12,10 @@ export const protect = async (req, res, next) => {
     req.headers.authorization.startsWith("Bearer")
   ) {
     try {
-      // Extract token from header
       token = req.headers.authorization.split(" ")[1];
 
-      // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // Get user from token (excluding password)
       req.user = await User.findByPk(decoded.id, {
         attributes: { exclude: ["password"] },
       });
@@ -28,7 +25,7 @@ export const protect = async (req, res, next) => {
         return res.status(401).json({ message: "User not found" });
       }
 
-      next(); // Proceed to the next middleware/controller
+      next();
     } catch (error) {
       console.error("Auth middleware error:", error);
       return res.status(401).json({ message: "Not authorized, token failed" });

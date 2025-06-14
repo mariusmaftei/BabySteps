@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useState, useEffect, useRef } from "react";
 import {
   View,
@@ -14,7 +12,6 @@ import { BarChart, PieChart } from "react-native-chart-kit";
 
 const screenWidth = Dimensions.get("window").width;
 
-// Helper function to get day of week abbreviation from date
 const getDayOfWeekAbbr = (dateStr) => {
   try {
     const date = new Date(dateStr);
@@ -36,9 +33,8 @@ const FeedingChartComponent = ({
   onMonthChange,
   currentMonth,
   currentYear,
-  onFetchMonthlyData, // New prop for direct monthly data fetching
+  onFetchMonthlyData,
 }) => {
-  // State for month navigation
   const [selectedMonth, setSelectedMonth] = useState(
     currentMonth || new Date().getMonth()
   );
@@ -46,19 +42,15 @@ const FeedingChartComponent = ({
     currentYear || new Date().getFullYear()
   );
 
-  // Store the last valid data to prevent disappearing
   const [stableData, setStableData] = useState(null);
   const dataInitialized = useRef(false);
 
-  // Feeding colors - same as in FeedingScreen.js
   const breastColor = "#FF9500";
   const bottleColor = "#5A87FF";
   const solidColor = "#4CD964";
 
-  // CONVERSION RATE: 1 minute breast feeding = 20 ml
   const BREAST_TO_ML_CONVERSION = 20;
 
-  // Initialize component with current month/year data
   useEffect(() => {
     console.log("FeedingChartComponent mounted, initializing data");
     if (timePeriod === "month" && onFetchMonthlyData) {
@@ -66,7 +58,6 @@ const FeedingChartComponent = ({
     }
   }, []);
 
-  // Update stable data when processedData changes and is valid
   useEffect(() => {
     if (
       processedData &&
@@ -79,7 +70,6 @@ const FeedingChartComponent = ({
     }
   }, [processedData]);
 
-  // Debug the processed data when it changes
   useEffect(() => {
     console.log("=== PROCESSED DATA CHANGED ===");
     console.log("Timestamp:", new Date().toISOString());
@@ -89,16 +79,13 @@ const FeedingChartComponent = ({
     console.log("Current timePeriod:", timePeriod);
     console.log("Selected month/year:", selectedMonth, selectedYear);
 
-    // Check if data is valid
     if (processedData && processedData.dailyFeedings) {
       console.log("Daily feedings count:", processedData.dailyFeedings.length);
 
-      // Log the first day's data for debugging
       if (processedData.dailyFeedings.length > 0) {
         const firstDay = processedData.dailyFeedings[0];
         console.log("First day data:", firstDay);
 
-        // Check for the new aggregated format
         if (firstDay.breastFeedings) {
           console.log("Using new aggregated format");
           console.log("Breast minutes:", firstDay.breastFeedings.totalMinutes);
@@ -123,7 +110,6 @@ const FeedingChartComponent = ({
     selectedYear,
   ]);
 
-  // Handle month navigation
   const handlePreviousMonth = () => {
     let newMonth = selectedMonth - 1;
     let newYear = selectedYear;
@@ -136,13 +122,10 @@ const FeedingChartComponent = ({
     setSelectedMonth(newMonth);
     setSelectedYear(newYear);
 
-    // Use the new direct fetch function if available
     if (onFetchMonthlyData) {
       console.log(`Fetching data for ${newYear}-${newMonth + 1} directly`);
       onFetchMonthlyData(newYear, newMonth);
-    }
-    // Fallback to old method
-    else if (onMonthChange) {
+    } else if (onMonthChange) {
       const startDate = new Date(newYear, newMonth, 1);
       const endDate = new Date(newYear, newMonth + 1, 0);
       onMonthChange(startDate, endDate);
@@ -161,20 +144,16 @@ const FeedingChartComponent = ({
     setSelectedMonth(newMonth);
     setSelectedYear(newYear);
 
-    // Use the new direct fetch function if available
     if (onFetchMonthlyData) {
       console.log(`Fetching data for ${newYear}-${newMonth + 1} directly`);
       onFetchMonthlyData(newYear, newMonth);
-    }
-    // Fallback to old method
-    else if (onMonthChange) {
+    } else if (onMonthChange) {
       const startDate = new Date(newYear, newMonth, 1);
       const endDate = new Date(newYear, newMonth + 1, 0);
       onMonthChange(startDate, endDate);
     }
   };
 
-  // Month selector component - Always render this for month view
   const renderMonthSelector = () => {
     if (timePeriod !== "month") return null;
 
@@ -216,7 +195,6 @@ const FeedingChartComponent = ({
     );
   };
 
-  // Helper function to get month name
   const getMonthName = (monthIndex) => {
     const monthNames = [
       "January",
@@ -235,14 +213,11 @@ const FeedingChartComponent = ({
     return monthNames[monthIndex];
   };
 
-  // Use the most reliable data source (either current or stable)
   const getActiveData = () => {
-    // If we're loading and have stable data, use stable data to prevent flickering
     if (isLoading && stableData) {
       return stableData;
     }
 
-    // If we have current data, use it
     if (
       processedData &&
       processedData.dailyFeedings &&
@@ -251,23 +226,19 @@ const FeedingChartComponent = ({
       return processedData;
     }
 
-    // Fall back to stable data if available
     if (stableData) {
       return stableData;
     }
 
-    // No data available
     return null;
   };
 
-  // FIXED: Calculate totals with breast feeding conversion to ml
   const calculateTotalsAndPercentages = (dailyData) => {
     let totalBreastMinutes = 0;
     let totalBottle = 0;
     let totalSolid = 0;
 
     dailyData.forEach((day) => {
-      // Get values based on data format
       let breastValue = 0;
       let bottleValue = 0;
       let solidValue = 0;
@@ -287,14 +258,10 @@ const FeedingChartComponent = ({
       totalSolid += solidValue;
     });
 
-    // Convert breast feeding minutes to ml for pie chart calculation
     const totalBreastMl = totalBreastMinutes * BREAST_TO_ML_CONVERSION;
 
-    // For pie chart, we'll use ml as the common unit (breast converted, bottle as-is, solid converted to ml equivalent)
-    // Note: For solid food, we'll treat grams as ml for chart purposes (1g ≈ 1ml for most baby foods)
     const totalForChart = totalBreastMl + totalBottle + totalSolid;
 
-    // Calculate percentages based on ml equivalents
     const breastPercentage =
       totalForChart > 0 ? Math.round((totalBreastMl / totalForChart) * 100) : 0;
     const bottlePercentage =
@@ -321,7 +288,6 @@ const FeedingChartComponent = ({
     };
   };
 
-  // FIXED: Properly centered pie chart with breast feeding conversion
   const renderChart = useCallback(() => {
     const activeData = getActiveData();
 
@@ -343,16 +309,13 @@ const FeedingChartComponent = ({
       );
     }
 
-    // Use rawData if available and dailyFeedings shows zeros
     const dataToUse =
       activeData.rawData && activeData.rawData.length > 0
         ? activeData.rawData
         : activeData.dailyFeedings;
 
-    // Calculate totals and percentages from daily data
     const totals = calculateTotalsAndPercentages(dataToUse);
 
-    // If we have no data, show error
     if (totals.totalForChart === 0) {
       return (
         <View style={styles.errorContainer}>
@@ -367,7 +330,6 @@ const FeedingChartComponent = ({
       );
     }
 
-    // Create pie chart data with converted values
     const pieData = [];
 
     if (totals.totalBreastMl > 0) {
@@ -400,7 +362,6 @@ const FeedingChartComponent = ({
       });
     }
 
-    // Render properly centered pie chart
     if (pieData.length > 0) {
       return (
         <View style={styles.chartWrapper}>
@@ -418,7 +379,7 @@ const FeedingChartComponent = ({
             accessor="value"
             backgroundColor="transparent"
             paddingLeft="0"
-            center={[screenWidth / 4, 0]} // Properly center the chart
+            center={[screenWidth / 4, 0]}
             absolute
             hasLegend={false}
           />
@@ -426,7 +387,6 @@ const FeedingChartComponent = ({
       );
     }
 
-    // Fallback: No valid chart data
     return (
       <View style={styles.errorContainer}>
         <Text style={[styles.errorText, { color: theme.text }]}>
@@ -452,7 +412,6 @@ const FeedingChartComponent = ({
     solidColor,
   ]);
 
-  // Render the daily feeding summary (UNCHANGED - keeping your working version)
   const renderDailySummary = useCallback(() => {
     const activeData = getActiveData();
 
@@ -489,7 +448,6 @@ const FeedingChartComponent = ({
       );
     }
 
-    // Use rawData if available and dailyFeedings shows zeros
     const dataToUse =
       activeData.rawData && activeData.rawData.length > 0
         ? activeData.rawData
@@ -552,25 +510,20 @@ const FeedingChartComponent = ({
         </View>
 
         {dataToUse.map((day, i) => {
-          // For weekly view, show day of week (Mon, Tue, etc.)
-          // For monthly view, show day number (1, 2, 3, etc.)
           const dayDisplay =
             timePeriod === "week" && day.date
               ? getDayOfWeekAbbr(day.date)
               : day.day;
 
-          // Get the correct values based on the data format
           let breastValue = 0;
           let bottleValue = 0;
           let solidValue = 0;
 
-          // Check if we have the new aggregated data format (from weekly/monthly endpoints)
           if (day.breastFeedings && day.bottleFeedings && day.solidFeedings) {
             breastValue = day.breastFeedings.totalMinutes || 0;
             bottleValue = day.bottleFeedings.totalMl || 0;
             solidValue = day.solidFeedings.totalGrams || 0;
           } else {
-            // Use the direct values from rawData or dailyFeedings
             breastValue = day.breastDuration || 0;
             bottleValue = day.bottleAmount || 0;
             solidValue = day.solidAmount || 0;
@@ -649,12 +602,10 @@ const FeedingChartComponent = ({
     solidColor,
   ]);
 
-  // FIXED: Modified feeding summary to show total values with breast conversion info
   const renderFeedingSummary = useCallback(() => {
     const activeData = getActiveData();
     if (!activeData) return null;
 
-    // Calculate totals from daily data
     const dataToUse =
       activeData.rawData && activeData.rawData.length > 0
         ? activeData.rawData
@@ -677,7 +628,6 @@ const FeedingChartComponent = ({
           </Text>
         </View>
 
-        {/* Show total values with breast conversion */}
         <View style={styles.summaryStatsContainer}>
           <View style={styles.summaryStatItem}>
             <View

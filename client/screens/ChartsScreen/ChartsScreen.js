@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
@@ -33,7 +31,6 @@ import {
   getFeedingDataByMonth,
 } from "../../services/feeding-service";
 
-// Import chart components
 import SleepChartComponent from "../../components/Charts/SleepChartComponent";
 import DiaperChartComponent from "../../components/Charts/DiaperChartComponent";
 import FeedingChartComponent from "../../components/Charts/FeedingChartComponent";
@@ -41,7 +38,6 @@ import GrowthChartComponent from "../../components/Charts/GrowthChartComponent";
 
 const screenWidth = Dimensions.get("window").width;
 
-// Helper function to safely reduce an array
 const safeReduce = (array, callback, initialValue) => {
   if (!array || !Array.isArray(array) || array.length === 0) {
     return initialValue;
@@ -49,28 +45,20 @@ const safeReduce = (array, callback, initialValue) => {
   return array.reduce(callback, initialValue);
 };
 
-// Update the getDayFromTimestamp function to be more robust
 const getDayFromTimestamp = (timestamp) => {
   if (!timestamp) return null;
 
   try {
-    // Handle different timestamp formats
     let day;
 
-    // Format: "2025-05-19T08:24:11.000Z" (ISO format)
     if (timestamp.includes("T")) {
       day = timestamp.split("T")[0].split("-")[2];
-    }
-    // Format: "2025-05-19 08:24:11" (database format)
-    else if (timestamp.includes(" ")) {
+    } else if (timestamp.includes(" ")) {
       day = timestamp.split(" ")[0].split("-")[2];
-    }
-    // Format: "2025-05-19" (date only)
-    else if (timestamp.includes("-")) {
+    } else if (timestamp.includes("-")) {
       day = timestamp.split("-")[2];
     }
 
-    // Remove leading zeros if any
     return day ? Number.parseInt(day, 10).toString() : null;
   } catch (error) {
     console.error("Error parsing timestamp:", error);
@@ -87,9 +75,8 @@ export default function ChartsScreen({ navigation }) {
   const [feedingData, setFeedingData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [timePeriod, setTimePeriod] = useState("week"); // 'week', 'month', or 'year'
+  const [timePeriod, setTimePeriod] = useState("week");
 
-  // State for month navigation
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
@@ -133,10 +120,8 @@ export default function ChartsScreen({ navigation }) {
     type: "bar",
   });
 
-  // Add a check for no children
   const noChildren = !currentChild || currentChild.id === "default";
 
-  // Define category colors
   const categoryColors = useMemo(
     () => ({
       Sleep: "#5A87FF",
@@ -280,7 +265,6 @@ export default function ChartsScreen({ navigation }) {
     };
   }, [timePeriod]);
 
-  // Update the processedFeedingData function to only include days with actual data
   const processedFeedingData = useMemo(() => {
     console.log("=== PROCESSING FEEDING DATA ===");
     console.log("Raw feedingData:", feedingData);
@@ -297,7 +281,6 @@ export default function ChartsScreen({ navigation }) {
       return null;
     }
 
-    // Log all the raw feeding data with their timestamps
     console.log("All feeding records:");
     feedingData.forEach((record, index) => {
       console.log(`Record ${index}:`, {
@@ -310,27 +293,21 @@ export default function ChartsScreen({ navigation }) {
       });
     });
 
-    // Create a map to store feeding data by day
     const feedingByDay = new Map();
 
-    // Process each feeding record
     feedingData.forEach((record, index) => {
       console.log(`Processing record ${index}:`, record);
-
-      // Extract the day from the timestamp
       const day = record.timestamp
         ? getDayFromTimestamp(record.timestamp)
         : record.date
         ? getDayFromTimestamp(record.date)
         : null;
 
-      console.log(`Extracted day for record ${index}:`, day);
-
       if (day) {
         if (!feedingByDay.has(day)) {
           feedingByDay.set(day, {
             day,
-            label: day, // Use the actual day number as the label
+            label: day,
             breastDuration: 0,
             bottleAmount: 0,
             solidAmount: 0,
@@ -342,12 +319,10 @@ export default function ChartsScreen({ navigation }) {
           });
         }
 
-        // Add this record to the day's data
         const dayData = feedingByDay.get(day);
         dayData.feedings.push(record);
         dayData.totalCount++;
 
-        // Update the totals based on record type
         if (record.type === "breast") {
           dayData.breastDuration += Number(record.duration) || 0;
         } else if (record.type === "bottle") {
@@ -355,35 +330,19 @@ export default function ChartsScreen({ navigation }) {
         } else if (record.type === "solid") {
           dayData.solidAmount += Number(record.amount) || 0;
         }
-
-        console.log(`Updated day ${day} data:`, dayData);
       } else {
-        console.log(`Could not extract day from record ${index}:`, record);
       }
     });
 
-    console.log("feedingByDay map:", Array.from(feedingByDay.entries()));
-
-    // Convert the map to an array and sort by day
     const dailyFeedings = Array.from(feedingByDay.values()).sort(
       (a, b) => Number(a.day) - Number(b.day)
     );
 
-    console.log("dailyFeedings after sorting:", dailyFeedings);
-
-    // Extract data for charts - ONLY include days with actual data
     const labels = dailyFeedings.map((day) => day.day);
     const breastFeedingData = dailyFeedings.map((day) => day.breastDuration);
     const bottleFeedingData = dailyFeedings.map((day) => day.bottleAmount);
     const solidFoodData = dailyFeedings.map((day) => day.solidAmount);
 
-    console.log("Chart data extracted:");
-    console.log("labels:", labels);
-    console.log("breastFeedingData:", breastFeedingData);
-    console.log("bottleFeedingData:", bottleFeedingData);
-    console.log("solidFoodData:", solidFoodData);
-
-    // Calculate averages
     const avgBreastDuration =
       breastFeedingData.length > 0
         ? Math.round(
@@ -408,7 +367,6 @@ export default function ChartsScreen({ navigation }) {
           )
         : 0;
 
-    // Calculate feeding counts by type
     const breastCount = feedingData.filter(
       (item) => item && item.type === "breast"
     ).length;
@@ -420,7 +378,6 @@ export default function ChartsScreen({ navigation }) {
     ).length;
     const totalCount = feedingData.length;
 
-    // Calculate percentages
     const breastPercentage =
       totalCount > 0 ? Math.round((breastCount / totalCount) * 100) : 0;
     const bottlePercentage =
@@ -447,11 +404,9 @@ export default function ChartsScreen({ navigation }) {
       rawData: feedingData,
     };
 
-    console.log("Final processed feeding data:", result);
     return result;
   }, [feedingData]);
 
-  // Process sleep data for the chart based on time period
   const processedSleepData = useMemo(() => {
     if (!sleepData || !Array.isArray(sleepData) || sleepData.length === 0)
       return null;
@@ -464,7 +419,6 @@ export default function ChartsScreen({ navigation }) {
     let nightHours = [];
 
     if (timePeriod === "week") {
-      // Get the last 7 days (including today)
       const today = new Date();
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
@@ -474,7 +428,6 @@ export default function ChartsScreen({ navigation }) {
         labels.push(formatDateForPeriod(dateStr, "week"));
       }
 
-      // Map the dates to sleep progress data
       sleepHours = dates.map((date) => {
         const record = sleepData.find((item) => item && item.date === date);
         return record && record.sleepProgress !== undefined
@@ -482,7 +435,6 @@ export default function ChartsScreen({ navigation }) {
           : 0;
       });
 
-      // Map the dates to total sleep hours
       totalSleepHours = dates.map((date) => {
         const record = sleepData.find((item) => item && item.date === date);
         if (record) {
@@ -493,19 +445,16 @@ export default function ChartsScreen({ navigation }) {
         return 0;
       });
 
-      // Map the dates to nap hours
       napHours = dates.map((date) => {
         const record = sleepData.find((item) => item && item.date === date);
         return record ? Number(record.napHours) || 0 : 0;
       });
 
-      // Map the dates to night hours
       nightHours = dates.map((date) => {
         const record = sleepData.find((item) => item && item.date === date);
         return record ? Number(record.nightHours) || 0 : 0;
       });
     } else if (timePeriod === "month") {
-      // Get all days in the selected month
       const daysInMonth = new Date(
         selectedYear,
         selectedMonth + 1,
@@ -516,13 +465,11 @@ export default function ChartsScreen({ navigation }) {
         const date = new Date(selectedYear, selectedMonth, i);
         const dateStr = date.toISOString().split("T")[0];
         dates.push(dateStr);
-        labels.push(i.toString()); // Just show the day number
+        labels.push(i.toString());
       }
 
-      // Map the dates to sleep progress data
       sleepHours = dates.map((date) => {
         const record = sleepData.find((item) => {
-          // Convert item.date to a date object if it's a string
           const itemDate =
             typeof item.date === "string"
               ? item.date
@@ -534,7 +481,6 @@ export default function ChartsScreen({ navigation }) {
           : 0;
       });
 
-      // Map the dates to total sleep hours
       totalSleepHours = dates.map((date) => {
         const record = sleepData.find((item) => {
           const itemDate =
@@ -551,7 +497,6 @@ export default function ChartsScreen({ navigation }) {
         return 0;
       });
 
-      // Map the dates to nap hours
       napHours = dates.map((date) => {
         const record = sleepData.find((item) => {
           const itemDate =
@@ -563,7 +508,6 @@ export default function ChartsScreen({ navigation }) {
         return record ? Number(record.napHours) || 0 : 0;
       });
 
-      // Map the dates to night hours
       nightHours = dates.map((date) => {
         const record = sleepData.find((item) => {
           const itemDate =
@@ -575,18 +519,15 @@ export default function ChartsScreen({ navigation }) {
         return record ? Number(record.nightHours) || 0 : 0;
       });
     } else if (timePeriod === "year") {
-      // For yearly view, we use the aggregated monthly data
       dates = sleepData.map((item) => item && item.date).filter(Boolean);
       labels = sleepData.map((item) => item && item.month).filter(Boolean);
 
-      // Use sleepProgress instead of totalHours
       sleepHours = sleepData.map((item) =>
         item && item.sleepProgress !== undefined
           ? Number(item.sleepProgress)
           : 0
       );
 
-      // For total sleep hours, we'll need to calculate from napHours and nightHours
       totalSleepHours = sleepData.map((item) => {
         if (!item) return 0;
         const nap = Number(item.napHours) || 0;
@@ -594,7 +535,6 @@ export default function ChartsScreen({ navigation }) {
         return nap + night;
       });
 
-      // Extract nap and night hours
       napHours = sleepData.map((item) =>
         item ? Number(item.napHours) || 0 : 0
       );
@@ -603,7 +543,6 @@ export default function ChartsScreen({ navigation }) {
       );
     }
 
-    // Calculate average sleep hours - using safeReduce to avoid errors
     const totalHours = safeReduce(sleepHours, (sum, hours) => sum + hours, 0);
     const validSleepHours = sleepHours ? sleepHours.filter((h) => h > 0) : [];
     const averageSleepHours =
@@ -611,11 +550,9 @@ export default function ChartsScreen({ navigation }) {
         ? Math.round(totalHours / validSleepHours.length)
         : 0;
 
-    // Calculate trend
     let trendPercentage = 0;
     if (sleepHours && sleepHours.length > 0) {
       if (timePeriod === "week") {
-        // For week: compare last 3 days with previous 4 days
         const recentDays = sleepHours.slice(4).filter((h) => h > 0);
         const previousDays = sleepHours.slice(0, 4).filter((h) => h > 0);
 
@@ -636,7 +573,6 @@ export default function ChartsScreen({ navigation }) {
           ).toFixed(0);
         }
       } else if (timePeriod === "month") {
-        // For month: compare last 15 days with previous 15 days
         const halfIndex = Math.floor(sleepHours.length / 2);
         const recentDays = sleepHours.slice(halfIndex).filter((h) => h > 0);
         const previousDays = sleepHours
@@ -660,7 +596,6 @@ export default function ChartsScreen({ navigation }) {
           ).toFixed(0);
         }
       } else if (timePeriod === "year") {
-        // For year: compare last 6 months with previous 6 months
         const halfIndex = Math.floor(sleepHours.length / 2);
         const recentMonths = sleepHours.slice(halfIndex).filter((h) => h > 0);
         const previousMonths = sleepHours
@@ -694,7 +629,6 @@ export default function ChartsScreen({ navigation }) {
         ? `${trendPercentage}%`
         : "Stable";
 
-    // Calculate average total sleep hours
     const validTotalSleepHours = totalSleepHours
       ? totalSleepHours.filter((h) => h > 0)
       : [];
@@ -704,7 +638,6 @@ export default function ChartsScreen({ navigation }) {
           validTotalSleepHours.length
         : 0;
 
-    // Update the return object to include all the data we need
     return {
       labels: labels || [],
       dates: dates || [],
@@ -724,7 +657,6 @@ export default function ChartsScreen({ navigation }) {
     };
   }, [sleepData, timePeriod, selectedMonth, selectedYear]);
 
-  // Add processedDiaperData similar to processedSleepData
   const processedDiaperData = useMemo(() => {
     if (!diaperData || !Array.isArray(diaperData) || diaperData.length === 0)
       return null;
@@ -734,7 +666,6 @@ export default function ChartsScreen({ navigation }) {
     let diaperCounts = [];
 
     if (timePeriod === "week") {
-      // Get the last 7 days (including today)
       const today = new Date();
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
@@ -744,13 +675,11 @@ export default function ChartsScreen({ navigation }) {
         labels.push(formatDateForPeriod(dateStr, "week"));
       }
 
-      // Count diaper changes per day
       diaperCounts = dates.map((date) => {
         const records = diaperData.filter((item) => item && item.date === date);
         return records.length;
       });
     } else if (timePeriod === "month") {
-      // Get the last 30 days, showing every 3rd day
       const today = new Date();
       for (let i = 29; i >= 0; i -= 3) {
         const date = new Date();
@@ -760,7 +689,6 @@ export default function ChartsScreen({ navigation }) {
         labels.push(formatDateForPeriod(dateStr, "month"));
       }
 
-      // Count diaper changes for each 3-day period
       diaperCounts = dates.map((date, index) => {
         let count = 0;
         for (let i = 0; i < 3; i++) {
@@ -773,17 +701,15 @@ export default function ChartsScreen({ navigation }) {
           );
           count += records.length;
         }
-        return Math.round(count / 3); // Average per day
+        return Math.round(count / 3);
       });
     } else if (timePeriod === "year") {
-      // For yearly view, use the aggregated monthly data
       dates = diaperData.map((item) => item && item.date).filter(Boolean);
       labels = diaperData.map((item) => item && item.month).filter(Boolean);
       diaperCounts = diaperData.map((item) => (item ? item.count : 0));
-      diaperCounts = diaperData.map((item) => (item ? item.count / 30 : 0)); // Average per day
+      diaperCounts = diaperData.map((item) => (item ? item.count / 30 : 0));
     }
 
-    // Calculate average diaper changes
     const totalChanges =
       diaperCounts && diaperCounts.length > 0
         ? safeReduce(diaperCounts, (sum, count) => sum + count, 0)
@@ -796,11 +722,9 @@ export default function ChartsScreen({ navigation }) {
         ? Math.round((totalChanges / validDiaperCounts.length) * 10) / 10 || 0
         : 0;
 
-    // Calculate trend
     let trendPercentage = 0;
     if (diaperCounts && diaperCounts.length > 0) {
       if (timePeriod === "week") {
-        // For week: compare last 3 days with previous 4 days
         const recentDays = diaperCounts.slice(4).filter((c) => c > 0);
         const previousDays = diaperCounts.slice(0, 4).filter((c) => c > 0);
 
@@ -821,7 +745,6 @@ export default function ChartsScreen({ navigation }) {
           ).toFixed(0);
         }
       } else if (timePeriod === "month" || timePeriod === "year") {
-        // Similar calculation for month and year
         const halfIndex = Math.floor(diaperCounts.length / 2);
         const recentCounts = diaperCounts.slice(halfIndex).filter((c) => c > 0);
         const previousCounts = diaperCounts
@@ -863,34 +786,26 @@ export default function ChartsScreen({ navigation }) {
     };
   }, [diaperData, timePeriod]);
 
-  // NEW: Function to handle month data fetching from SleepChartComponent
   const handleSleepMonthDataFetch = async (year, month) => {
     if (noChildren || activeTab !== "Sleep") return;
-
-    console.log(`🔄 ChartsScreen: Fetching sleep data for ${year}-${month}`);
 
     setIsLoading(true);
     setError(null);
 
     try {
       const data = await getSleepDataByMonth(currentChild.id, year, month);
-      console.log(
-        `✅ ChartsScreen: Sleep data fetched: ${data ? data.length : 0} records`
-      );
+
       setSleepData(data || []);
 
-      // Update the selected month/year state to match what was fetched
-      setSelectedMonth(month - 1); // Convert back to 0-based
+      setSelectedMonth(month - 1);
       setSelectedYear(year);
     } catch (err) {
-      console.error(`❌ ChartsScreen: Error fetching sleep data:`, err);
       setError(`Failed to load sleep data. Please try again.`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle month change from the FeedingChartComponent
   const handleFeedingMonthChange = async (startDate, endDate) => {
     if (noChildren || activeTab !== "Feeding") return;
 
@@ -924,7 +839,6 @@ export default function ChartsScreen({ navigation }) {
     }
   };
 
-  // Function to fetch data based on selected time period and active tab
   const fetchData = async () => {
     if (noChildren) return;
 
@@ -932,21 +846,12 @@ export default function ChartsScreen({ navigation }) {
     setError(null);
 
     try {
-      console.log(
-        `Fetching ${timePeriod} ${activeTab.toLowerCase()} data for charts...`
-      );
       let data;
 
       if (activeTab === "Sleep") {
         if (timePeriod === "week") {
           data = await getWeeklySleepData(currentChild.id);
         } else if (timePeriod === "month") {
-          // For month view, fetch data for the currently selected month
-          console.log(
-            `🔄 fetchData: Fetching sleep data for ${selectedYear}-${
-              selectedMonth + 1
-            }`
-          );
           data = await getSleepDataByMonth(
             currentChild.id,
             selectedYear,
@@ -978,24 +883,18 @@ export default function ChartsScreen({ navigation }) {
         );
         setDiaperData(data || []);
       } else if (activeTab === "Feeding") {
-        // Fetch feeding data
         if (timePeriod === "week") {
           data = await getWeeklyFeedingData(currentChild.id);
-          // Add debug logging
-          console.log("Weekly feeding data dates:");
           if (data && data.length > 0) {
             const dates = [...new Set(data.map((item) => item.date))].sort();
             dates.forEach((date) => {
               const count = data.filter((item) => item.date === date).length;
-              console.log(`${date}: ${count} records`);
             });
           } else {
-            console.log("No feeding data found for this week");
           }
         } else if (timePeriod === "month") {
-          // For month view, always fetch current month initially
           const now = new Date();
-          const currentMonth = now.getMonth() + 1; // 1-based
+          const currentMonth = now.getMonth() + 1;
           const currentYear = now.getFullYear();
 
           data = await getFeedingDataByMonth(
@@ -1004,15 +903,9 @@ export default function ChartsScreen({ navigation }) {
             currentMonth
           );
 
-          // Update state to match what we fetched
-          setSelectedMonth(now.getMonth()); // 0-based for state
+          setSelectedMonth(now.getMonth());
           setSelectedYear(currentYear);
         }
-        console.log(
-          `${timePeriod} feeding data fetched for charts:`,
-          data ? data.length : 0,
-          "records"
-        );
         setFeedingData(data || []);
       }
     } catch (err) {
@@ -1028,12 +921,10 @@ export default function ChartsScreen({ navigation }) {
     }
   };
 
-  // Fetch data when the component mounts, when the current child changes, or when time period changes
   useEffect(() => {
     fetchData();
   }, [currentChild, noChildren, timePeriod, activeTab]);
 
-  // Add a focus effect to refresh data when the screen comes into focus
   const fetchDataRef = useMemo(
     () => fetchData,
     [currentChild, noChildren, timePeriod, activeTab]
@@ -1041,23 +932,16 @@ export default function ChartsScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      console.log("ChartsScreen focused, refreshing data...");
       fetchDataRef();
-      return () => {
-        // This runs when the screen is unfocused
-        console.log("ChartsScreen unfocused");
-      };
+      return () => {};
     }, [fetchDataRef])
   );
 
-  // Add this useEffect after the other useEffects
   useEffect(() => {
-    // If timePeriod is set to "year", change it to "month"
     if (timePeriod === "year") {
       setTimePeriod("month");
     }
 
-    // Reset to current month when switching to month view
     if (timePeriod === "month") {
       const now = new Date();
       setSelectedMonth(now.getMonth());
@@ -1065,34 +949,32 @@ export default function ChartsScreen({ navigation }) {
     }
   }, [timePeriod]);
 
-  // In the useEffect that updates sleepChartData, modify to use sleepProgress
   useEffect(() => {
     if (processedSleepData) {
       setSleepChartData({
         labels: processedSleepData.labels,
         datasets: [
           {
-            data: processedSleepData.sleepProgress, // Changed from sleepHours to sleepProgress
+            data: processedSleepData.sleepProgress,
             color: (opacity = 1) => `rgba(90, 135, 255, ${opacity})`,
             strokeWidth: 2,
           },
         ],
-        legend: ["Sleep Progress (%)"], // Updated legend
-        unit: "%", // Changed unit from hours to %
+        legend: ["Sleep Progress (%)"],
+        unit: "%",
         type: "line",
       });
     } else {
       setSleepChartData({
         labels: defaultSleepChartData.labels,
         datasets: defaultSleepChartData.datasets,
-        legend: ["Sleep Progress (%)"], // Updated legend
-        unit: "%", // Changed unit from hours to %
+        legend: ["Sleep Progress (%)"],
+        unit: "%",
         type: "line",
       });
     }
   }, [processedSleepData, defaultSleepChartData]);
 
-  // Add useEffect for diaperChartData
   useEffect(() => {
     if (processedDiaperData) {
       setDiaperChartData({
@@ -1118,7 +1000,6 @@ export default function ChartsScreen({ navigation }) {
     }
   }, [processedDiaperData, defaultDiaperChartData]);
 
-  // Add useEffect for feedingChartData
   useEffect(() => {
     if (processedFeedingData) {
       setFeedingChartData({
@@ -1152,7 +1033,6 @@ export default function ChartsScreen({ navigation }) {
     }
   }, [processedFeedingData, defaultFeedingChartData]);
 
-  // Chart configuration
   const getChartConfig = useCallback(() => {
     return {
       backgroundColor: theme.cardBackground,
@@ -1173,13 +1053,10 @@ export default function ChartsScreen({ navigation }) {
     };
   }, [theme.cardBackground, theme.text, categoryColors, activeTab]);
 
-  // Helper function to convert hex to rgb
   const hexToRgb = (hex) => {
     if (!hex) return "0, 0, 0";
-    // Remove # if present
     hex = hex.replace("#", "");
 
-    // Parse the hex values
     const r = Number.parseInt(hex.substring(0, 2), 16);
     const g = Number.parseInt(hex.substring(2, 4), 16);
     const b = Number.parseInt(hex.substring(4, 6), 16);
@@ -1187,7 +1064,6 @@ export default function ChartsScreen({ navigation }) {
     return `${r}, ${g}, ${b}`;
   };
 
-  // Get icon for current category
   const getCategoryIcon = (category) => {
     const icons = {
       Sleep: "moon",
@@ -1199,7 +1075,6 @@ export default function ChartsScreen({ navigation }) {
     return icons[category] || "stats-chart";
   };
 
-  // Get time period label
   const getTimePeriodLabelTextValue = () => {
     if (timePeriod === "week") {
       return "Last 7 days";
@@ -1224,15 +1099,10 @@ export default function ChartsScreen({ navigation }) {
     }
   };
 
-  // Add a refresh button
   const handleRefresh = () => {
-    console.log(`🔄 Refreshing ${activeTab} data for ${timePeriod} view`);
-
     if (activeTab === "Sleep" && timePeriod === "month") {
-      // For sleep month view, use the dedicated month fetch function
       handleSleepMonthDataFetch(selectedYear, selectedMonth + 1);
     } else {
-      // For all other cases, use the general fetch function
       fetchData();
     }
   };
@@ -1283,7 +1153,6 @@ export default function ChartsScreen({ navigation }) {
     theme.tabInactiveText,
   ]);
 
-  // Render category tabs
   const renderTabs = renderTabsMemoized;
 
   const renderTimePeriodTabsMemoized = useCallback(() => {
@@ -1351,10 +1220,8 @@ export default function ChartsScreen({ navigation }) {
     );
   }, [activeTab, categoryColors, theme.textSecondary, timePeriod]);
 
-  // Render time period tabs for Sleep category
   const renderTimePeriodTabs = renderTimePeriodTabsMemoized;
 
-  // If there are no children, show a message to add a child
   if (noChildren) {
     return (
       <SafeAreaView
@@ -1392,7 +1259,6 @@ export default function ChartsScreen({ navigation }) {
     );
   }
 
-  // Create data object for tabs
   const data = {
     Sleep: sleepChartData,
     Feeding: feedingChartData,
@@ -1400,7 +1266,6 @@ export default function ChartsScreen({ navigation }) {
     Growth: {},
   };
 
-  // Render the appropriate component based on the active tab
   const renderActiveTabContent = () => {
     switch (activeTab) {
       case "Sleep":
@@ -1414,8 +1279,8 @@ export default function ChartsScreen({ navigation }) {
             categoryColor={categoryColors.Sleep}
             timePeriod={timePeriod}
             getChartConfig={getChartConfig}
-            onFetchMonthlyData={handleSleepMonthDataFetch} // Changed this line
-            rawSleepData={sleepData} // Add this line to pass the raw sleep data
+            onFetchMonthlyData={handleSleepMonthDataFetch}
+            rawSleepData={sleepData}
           />
         );
       case "Diaper":
@@ -1466,24 +1331,14 @@ export default function ChartsScreen({ navigation }) {
     }
   };
 
-  // Add this useEffect after the existing ones
   useEffect(() => {
-    // When switching to Sleep tab in month view, ensure we have data
     if (
       activeTab === "Sleep" &&
       timePeriod === "month" &&
       currentChild &&
       currentChild.id !== "default"
     ) {
-      console.log(`🔄 Sleep tab activated in month view, checking data...`);
-
-      // If we don't have sleep data, fetch it
       if (!sleepData || sleepData.length === 0) {
-        console.log(
-          `📅 No sleep data found, fetching for ${selectedYear}-${
-            selectedMonth + 1
-          }`
-        );
         handleSleepMonthDataFetch(selectedYear, selectedMonth + 1);
       }
     }

@@ -29,7 +29,6 @@ export const getGrowthRecords = async (childId) => {
     return response.data;
   } catch (error) {
     console.error("Error in getGrowthRecords:", error);
-    // Return an empty array instead of hardcoded data on error
     return [];
   }
 };
@@ -40,7 +39,6 @@ export const getLatestGrowthRecord = async (childId) => {
     const response = await api.get(`/growth/child/${childId}/latest`);
     return response.data;
   } catch (error) {
-    // Return null instead of hardcoded data on error or 404
     return handle404Error(error, "No latest growth record found", null);
   }
 };
@@ -110,10 +108,7 @@ export const calculateMonthlyGrowthTargets = (ageInMonths, gender) => {
 export const calculateGrowthProgressPercentages = async (
   childId,
   ageInMonths,
-  gender,
-  birthWeight,
-  birthHeight,
-  birthHeadCirc
+  gender
 ) => {
   try {
     const records = await getGrowthRecords(childId);

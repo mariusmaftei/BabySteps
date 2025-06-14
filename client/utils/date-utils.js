@@ -1,7 +1,3 @@
-/**
- * Gets the current date in local timezone as YYYY-MM-DD
- * This ensures dates are in the user's local timezone (Romania)
- */
 export const getLocalDateString = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -10,9 +6,6 @@ export const getLocalDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
-/**
- * Formats a date for display
- */
 export const formatDisplayDate = (dateString) => {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -23,17 +16,11 @@ export const formatDisplayDate = (dateString) => {
   });
 };
 
-/**
- * Checks if a date is today in local timezone
- */
 export const isLocalToday = (dateString) => {
   if (!dateString) return false;
   return dateString === getLocalDateString();
 };
 
-/**
- * Gets date for N days ago in local timezone
- */
 export const getLocalDateDaysAgo = (days) => {
   const date = new Date();
   date.setDate(date.getDate() - days);
@@ -43,13 +30,10 @@ export const getLocalDateDaysAgo = (days) => {
   return `${year}-${month}-${day}`;
 };
 
-/**
- * Gets the start and end dates for the current week in local timezone
- */
 export const getCurrentWeekDates = () => {
   const now = new Date();
   const startDate = new Date(now);
-  startDate.setDate(now.getDate() - 6); // Last 7 days
+  startDate.setDate(now.getDate() - 6);
 
   const endDateStr = getLocalDateString();
   const startDateStr =
@@ -62,9 +46,6 @@ export const getCurrentWeekDates = () => {
   return { startDate: startDateStr, endDate: endDateStr };
 };
 
-/**
- * Gets the start and end dates for a month in local timezone
- */
 export const getMonthDates = (year, month) => {
   const startDate = new Date(year, month, 1);
   const endDate = new Date(year, month + 1, 0);

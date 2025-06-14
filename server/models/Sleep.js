@@ -58,7 +58,7 @@ const Sleep = sequelize.define(
     date: {
       type: DataTypes.STRING,
       allowNull: false,
-      defaultValue: "2025-01-01 00:00:00", // Default datetime string value
+      defaultValue: "2025-01-01 00:00:00",
       comment:
         "Datetime string in YYYY-MM-DD HH:MM:SS format sent from client (Romania local time)",
       validate: {

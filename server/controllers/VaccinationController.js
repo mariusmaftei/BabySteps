@@ -2,12 +2,10 @@ import Vaccination from "../models/Vaccination.js";
 import Child from "../models/Child.js";
 import { Op } from "sequelize";
 
-// Get all vaccinations for a child
 export const getVaccinationsForChild = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Verify child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -35,7 +33,6 @@ export const getVaccinationsForChild = async (req, res) => {
   }
 };
 
-// Create a new vaccination record
 export const createVaccination = async (req, res) => {
   try {
     const { childId } = req.params;
@@ -49,7 +46,6 @@ export const createVaccination = async (req, res) => {
       notes,
     } = req.body;
 
-    // Verify child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -63,7 +59,6 @@ export const createVaccination = async (req, res) => {
         .json({ message: "Child not found or not authorized" });
     }
 
-    // Check if this vaccination already exists for this child
     const existingVaccination = await Vaccination.findOne({
       where: {
         childId,
@@ -98,7 +93,6 @@ export const createVaccination = async (req, res) => {
   }
 };
 
-// Create multiple vaccination records at once (for initial setup)
 export const createMultipleVaccinations = async (req, res) => {
   try {
     const { childId } = req.params;
@@ -108,7 +102,6 @@ export const createMultipleVaccinations = async (req, res) => {
       return res.status(400).json({ message: "Invalid vaccinations data" });
     }
 
-    // Verify child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -122,13 +115,11 @@ export const createMultipleVaccinations = async (req, res) => {
         .json({ message: "Child not found or not authorized" });
     }
 
-    // Prepare vaccination records with childId
     const vaccinationRecords = vaccinations.map((vaccination) => ({
       ...vaccination,
       childId,
     }));
 
-    // Create all vaccination records
     const createdVaccinations = await Vaccination.bulkCreate(
       vaccinationRecords
     );
@@ -142,13 +133,11 @@ export const createMultipleVaccinations = async (req, res) => {
   }
 };
 
-// Update a vaccination record (mark as completed)
 export const updateVaccination = async (req, res) => {
   try {
     const { childId, vaccinationId } = req.params;
     const { isCompleted, completedDate, completionNotes } = req.body;
 
-    // Verify child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -162,7 +151,6 @@ export const updateVaccination = async (req, res) => {
         .json({ message: "Child not found or not authorized" });
     }
 
-    // Find the vaccination
     const vaccination = await Vaccination.findOne({
       where: {
         id: vaccinationId,
@@ -174,7 +162,6 @@ export const updateVaccination = async (req, res) => {
       return res.status(404).json({ message: "Vaccination record not found" });
     }
 
-    // Update the vaccination
     vaccination.isCompleted = isCompleted ?? vaccination.isCompleted;
 
     if (isCompleted) {
@@ -197,14 +184,12 @@ export const updateVaccination = async (req, res) => {
   }
 };
 
-// Update a vaccination by vaccineId (for the mobile app)
 export const updateVaccinationByVaccineId = async (req, res) => {
   try {
     const { childId } = req.params;
     const { vaccineId } = req.params;
     const { isCompleted, completedDate, completionNotes } = req.body;
 
-    // Verify child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -218,7 +203,6 @@ export const updateVaccinationByVaccineId = async (req, res) => {
         .json({ message: "Child not found or not authorized" });
     }
 
-    // Find the vaccination
     const vaccination = await Vaccination.findOne({
       where: {
         vaccineId,
@@ -230,7 +214,6 @@ export const updateVaccinationByVaccineId = async (req, res) => {
       return res.status(404).json({ message: "Vaccination record not found" });
     }
 
-    // Update the vaccination
     vaccination.isCompleted = isCompleted ?? vaccination.isCompleted;
 
     if (isCompleted) {
@@ -253,12 +236,10 @@ export const updateVaccinationByVaccineId = async (req, res) => {
   }
 };
 
-// Delete a vaccination record
 export const deleteVaccination = async (req, res) => {
   try {
     const { childId, vaccinationId } = req.params;
 
-    // Verify child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -272,7 +253,6 @@ export const deleteVaccination = async (req, res) => {
         .json({ message: "Child not found or not authorized" });
     }
 
-    // Find and delete the vaccination
     const vaccination = await Vaccination.findOne({
       where: {
         id: vaccinationId,
@@ -297,12 +277,10 @@ export const deleteVaccination = async (req, res) => {
   }
 };
 
-// Get due vaccinations for a child
 export const getDueVaccinations = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Verify child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -316,12 +294,10 @@ export const getDueVaccinations = async (req, res) => {
         .json({ message: "Child not found or not authorized" });
     }
 
-    // Get current date
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-    // Find vaccinations due this month and not completed
     const dueVaccinations = await Vaccination.findAll({
       where: {
         childId,
@@ -342,12 +318,10 @@ export const getDueVaccinations = async (req, res) => {
   }
 };
 
-// Get overdue vaccinations for a child
 export const getOverdueVaccinations = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Verify child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -361,11 +335,9 @@ export const getOverdueVaccinations = async (req, res) => {
         .json({ message: "Child not found or not authorized" });
     }
 
-    // Get current date
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    // Find vaccinations due before this month and not completed
     const overdueVaccinations = await Vaccination.findAll({
       where: {
         childId,
@@ -386,12 +358,10 @@ export const getOverdueVaccinations = async (req, res) => {
   }
 };
 
-// Get vaccination progress for a child
 export const getVaccinationProgress = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Verify child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -405,7 +375,6 @@ export const getVaccinationProgress = async (req, res) => {
         .json({ message: "Child not found or not authorized" });
     }
 
-    // Count total and completed vaccinations
     const totalCount = await Vaccination.count({
       where: { childId },
     });
@@ -417,7 +386,6 @@ export const getVaccinationProgress = async (req, res) => {
       },
     });
 
-    // Calculate percentage
     const percentage =
       totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 

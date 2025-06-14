@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -163,7 +161,6 @@ export default function FeedingScreen({ navigation }) {
           duration: durationInMinutes,
           side: activeBreast,
           notes: currentFeeding.note || "",
-          // Use full datetime format
           timestamp: getCurrentDateTimeString(),
         };
 
@@ -213,7 +210,6 @@ export default function FeedingScreen({ navigation }) {
               duration: durationInMinutes,
               side: activeBreast,
               notes: currentFeeding.note || "Auto-stopped after 45 minutes",
-              // Use full datetime format
               timestamp: getCurrentDateTimeString(),
             };
 
@@ -292,7 +288,6 @@ export default function FeedingScreen({ navigation }) {
         amount: Number.parseInt(currentFeeding.amount),
         unit: "ml",
         notes: currentFeeding.note || "",
-        // Use full datetime format
         timestamp: getCurrentDateTimeString(),
       };
 
@@ -346,7 +341,6 @@ export default function FeedingScreen({ navigation }) {
         amount: Number.parseInt(currentFeeding.amount),
         unit: "g",
         notes: currentFeeding.note || "",
-        // Use full datetime format
         timestamp: getCurrentDateTimeString(),
       };
 

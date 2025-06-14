@@ -42,29 +42,29 @@ const EXPECTED_404_ENDPOINTS = [
   "/statistics",
 ];
 
-const isExpected404Error = (url, status) => {
-  if (status !== 404) return false;
-  return EXPECTED_404_ENDPOINTS.some((endpoint) => url.includes(endpoint));
-};
+// const isExpected404Error = (url, status) => {
+//   if (status !== 404) return false;
+//   return EXPECTED_404_ENDPOINTS.some((endpoint) => url.includes(endpoint));
+// };
 
-const isKnownError = (error) => {
-  const isDuplicateEmail =
-    error.response &&
-    error.response.status === 400 &&
-    error.response.data &&
-    (error.response.data.code === "EMAIL_EXISTS" ||
-      (error.response.data.message &&
-        error.response.data.message.includes("already exists")));
+// const isKnownError = (error) => {
+//   const isDuplicateEmail =
+//     error.response &&
+//     error.response.status === 400 &&
+//     error.response.data &&
+//     (error.response.data.code === "EMAIL_EXISTS" ||
+//       (error.response.data.message &&
+//         error.response.data.message.includes("already exists")));
 
-  const isInvalidCredentials =
-    error.response &&
-    error.response.status === 400 &&
-    error.response.data &&
-    error.response.data.message &&
-    error.response.data.message.includes("Invalid credentials");
+//   const isInvalidCredentials =
+//     error.response &&
+//     error.response.status === 400 &&
+//     error.response.data &&
+//     error.response.data.message &&
+//     error.response.data.message.includes("Invalid credentials");
 
-  return isDuplicateEmail || isInvalidCredentials;
-};
+//   return isDuplicateEmail || isInvalidCredentials;
+// };
 
 api.interceptors.request.use(
   (config) => {

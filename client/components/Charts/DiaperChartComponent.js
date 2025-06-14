@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useState, useMemo, useEffect } from "react";
 import {
   View,

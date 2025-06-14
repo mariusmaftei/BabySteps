@@ -2,10 +2,8 @@ import Sleep from "../models/Sleep.js";
 import Child from "../models/Child.js";
 import { Op } from "sequelize";
 
-// Helper function to get current Romanian datetime (YYYY-MM-DD HH:MM:SS format)
 const getRomaniaDateTime = () => {
   const now = new Date();
-  // Convert to Romania timezone (Europe/Bucharest) - UTC+3 during summer
   const romaniaOffset = 3 * 60 * 60 * 1000; // UTC+3 for Romania (EEST)
   const romaniaTime = new Date(now.getTime() + romaniaOffset);
 
@@ -25,17 +23,15 @@ const getRomaniaDateTime = () => {
   return romaniaDatetime;
 };
 
-// Helper function to get today's date in Romania timezone (YYYY-MM-DD format)
 const getTodayLocalDate = () => {
   const romaniaDatetime = getRomaniaDateTime();
-  return romaniaDatetime.split(" ")[0]; // Extract just the date part
+  return romaniaDatetime.split(" ")[0];
 };
 
-// Helper function to convert date to datetime if needed
 const ensureDateTime = (dateStr) => {
   if (!dateStr) return getRomaniaDateTime();
-  if (dateStr.length === 10) return `${dateStr} 00:00:00`; // Convert YYYY-MM-DD to YYYY-MM-DD 00:00:00
-  return dateStr; // Already datetime format
+  if (dateStr.length === 10) return `${dateStr} 00:00:00`;
+  return dateStr;
 };
 
 export const createSleep = async (req, res) => {
@@ -67,17 +63,15 @@ export const createSleep = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Ensure we have a full datetime string
     const dateTimeString = ensureDateTime(date);
 
-    // For finding existing records, we need to match just the date part
     const datePart = dateTimeString.split(" ")[0];
 
     const existingRecords = await Sleep.findAll({
       where: {
         childId,
         date: {
-          [Op.like]: `${datePart}%`, // Match records with the same date part
+          [Op.like]: `${datePart}%`,
         },
       },
     });
@@ -166,7 +160,7 @@ export const updateSleep = async (req, res) => {
 
     sleep.napHours = napHours !== undefined ? napHours : sleep.napHours;
     sleep.nightHours = nightHours !== undefined ? nightHours : sleep.nightHours;
-    sleep.date = ensureDateTime(date); // Ensure we have a full datetime string
+    sleep.date = ensureDateTime(date);
     sleep.notes = notes !== undefined ? notes : sleep.notes;
     sleep.sleepProgress =
       sleepProgress !== undefined ? sleepProgress : sleep.sleepProgress;
@@ -310,19 +304,17 @@ export const getSleepByDateRange = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Create array of date strings for the range
     const dateStrings = [];
     const start = new Date(startDate);
     const end = new Date(endDate);
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split("T")[0]; // YYYY-MM-DD format
+      const dateStr = d.toISOString().split("T")[0];
       dateStrings.push(dateStr);
     }
 
     console.log("Looking for sleep records with dates:", dateStrings);
 
-    // Use OR condition with LIKE to match any of the target dates
     const whereConditions = dateStrings.map((dateStr) => ({
       date: {
         [Op.like]: `${dateStr}%`,
@@ -372,7 +364,6 @@ export const getWeeklySleep = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Get today and 6 days ago (total 7 days)
     const today = new Date();
     const sixDaysAgo = new Date();
     sixDaysAgo.setDate(today.getDate() - 6);
@@ -385,7 +376,6 @@ export const getWeeklySleep = async (req, res) => {
       endDate: todayStr,
     });
 
-    // Create array of date strings for the past 7 days (including today)
     const dateStrings = [];
     for (let d = new Date(sixDaysAgo); d <= today; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split("T")[0];
@@ -394,7 +384,6 @@ export const getWeeklySleep = async (req, res) => {
 
     console.log("Looking for weekly sleep records with dates:", dateStrings);
 
-    // Use OR condition with LIKE to match any of the target dates
     const whereConditions = dateStrings.map((dateStr) => ({
       date: {
         [Op.like]: `${dateStr}%`,
@@ -431,7 +420,7 @@ export const getWeeklySleep = async (req, res) => {
 export const getMonthlySleep = async (req, res) => {
   try {
     const { childId } = req.params;
-    const { year, month } = req.query; // month should be 1-12
+    const { year, month } = req.query;
 
     console.log(
       `Fetching monthly sleep data for child ${childId}, year: ${year}, month: ${month}`
@@ -447,11 +436,9 @@ export const getMonthlySleep = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Validate year and month
     const targetYear = Number.parseInt(year) || new Date().getFullYear();
     const targetMonth = Number.parseInt(month) || new Date().getMonth() + 1;
 
-    // Create the date pattern for filtering: YYYY-MM-
     const datePattern = `${targetYear}-${String(targetMonth).padStart(
       2,
       "0"
@@ -459,12 +446,11 @@ export const getMonthlySleep = async (req, res) => {
 
     console.log(`Monthly date pattern for filtering: ${datePattern}`);
 
-    // Filter records where date starts with the pattern (e.g., "2025-06-")
     const sleepRecords = await Sleep.findAll({
       where: {
         childId,
         date: {
-          [Op.like]: `${datePattern}%`, // This will match "2025-06-01 03:07:23", "2025-06-02 03:07:23", etc.
+          [Op.like]: `${datePattern}%`,
         },
       },
       order: [["date", "ASC"]],
@@ -503,19 +489,17 @@ export const getTodaySleep = async (req, res) => {
         .json({ message: "Child not found or doesn't belong to user" });
     }
 
-    // Get today's date in local format (YYYY-MM-DD)
     const today = getTodayLocalDate();
 
     console.log(
       `Looking for today's sleep record for child ${childId} on date: ${today}`
     );
 
-    // Find sleep records with today's date (matching just the date part)
     const sleepRecords = await Sleep.findAll({
       where: {
         childId,
         date: {
-          [Op.like]: `${today}%`, // Match records with today's date part
+          [Op.like]: `${today}%`,
         },
       },
       order: [["date", "DESC"]],
@@ -527,7 +511,6 @@ export const getTodaySleep = async (req, res) => {
     );
 
     if (sleepRecords.length === 0) {
-      // Return a default record with today's datetime
       const defaultRecord = {
         id: null,
         childId,
@@ -569,10 +552,8 @@ export const getCurrentSleepData = async (req, res) => {
     const now = new Date();
     const currentHour = now.getHours();
 
-    // Get today's date in local format (YYYY-MM-DD)
     const today = getTodayLocalDate();
 
-    // If before noon, get yesterday's date in Romania timezone
     let targetDate = today;
     if (currentHour < 12) {
       const romaniaTime = new Date(
@@ -589,19 +570,17 @@ export const getCurrentSleepData = async (req, res) => {
       `Getting sleep data for child ${childId} for date ${targetDate} (current hour: ${currentHour})`
     );
 
-    // Find sleep records with target date (matching just the date part)
     const sleepRecords = await Sleep.findAll({
       where: {
         childId,
         date: {
-          [Op.like]: `${targetDate}%`, // Match records with target date part
+          [Op.like]: `${targetDate}%`,
         },
       },
       order: [["date", "DESC"]],
     });
 
     if (sleepRecords.length === 0) {
-      // Return a default record
       const defaultRecord = {
         id: null,
         childId,
@@ -636,7 +615,6 @@ export const autoFillSleepRecords = async (req, res) => {
   try {
     console.log("Starting auto-fill process for missing sleep records");
 
-    // Get yesterday's date in Romania timezone (YYYY-MM-DD)
     const now = new Date();
     const romaniaTime = new Date(
       now.toLocaleString("en-US", { timeZone: "Europe/Bucharest" })
@@ -646,7 +624,7 @@ export const autoFillSleepRecords = async (req, res) => {
     const yesterdayFormatted = `${yesterday.getFullYear()}-${String(
       yesterday.getMonth() + 1
     ).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
-    const yesterdayDateTime = `${yesterdayFormatted} 12:00:00`; // Set a default time
+    const yesterdayDateTime = `${yesterdayFormatted} 12:00:00`;
 
     const children = await Child.findAll();
     console.log(
@@ -656,12 +634,11 @@ export const autoFillSleepRecords = async (req, res) => {
     let autoFilledCount = 0;
 
     for (const child of children) {
-      // Check if there's any record for yesterday (matching just the date part)
       const existingRecords = await Sleep.findAll({
         where: {
           childId: child.id,
           date: {
-            [Op.like]: `${yesterdayFormatted}%`, // Match records with yesterday's date part
+            [Op.like]: `${yesterdayFormatted}%`,
           },
         },
       });

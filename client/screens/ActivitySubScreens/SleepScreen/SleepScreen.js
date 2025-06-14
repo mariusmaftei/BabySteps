@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -21,9 +19,8 @@ import {
   getSleepByChild,
   saveSleepData,
   updateSleepData,
-  getCurrentSleepData,
-  getTodaySleepData,
   getLocalDateTimeString,
+  extractDateFromDateTime,
 } from "../../../services/sleep-service";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ChildInfoCard from "../../../components/UI/Cards/ChildInfoCard";
@@ -53,16 +50,13 @@ const SleepScreen = () => {
   const [savedRecord, setSavedRecord] = useState(null);
   const [isDefaultData, setIsDefaultData] = useState(false);
 
-  // Determine if there's actual sleep data entered
   const hasActualData = () => {
     const napValue = Number.parseFloat(napHours) || 0;
     const nightValue = Number.parseFloat(nightHours) || 0;
     return napValue > 0 || nightValue > 0;
   };
 
-  // Effect to set edit mode based on whether there's actual data
   useEffect(() => {
-    // If this is the first load or there's no actual data, show edit mode
     if (isFirstRecord || !hasActualData()) {
       setIsEditMode(true);
     }
@@ -70,7 +64,6 @@ const SleepScreen = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
-    // Extract just the date part if it's a datetime string
     const datePart = dateString.includes(" ")
       ? dateString.split(" ")[0]
       : dateString;
@@ -93,11 +86,9 @@ const SleepScreen = () => {
   };
 
   const getSleepRecommendations = (ageInMonths) => {
-    // Cap age at 12 months since the app is only for infants
     const cappedAge = Math.min(ageInMonths, 12);
 
     if (cappedAge < 4) {
-      // Newborn (0-3 months)
       return {
         ageGroup: "Newborn (0-3 months)",
         totalSleep: "14-17 hours/day",
@@ -111,7 +102,6 @@ const SleepScreen = () => {
         recommendedNightHours: 8,
       };
     } else {
-      // Infant (4-12 months)
       return {
         ageGroup: "Infant (4-12 months)",
         totalSleep: "12-16 hours/day",
@@ -150,15 +140,12 @@ const SleepScreen = () => {
 
   const sunnyColor = "#FF9500";
 
-  // Refresh data when the screen comes into focus
   useFocusEffect(
     useCallback(() => {
       if (currentChildId) {
         loadSleepData();
       }
-      return () => {
-        // Cleanup if needed
-      };
+      return () => {};
     }, [currentChildId])
   );
 
@@ -166,10 +153,12 @@ const SleepScreen = () => {
     calculateSleepPercentage();
   }, [customTotalHours, recommendations.minHours]);
 
-  // Use the saved record if we just saved one
   useEffect(() => {
     if (justSaved && savedRecord) {
-      console.log("Using saved record instead of fetching:", savedRecord);
+      console.log(
+        "Using saved record instead of fetching (just saved):",
+        savedRecord
+      );
       setSelectedRecord(savedRecord);
       setNapHours(savedRecord.napHours.toString());
       setNightHours(savedRecord.nightHours.toString());
@@ -180,7 +169,6 @@ const SleepScreen = () => {
         savedRecord.nightHours.toString()
       );
 
-      // Only set to view mode if there's actual data
       const hasData = savedRecord.napHours > 0 || savedRecord.nightHours > 0;
       setIsEditMode(!hasData);
 
@@ -229,9 +217,11 @@ const SleepScreen = () => {
   const loadSleepData = async () => {
     setLoading(true);
     try {
-      // If we just saved a record, use that instead of fetching
       if (justSaved && savedRecord) {
-        console.log("Using saved record instead of fetching:", savedRecord);
+        console.log(
+          "Using saved record instead of fetching (just saved):",
+          savedRecord
+        );
         setSelectedRecord(savedRecord);
         setNapHours(savedRecord.napHours.toString());
         setNightHours(savedRecord.nightHours.toString());
@@ -242,10 +232,8 @@ const SleepScreen = () => {
           savedRecord.nightHours.toString()
         );
 
-        // Only set to view mode if there's actual data
         const hasData = savedRecord.napHours > 0 || savedRecord.nightHours > 0;
         setIsEditMode(!hasData);
-
         setIsDefaultData(false);
 
         if (savedRecord.sleepProgress !== undefined) {
@@ -260,152 +248,60 @@ const SleepScreen = () => {
         return;
       }
 
-      const history = await getSleepByChild(currentChildId);
+      const allSleepRecords = await getSleepByChild(currentChildId);
+      const sortedRecords = allSleepRecords.sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
 
-      if (!Array.isArray(history) || history.length === 0) {
-        console.log("No sleep history found, creating default record");
+      const todayFullDateTime = getLocalDateTimeString();
+      const todayLocalDate = extractDateFromDateTime(todayFullDateTime);
+      const nowHour = new Date().getHours();
+
+      let recordForToday = null;
+      if (sortedRecords && sortedRecords.length > 0) {
+        recordForToday = sortedRecords.find((record) => {
+          const recordDatePart = extractDateFromDateTime(record.date);
+          return recordDatePart === todayLocalDate;
+        });
+      }
+
+      if (recordForToday) {
+        console.log("Found sleep record for today:", recordForToday);
+        setSelectedRecord(recordForToday);
+        setNapHours(recordForToday.napHours.toString());
+        setNightHours(recordForToday.nightHours.toString());
+        setNotes(recordForToday.notes || "");
+        setCurrentDate(recordForToday.date);
+        updateTotalHours(
+          recordForToday.napHours.toString(),
+          recordForToday.nightHours.toString()
+        );
+
+        const hasData =
+          recordForToday.napHours > 0 || recordForToday.nightHours > 0;
+        setIsEditMode(!hasData);
+        setIsDefaultData(recordForToday.isDefaultData || false);
+        setIsFirstRecord(false);
+
+        if (recordForToday.sleepProgress !== undefined) {
+          setSleepPercentage(recordForToday.sleepProgress);
+        } else {
+          calculateSleepPercentage();
+        }
+
+        const recordDate = new Date(
+          extractDateFromDateTime(recordForToday.date)
+        );
+        const todayDate = new Date(todayLocalDate);
+        const isRecordFromYesterday =
+          recordDate.getDate() === todayDate.getDate() - 1 && nowHour < 12;
+        setShowingYesterdayData(isRecordFromYesterday);
+      } else {
+        console.log("No sleep record found for today. Allowing new record.");
+        resetForm();
         setIsFirstRecord(true);
-        const today = getLocalDateTimeString();
 
-        const defaultRecord = {
-          id: null,
-          childId: currentChildId,
-          napHours: 0,
-          nightHours: 0,
-          date: today,
-          notes: "",
-          totalHours: "0",
-          isBeforeNoon: false,
-          targetDate: today,
-          sleepProgress: 0,
-          isDefaultData: true,
-        };
-
-        setNapHours("");
-        setNightHours("");
-        setNotes("");
-        setSelectedRecord(defaultRecord);
-        setCurrentDate(today);
-        updateTotalHours("0", "0");
-        setIsEditMode(true); // Always edit mode for first record
-        setIsDefaultData(true);
-
-        setLoading(false);
-        return;
-      }
-
-      setIsFirstRecord(false);
-
-      // Try to get today's data first
-      try {
-        const todayData = await getTodaySleepData(currentChildId);
-        if (todayData) {
-          console.log("Found today's sleep data:", todayData);
-          setNapHours(todayData.napHours.toString());
-          setNightHours(todayData.nightHours.toString());
-          setNotes(todayData.notes || "");
-          setSelectedRecord(todayData);
-          setCurrentDate(todayData.date);
-          updateTotalHours(
-            todayData.napHours.toString(),
-            todayData.nightHours.toString()
-          );
-          setShowingYesterdayData(false);
-
-          // Only set to view mode if there's actual data
-          const hasData = todayData.napHours > 0 || todayData.nightHours > 0;
-          setIsEditMode(!hasData);
-
-          setIsDefaultData(todayData.isDefaultData || false);
-
-          if (todayData.sleepProgress !== undefined) {
-            setSleepPercentage(todayData.sleepProgress);
-          } else {
-            calculateSleepPercentage();
-          }
-
-          setLoading(false);
-          return;
-        }
-      } catch (error) {
-        console.log("Error getting today's sleep data:", error);
-        // Continue to try other methods to get data
-      }
-
-      // If no today's data, try to get current data
-      if (!selectedRecord) {
-        try {
-          console.log("Fetching current sleep data...");
-          const currentData = await getCurrentSleepData(currentChildId);
-          console.log("Current sleep data loaded:", currentData);
-
-          if (currentData) {
-            setNapHours(currentData.napHours.toString());
-            setNightHours(currentData.nightHours.toString());
-            setNotes(currentData.notes || "");
-            setSelectedRecord(currentData);
-            setCurrentDate(
-              currentData.date ||
-                currentData.targetDate ||
-                getLocalDateTimeString()
-            );
-            updateTotalHours(
-              currentData.napHours.toString(),
-              currentData.nightHours.toString()
-            );
-            setShowingYesterdayData(currentData.isBeforeNoon);
-
-            // Only set to view mode if there's actual data
-            const hasData =
-              currentData.napHours > 0 || currentData.nightHours > 0;
-            setIsEditMode(!hasData);
-
-            setIsDefaultData(currentData.isDefaultData || false);
-
-            if (currentData.sleepProgress !== undefined) {
-              setSleepPercentage(currentData.sleepProgress);
-            } else {
-              calculateSleepPercentage();
-            }
-          } else {
-            resetForm();
-          }
-        } catch (error) {
-          console.error("Error fetching current sleep data:", error);
-
-          // If all else fails, use the most recent record from history
-          if (history.length > 0) {
-            const mostRecent = history.sort(
-              (a, b) => new Date(b.date) - new Date(a.date)
-            )[0];
-
-            console.log("Using most recent record:", mostRecent);
-            setNapHours(mostRecent.napHours.toString());
-            setNightHours(mostRecent.nightHours.toString());
-            setNotes(mostRecent.notes || "");
-            setSelectedRecord(mostRecent);
-            setCurrentDate(mostRecent.date);
-            updateTotalHours(
-              mostRecent.napHours.toString(),
-              mostRecent.nightHours.toString()
-            );
-
-            // Only set to view mode if there's actual data
-            const hasData =
-              mostRecent.napHours > 0 || mostRecent.nightHours > 0;
-            setIsEditMode(!hasData);
-
-            setIsDefaultData(false);
-
-            if (mostRecent.sleepProgress !== undefined) {
-              setSleepPercentage(mostRecent.sleepProgress);
-            } else {
-              calculateSleepPercentage();
-            }
-          } else {
-            resetForm();
-          }
-        }
+        setShowingYesterdayData(nowHour < 12);
       }
     } catch (error) {
       console.error("Error loading sleep data:", error);
@@ -434,7 +330,7 @@ const SleepScreen = () => {
     });
     setCurrentDate(today);
     updateTotalHours("0", "0");
-    setIsEditMode(true); // Always edit mode for new/reset form
+    setIsEditMode(true);
     setSleepPercentage(0);
     setIsDefaultData(true);
   };
@@ -447,7 +343,6 @@ const SleepScreen = () => {
     setCurrentDate(record.date);
     updateTotalHours(record.napHours.toString(), record.nightHours.toString());
 
-    // Only set to view mode if there's actual data
     const hasData = record.napHours > 0 || record.nightHours > 0;
     setIsEditMode(!hasData);
 
@@ -496,7 +391,6 @@ const SleepScreen = () => {
       return;
     }
 
-    // Validate input values
     const napValue = Number.parseFloat(napHours) || 0;
     const nightValue = Number.parseFloat(nightHours) || 0;
 
@@ -540,7 +434,7 @@ const SleepScreen = () => {
       let result;
       if (selectedRecord?.id) {
         console.log("Updating existing record with ID:", selectedRecord.id);
-        result = await updateSleepData(sleepData);
+        result = await updateSleepData(selectedRecord.id, sleepData);
       } else {
         console.log("Creating new sleep record");
         result = await saveSleepData(sleepData);
@@ -551,32 +445,8 @@ const SleepScreen = () => {
       if (result) {
         Alert.alert("Success", "Sleep data saved successfully!");
 
-        // Store the saved record to use directly instead of fetching
         setJustSaved(true);
         setSavedRecord(result);
-
-        // Update the UI with the saved record
-        setSelectedRecord(result);
-        setNapHours(result.napHours.toString());
-        setNightHours(result.nightHours.toString());
-        setNotes(result.notes || "");
-        setCurrentDate(result.date);
-        updateTotalHours(
-          result.napHours.toString(),
-          result.nightHours.toString()
-        );
-
-        // Only set to view mode if there's actual data
-        const hasData = result.napHours > 0 || result.nightHours > 0;
-        setIsEditMode(!hasData);
-
-        setIsDefaultData(false);
-
-        if (result.sleepProgress !== undefined) {
-          setSleepPercentage(result.sleepProgress);
-        } else {
-          calculateSleepPercentage();
-        }
 
         setIsFirstRecord(false);
       } else {
@@ -1276,6 +1146,10 @@ const styles = StyleSheet.create({
   totalSleepValue: {
     fontSize: 18,
     fontWeight: "600",
+  },
+  totalUnit: {
+    fontSize: 14,
+    marginTop: 4,
   },
   totalSummaryContainer: {
     borderRadius: 16,

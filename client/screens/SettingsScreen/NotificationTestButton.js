@@ -5,7 +5,6 @@ const NotificationTestButton = () => {
   const { scheduleTestNotification, requestPermissions } = useNotification();
 
   const handleTestNotification = async () => {
-    // First ensure we have permissions
     const hasPermission = await requestPermissions();
 
     if (!hasPermission) {
@@ -17,7 +16,6 @@ const NotificationTestButton = () => {
       return;
     }
 
-    // Schedule a test notification
     const notificationId = await scheduleTestNotification();
 
     if (notificationId) {

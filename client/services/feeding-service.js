@@ -1,9 +1,7 @@
 import api, { ensureToken } from "./api";
 
-// Helper function to get current datetime string in Romania timezone (YYYY-MM-DD HH:MM:SS format)
 export const getCurrentDateTimeString = () => {
   const now = new Date();
-  // Add 3 hours for Romania timezone (UTC+3 during DST)
   const romaniaTime = new Date(now.getTime() + 3 * 60 * 60 * 1000);
 
   const year = romaniaTime.getUTCFullYear();
@@ -17,7 +15,6 @@ export const getCurrentDateTimeString = () => {
 };
 
 const createFeedingRecord = (data) => {
-  // Get current datetime for defaults
   const currentDateTime = getCurrentDateTimeString();
 
   return {
@@ -32,13 +29,11 @@ const createFeedingRecord = (data) => {
     unit: data.unit || null,
     foodType: data.foodType || null,
     notes: data.notes || data.note || "",
-    // Always use date field for consistency
     date: data.date || currentDateTime,
     timestamp: data.timestamp || currentDateTime,
   };
 };
 
-// New function to handle aggregated daily data from weekly/monthly endpoints
 const createAggregatedDayRecord = (data) => {
   return {
     date: data.date,
@@ -58,7 +53,6 @@ export const getDayFromTimestamp = (dateString) => {
   if (!dateString) return null;
 
   try {
-    // Use date field instead of timestamp for day extraction
     if (dateString.includes("T")) {
       return dateString.split("T")[0].split("-")[2];
     }
@@ -181,7 +175,6 @@ export const getFeedingDataByDateRange = async (
   try {
     await ensureToken();
 
-    // Format dates to YYYY-MM-DD format
     const formattedStartDate = startDate.toISOString().split("T")[0];
     const formattedEndDate = endDate.toISOString().split("T")[0];
 
@@ -189,7 +182,6 @@ export const getFeedingDataByDateRange = async (
       `API call: Getting feeding data for range ${formattedStartDate} to ${formattedEndDate}`
     );
 
-    // Try the date-range endpoint first
     try {
       const response = await api.get(
         `/feeding/child/${childId}/date-range?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
@@ -210,7 +202,6 @@ export const getFeedingDataByDateRange = async (
     } catch (dateRangeError) {
       console.error("Error with date-range endpoint:", dateRangeError);
 
-      // Fallback: Get all feeding data and filter manually by date field
       console.log(
         "Falling back to getting all feeding data and filtering manually by date field"
       );
@@ -225,15 +216,12 @@ export const getFeedingDataByDateRange = async (
         `Got ${allData.length} total feeding records, filtering by date range`
       );
 
-      // Convert start and end dates to timestamps for comparison
       const startTimestamp = new Date(startDate).getTime();
       const endTimestamp = new Date(endDate).getTime();
 
-      // Filter records that fall within the date range using date field
       const filteredData = allData.filter((record) => {
         let recordDate;
 
-        // Use date field first, fallback to timestamp if needed
         if (record.date) {
           recordDate = new Date(record.date);
         } else if (record.timestamp) {
@@ -264,7 +252,6 @@ export const getWeeklyFeedingData = async (childId) => {
     console.log("Getting weekly feeding data");
     await ensureToken();
 
-    // Try the new weekly endpoint first (returns aggregated daily data)
     try {
       const response = await api.get(`/feeding/child/${childId}/weekly`);
 
@@ -273,15 +260,13 @@ export const getWeeklyFeedingData = async (childId) => {
           `Weekly endpoint returned ${response.data.data.length} aggregated days`
         );
 
-        // Process the aggregated data into the format expected by the chart component
         const processedData = {
           dailyFeedings: response.data.data.map((day) => ({
             date: day.date,
-            day: day.date.split("-")[2], // Extract day number from YYYY-MM-DD
+            day: day.date.split("-")[2],
             breastDuration: day.breastFeedings.totalMinutes,
             bottleAmount: day.bottleFeedings.totalMl,
             solidAmount: day.solidFeedings.totalGrams,
-            // Keep the original data too
             breastFeedings: day.breastFeedings,
             bottleFeedings: day.bottleFeedings,
             solidFeedings: day.solidFeedings,
@@ -298,16 +283,13 @@ export const getWeeklyFeedingData = async (childId) => {
       console.error("Error with weekly endpoint:", weeklyError);
     }
 
-    // Fallback to date range approach (returns individual records)
     const today = new Date();
     console.log(`Today is: ${today.toISOString()}`);
 
-    // Calculate start date (7 days ago from today)
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - 6);
     startDate.setHours(0, 0, 0, 0);
 
-    // Calculate end date (today at end of day)
     const endDate = new Date(today);
     endDate.setHours(23, 59, 59, 999);
 
@@ -315,7 +297,6 @@ export const getWeeklyFeedingData = async (childId) => {
       `Weekly date range fallback: ${startDate.toISOString()} to ${endDate.toISOString()}`
     );
 
-    // Try to get data for this date range
     const result = await getFeedingDataByDateRange(childId, startDate, endDate);
     console.log(
       `Weekly feeding data retrieved via fallback: ${
@@ -323,7 +304,6 @@ export const getWeeklyFeedingData = async (childId) => {
       } records`
     );
 
-    // If no data found, try getting all data as a fallback
     if (!result || result.length === 0) {
       console.log(
         "No weekly data found, trying to get all feeding data as fallback"
@@ -334,7 +314,6 @@ export const getWeeklyFeedingData = async (childId) => {
         console.log(
           `Got ${allData.length} total feeding records, returning most recent ones`
         );
-        // Sort by date field descending and take the most recent ones (up to 10)
         return allData
           .sort((a, b) => {
             const dateA = new Date(a.date || a.timestamp);
@@ -357,10 +336,8 @@ export const getMonthlyFeedingData = async (childId, year, month) => {
     console.log(`Getting monthly feeding data for ${year}-${month + 1}`);
     await ensureToken();
 
-    // Format month parameter for API
     const monthParam = `${year}-${String(month + 1).padStart(2, "0")}`;
 
-    // Try the new monthly endpoint first (returns aggregated daily data)
     try {
       const response = await api.get(
         `/feeding/child/${childId}/monthly?month=${monthParam}`
@@ -371,15 +348,13 @@ export const getMonthlyFeedingData = async (childId, year, month) => {
           `Monthly endpoint returned ${response.data.data.length} aggregated days for ${monthParam}`
         );
 
-        // Process the aggregated data into the format expected by the chart component
         const processedData = {
           dailyFeedings: response.data.data.map((day) => ({
             date: day.date,
-            day: day.date.split("-")[2], // Extract day number from YYYY-MM-DD
+            day: day.date.split("-")[2],
             breastDuration: day.breastFeedings.totalMinutes,
             bottleAmount: day.bottleFeedings.totalMl,
             solidAmount: day.solidFeedings.totalGrams,
-            // Keep the original data too
             breastFeedings: day.breastFeedings,
             bottleFeedings: day.bottleFeedings,
             solidFeedings: day.solidFeedings,
@@ -399,7 +374,6 @@ export const getMonthlyFeedingData = async (childId, year, month) => {
       );
     }
 
-    // Fallback to date range approach (returns individual records)
     const startDate = new Date(year, month, 1);
     const endDate = new Date(year, month + 1, 0);
     endDate.setHours(23, 59, 59, 999);
@@ -415,7 +389,6 @@ export const getMonthlyFeedingData = async (childId, year, month) => {
       } records`
     );
 
-    // If no data found, try getting all data as a fallback
     if (!result || result.length === 0) {
       console.log(
         `No data found for month ${
@@ -431,11 +404,9 @@ export const getMonthlyFeedingData = async (childId, year, month) => {
           }/${year}`
         );
 
-        // Filter records for the specified month and year using date field
         const filteredData = allData.filter((record) => {
           let recordDate;
 
-          // Use date field first, fallback to timestamp if needed
           if (record.date) {
             recordDate = new Date(record.date);
           } else if (record.timestamp) {
@@ -533,12 +504,9 @@ export const saveBreastfeedingData = async (feedingData) => {
   try {
     await ensureToken();
 
-    // Convert date to Romanian timezone before sending (same as diaper-service.js)
     const romanianDate = new Date(feedingData.date || new Date());
-    // Romania is UTC+2 (EET) or UTC+3 (EEST during DST) - currently DST is active
-    const targetOffset = 3; // Romania daylight saving time offset (UTC+3)
+    const targetOffset = 3;
 
-    // Adjust for Romanian timezone
     const adjustedDate = new Date(
       romanianDate.getTime() + targetOffset * 60 * 60 * 1000
     );
@@ -552,7 +520,6 @@ export const saveBreastfeedingData = async (feedingData) => {
       side: feedingData.side,
       amount: 0,
       notes: feedingData.notes || "",
-      // Use the adjusted Romania time for both date and timestamp
       date: adjustedDate.toISOString(),
       timestamp: adjustedDate.toISOString(),
     };
@@ -582,12 +549,9 @@ export const saveBottleFeedingData = async (feedingData) => {
   try {
     await ensureToken();
 
-    // Convert date to Romanian timezone before sending (same as diaper-service.js)
     const romanianDate = new Date(feedingData.date || new Date());
-    // Romania is UTC+2 (EET) or UTC+3 (EEST during DST) - currently DST is active
-    const targetOffset = 3; // Romania daylight saving time offset (UTC+3)
+    const targetOffset = 3;
 
-    // Adjust for Romanian timezone
     const adjustedDate = new Date(
       romanianDate.getTime() + targetOffset * 60 * 60 * 1000
     );
@@ -602,7 +566,6 @@ export const saveBottleFeedingData = async (feedingData) => {
       amount: feedingData.amount,
       unit: feedingData.unit || "ml",
       notes: feedingData.notes || "",
-      // Use the adjusted Romania time for both date and timestamp
       date: adjustedDate.toISOString(),
       timestamp: adjustedDate.toISOString(),
     };
@@ -632,12 +595,9 @@ export const saveSolidFoodData = async (feedingData) => {
   try {
     await ensureToken();
 
-    // Convert date to Romanian timezone before sending (same as diaper-service.js)
     const romanianDate = new Date(feedingData.date || new Date());
-    // Romania is UTC+2 (EET) or UTC+3 (EEST during DST) - currently DST is active
-    const targetOffset = 3; // Romania daylight saving time offset (UTC+3)
+    const targetOffset = 3;
 
-    // Adjust for Romanian timezone
     const adjustedDate = new Date(
       romanianDate.getTime() + targetOffset * 60 * 60 * 1000
     );
@@ -653,7 +613,6 @@ export const saveSolidFoodData = async (feedingData) => {
       unit: feedingData.unit || "g",
       foodType: feedingData.foodType,
       notes: feedingData.notes || "",
-      // Use the adjusted Romania time for both date and timestamp
       date: adjustedDate.toISOString(),
       timestamp: adjustedDate.toISOString(),
     };

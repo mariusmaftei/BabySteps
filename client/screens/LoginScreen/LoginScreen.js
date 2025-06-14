@@ -29,11 +29,9 @@ export default function LoginScreen({ navigation }) {
   const [passwordError, setPasswordError] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  // Start animations when component mounts
   React.useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -49,10 +47,9 @@ export default function LoginScreen({ navigation }) {
     ]).start();
   }, []);
 
-  // Validate email
   const validateEmail = (text) => {
     setEmail(text);
-    setLoginError(""); // Clear login error when user types
+    setLoginError("");
 
     if (text.trim() === "") {
       setEmailError("Email is required");
@@ -63,11 +60,9 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // Validate password
   const validatePassword = (text) => {
     setPassword(text);
-    setLoginError(""); // Clear login error when user types
-
+    setLoginError("");
     if (text.trim() === "") {
       setPasswordError("Password is required");
     } else if (text.length < 6) {
@@ -77,7 +72,6 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // Check if the error is an invalid credentials error
   const isInvalidCredentialsError = (error) => {
     return (
       error.message &&
@@ -87,12 +81,9 @@ export default function LoginScreen({ navigation }) {
     );
   };
 
-  // Handle login
   const handleLogin = async () => {
-    // Clear previous login error
     setLoginError("");
 
-    // Validate inputs
     validateEmail(email);
     validatePassword(password);
 
@@ -109,14 +100,11 @@ export default function LoginScreen({ navigation }) {
     try {
       console.log("Attempting to login with:", { email });
       await login(email, password);
-      // Login successful - navigation will be handled by the auth state change
     } catch (error) {
-      // Handle invalid credentials error
       if (isInvalidCredentialsError(error)) {
         setLoginError("Invalid email or password. Please try again.");
         console.log("Login failed in component: Invalid credentials");
       } else {
-        // For other errors, show an alert
         Alert.alert(
           "Login Failed",
           error.message || "An unexpected error occurred. Please try again."
@@ -164,7 +152,6 @@ export default function LoginScreen({ navigation }) {
               Sign in to continue tracking your child's growth
             </Text>
 
-            {/* Show login error message if present */}
             {loginError ? (
               <View style={styles.loginErrorContainer}>
                 <Text style={[styles.loginErrorText, { color: theme.danger }]}>

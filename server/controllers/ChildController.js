@@ -1,13 +1,12 @@
 import Child from "../models/Child.js";
 
-// Get all children for a user
 export const getUserChildren = async (req, res) => {
   try {
-    const userId = req.user.id; // Get user ID from auth middleware
+    const userId = req.user.id;
 
     const children = await Child.findAll({
       where: { userId },
-      order: [["createdAt", "DESC"]], // Newest first
+      order: [["createdAt", "DESC"]],
     });
 
     res.status(200).json(children);
@@ -17,7 +16,6 @@ export const getUserChildren = async (req, res) => {
   }
 };
 
-// Get a specific child by ID
 export const getChildById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -26,7 +24,7 @@ export const getChildById = async (req, res) => {
     const child = await Child.findOne({
       where: {
         id,
-        userId, // Ensure the child belongs to the authenticated user
+        userId,
       },
     });
 
@@ -41,7 +39,6 @@ export const getChildById = async (req, res) => {
   }
 };
 
-// Create a new child
 export const createChild = async (req, res) => {
   try {
     const {
@@ -56,34 +53,27 @@ export const createChild = async (req, res) => {
     } = req.body;
     const userId = req.user.id;
 
-    // Validate required fields
     if (!name) {
       return res.status(400).json({ message: "Name is required" });
     }
 
-    // Parse birth date if provided
     let parsedBirthDate = null;
     if (birthDate) {
-      // Check if birthDate is in DD/MM/YYYY format
       const dateRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
       const match = birthDate.match(dateRegex);
 
       if (match) {
-        // Convert from DD/MM/YYYY to YYYY-MM-DD for proper Date parsing
         const [, day, month, year] = match;
         parsedBirthDate = new Date(`${year}-${month}-${day}`);
       } else {
-        // Try to parse as a regular date string
         parsedBirthDate = new Date(birthDate);
       }
 
-      // Validate the parsed date
       if (isNaN(parsedBirthDate.getTime())) {
         return res.status(400).json({ message: "Invalid birth date format" });
       }
     }
 
-    // Calculate age string if birth date is provided
     let ageString = age || "Not specified";
     if (parsedBirthDate) {
       const now = new Date();
@@ -120,7 +110,6 @@ export const createChild = async (req, res) => {
   }
 };
 
-// Update a child
 export const updateChild = async (req, res) => {
   try {
     const { id } = req.params;
@@ -139,7 +128,7 @@ export const updateChild = async (req, res) => {
     const child = await Child.findOne({
       where: {
         id,
-        userId, // Ensure the child belongs to the authenticated user
+        userId,
       },
     });
 
@@ -147,29 +136,23 @@ export const updateChild = async (req, res) => {
       return res.status(404).json({ message: "Child not found" });
     }
 
-    // Parse birth date if provided
     let parsedBirthDate = null;
     if (birthDate) {
-      // Check if birthDate is in DD/MM/YYYY format
       const dateRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
       const match = birthDate.match(dateRegex);
 
       if (match) {
-        // Convert from DD/MM/YYYY to YYYY-MM-DD for proper Date parsing
         const [, day, month, year] = match;
         parsedBirthDate = new Date(`${year}-${month}-${day}`);
       } else {
-        // Try to parse as a regular date string
         parsedBirthDate = new Date(birthDate);
       }
 
-      // Validate the parsed date
       if (isNaN(parsedBirthDate.getTime())) {
         return res.status(400).json({ message: "Invalid birth date format" });
       }
     }
 
-    // Calculate age string if birth date is provided
     let ageString = age;
     if (parsedBirthDate) {
       const now = new Date();
@@ -187,7 +170,6 @@ export const updateChild = async (req, res) => {
       }
     }
 
-    // Update fields
     if (name) child.name = name;
     if (ageString) child.age = ageString;
     if (parsedBirthDate) child.birthDate = parsedBirthDate;
@@ -207,7 +189,6 @@ export const updateChild = async (req, res) => {
   }
 };
 
-// Delete a child
 export const deleteChild = async (req, res) => {
   try {
     const { id } = req.params;
@@ -216,7 +197,7 @@ export const deleteChild = async (req, res) => {
     const child = await Child.findOne({
       where: {
         id,
-        userId, // Ensure the child belongs to the authenticated user
+        userId,
       },
     });
 

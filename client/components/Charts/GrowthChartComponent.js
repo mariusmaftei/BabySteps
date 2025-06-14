@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -57,7 +55,6 @@ const GrowthChartComponent = ({ theme }) => {
         const records = await getGrowthRecords(currentChild.id);
         console.log(`Fetched ${records.length} growth records`);
 
-        // Sort records by date to ensure correct cumulative sum
         const sortedRecords = [...records].sort((a, b) => {
           return (
             new Date(a.recordDate || a.date || a.createdAt) -
@@ -166,7 +163,6 @@ const GrowthChartComponent = ({ theme }) => {
       birthValue = Number(birthHeadCirc) || 0;
     }
 
-    // Calculate currentTotal by summing birth value and all recorded gains
     let currentTotal = birthValue;
     growthRecords.forEach((record) => {
       if (activeTab === "weight") {
@@ -208,12 +204,12 @@ const GrowthChartComponent = ({ theme }) => {
     birthWeight,
     birthHeight,
     birthHeadCirc,
-    growthRecords, // Dependency for summing all records
+    growthRecords,
     currentChild?.gender,
   ]);
 
   const getChartData = useCallback(() => {
-    const whoProgress = calculateWHOProgress(); // Get the progress data
+    const whoProgress = calculateWHOProgress();
 
     let currentDateLabel = "Latest";
     if (latestRecord) {
@@ -233,7 +229,7 @@ const GrowthChartComponent = ({ theme }) => {
         {
           data: [
             whoProgress.birthValue,
-            whoProgress.currentTotal, // This is the cumulative total
+            whoProgress.currentTotal,
             whoProgress.whoTarget,
           ],
           color: (opacity = 1) => `rgba(${getColorRGB(activeTab)}, ${opacity})`,
@@ -418,7 +414,7 @@ const GrowthChartComponent = ({ theme }) => {
       },
     };
 
-    const whoProgress = calculateWHOProgress(); // Get progress for explanation
+    const whoProgress = calculateWHOProgress();
 
     return (
       <View style={styles.sectionContainer}>
@@ -788,9 +784,9 @@ const styles = StyleSheet.create({
   },
   tableHeaderCell: {
     flex: 1,
-    justifyContent: "center", // Center vertically
-    alignItems: "flex-start", // Align text to the left
-    paddingLeft: 8, // Add some padding for "lean" look
+    justifyContent: "center",
+    alignItems: "flex-start",
+    paddingLeft: 8,
   },
   tableHeaderText: {
     fontWeight: "bold",
@@ -805,14 +801,14 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     flex: 1,
-    justifyContent: "center", // Center vertically
-    alignItems: "flex-start", // Align content to the left
-    paddingLeft: 8, // Add some padding for "lean" look
+    justifyContent: "center",
+    alignItems: "flex-start",
+    paddingLeft: 8,
   },
   cellWithIcon: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start", // Align icon and text to the left
+    justifyContent: "flex-start",
   },
   cellIcon: {
     marginRight: 4,

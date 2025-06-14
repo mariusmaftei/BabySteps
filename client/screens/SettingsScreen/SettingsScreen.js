@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import {
   View,
@@ -31,7 +29,6 @@ const handleSelectImage = async () => {
   try {
     console.log("Starting image selection process");
 
-    // Request permission for media library
     const { status: mediaLibraryStatus } =
       await ExpoImagePicker.requestMediaLibraryPermissionsAsync();
     console.log("Media library permission status:", mediaLibraryStatus);
@@ -46,7 +43,6 @@ const handleSelectImage = async () => {
       return null;
     }
 
-    // Configure options based on platform
     const pickerOptions = {
       mediaTypes: ExpoImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -56,18 +52,15 @@ const handleSelectImage = async () => {
 
     console.log("Launching image picker with options:", pickerOptions);
 
-    // Launch image picker
     const result = await ExpoImagePicker.launchImageLibraryAsync(pickerOptions);
 
     console.log("Image picker result:", JSON.stringify(result));
 
-    // Check if the user canceled the operation
     if (!result || result.canceled === true) {
       console.log("User canceled image selection");
       return null;
     }
 
-    // Return the URI of the selected image
     if (result.assets && result.assets.length > 0 && result.assets[0].uri) {
       const imageUri = result.assets[0].uri;
       console.log("Selected image URI:", imageUri);
@@ -92,7 +85,6 @@ export default function SettingsScreen({ navigation }) {
   const { theme, isGirlTheme, toggleTheme } = useTheme();
   const {
     children,
-    currentChild,
     currentChildId,
     switchChild,
     addChild,
@@ -101,20 +93,17 @@ export default function SettingsScreen({ navigation }) {
   } = useChildActivity();
   const { user, token, logout, updateUserProfile, getCurrentUser } = useAuth();
 
-  // Get notification context with all the updated methods
   const {
     settings,
     toggleNotifications,
     toggleHealthReminders,
     scheduleTestNotification,
-    expoPushToken,
     registerForPushNotifications,
   } = useNotification();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showAddChildModal, setShowAddChildModal] = useState(false);
 
-  // User profile state
   const [userProfile, setUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
@@ -127,26 +116,21 @@ export default function SettingsScreen({ navigation }) {
   const [isSelectingImage, setIsSelectingImage] = useState(false);
   const [isTestingNotification, setIsTestingNotification] = useState(false);
 
-  // Add these new state variables after the other state declarations
   const [showEditChildModal, setShowEditChildModal] = useState(false);
   const [editChildId, setEditChildId] = useState(null);
 
-  // Handle notification toggle
   const handleToggleNotifications = async (value) => {
     setNotificationsEnabled(value);
     await toggleNotifications(value);
   };
 
-  // Fetch user profile on component mount
   useEffect(() => {
     fetchUserProfile();
   }, [token]);
 
-  // Fetch user profile from API
   const fetchUserProfile = async () => {
     if (!token) {
       console.log("No token available, using local user data");
-      // If no token, use the local user data from auth context
       if (user) {
         console.log("Using local user data:", user);
         setUserProfile(user);
@@ -163,19 +147,16 @@ export default function SettingsScreen({ navigation }) {
 
     try {
       console.log("Fetching user profile with token");
-      // Use the getCurrentUser from auth context
       const userData = await getCurrentUser(token);
       console.log("User data received:", userData);
 
       setUserProfile(userData);
 
-      // Set default profile image if none exists
       setProfileImage(userData.imageSrc);
     } catch (error) {
       console.error("Failed to fetch user profile:", error);
       setLoadError("Failed to load profile data");
 
-      // Fallback to local user data if API fails
       if (user) {
         console.log("Falling back to local user data:", user);
         setUserProfile(user);
@@ -186,7 +167,6 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  // Updated image selection handler with debounce
   const onSelectImage = async () => {
     if (isSelectingImage) return;
 
@@ -205,7 +185,6 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  // Handle test notification
   const handleTestNotification = async () => {
     if (isTestingNotification) return;
 
@@ -235,7 +214,6 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  // Handle push token registration
   const handleRegisterPushToken = async () => {
     try {
       const token = await registerForPushNotifications();
@@ -254,11 +232,9 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  // Handle profile update
   const handleUpdateProfile = async () => {
     if (!userProfile) return;
 
-    // Validate inputs
     if (editPassword && editPassword.length < 6) {
       Alert.alert(
         "Invalid Password",
@@ -277,7 +253,6 @@ export default function SettingsScreen({ navigation }) {
     try {
       const updateData = {};
 
-      // Check if username has changed - handle both name and username fields
       const currentName = userProfile.name || userProfile.username || "";
       if (editUsername && editUsername !== currentName) {
         updateData.name = editUsername;
@@ -288,10 +263,9 @@ export default function SettingsScreen({ navigation }) {
       }
 
       if (profileImage && profileImage !== userProfile.imageSrc) {
-        updateData.imageSrc = profileImage; // Changed from profileImage to imageSrc to match the expected field
+        updateData.imageSrc = profileImage;
       }
 
-      // Only update if there are changes
       if (Object.keys(updateData).length === 0) {
         setShowEditProfileModal(false);
         setIsUpdating(false);
@@ -300,11 +274,9 @@ export default function SettingsScreen({ navigation }) {
 
       console.log("Updating profile with data:", updateData);
 
-      // Use the updateUserProfile function from the auth context
       const updatedUser = await updateUserProfile(updateData);
       console.log("Profile updated successfully:", updatedUser);
 
-      // Update local state
       setUserProfile({
         ...userProfile,
         ...updatedUser,
@@ -313,7 +285,6 @@ export default function SettingsScreen({ navigation }) {
       Alert.alert("Success", "Profile updated successfully");
       setShowEditProfileModal(false);
 
-      // Reset form fields
       setEditPassword("");
       setConfirmPassword("");
     } catch (error) {
@@ -327,18 +298,15 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  // Open edit profile modal - Fixed function
   const openEditProfileModal = () => {
     console.log("Opening edit profile modal");
     console.log("User profile:", userProfile);
 
     if (userProfile) {
-      // Set the initial values
       setEditUsername(userProfile.name || userProfile.username || "");
       setEditPassword("");
       setConfirmPassword("");
 
-      // Show the modal
       setShowEditProfileModal(true);
       console.log("Modal should be visible now:", showEditProfileModal);
     } else {
@@ -347,7 +315,6 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  // Add new child - simplified to just call the context function
   const handleAddChild = async (childData) => {
     try {
       const childId = await addChild(childData);
@@ -363,14 +330,12 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  // Function to handle editing a child - simplified
   const handleEditChild = (child) => {
     console.log("Editing child:", child);
     setEditChildId(child.id);
     setShowEditChildModal(true);
   };
 
-  // Function to save edited child data - simplified
   const saveEditedChild = async (updatedChildData) => {
     try {
       const success = await updateChildData(editChildId, updatedChildData);
@@ -386,7 +351,6 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  // Add this function to handle child deletion with confirmation
   const handleDeleteChild = (childId) => {
     Alert.alert(
       "Confirm Deletion",
@@ -405,27 +369,21 @@ export default function SettingsScreen({ navigation }) {
     );
   };
 
-  // Handle child selection
   const handleSelectChild = (childId) => {
     switchChild(childId);
   };
 
-  // Handle logout with proper navigation reset
   const handleLogout = async () => {
     try {
       console.log("Logging out...");
       await logout();
       console.log("Logout successful");
-
-      // We don't need to navigate manually - the NavigationContainer will handle this
-      // when isAuthenticated changes to false in the auth context
     } catch (error) {
       console.error("Logout error:", error);
       Alert.alert("Error", "Failed to log out. Please try again.");
     }
   };
 
-  // Render settings section
   const renderSection = (title, children) => {
     return (
       <View
@@ -445,7 +403,6 @@ export default function SettingsScreen({ navigation }) {
     );
   };
 
-  // Render setting item with toggle
   const renderToggleSetting = (icon, title, value, onValueChange) => {
     return (
       <View
@@ -472,7 +429,6 @@ export default function SettingsScreen({ navigation }) {
     );
   };
 
-  // Render setting item with chevron
   const renderChevronSetting = (icon, title, onPress) => {
     return (
       <TouchableOpacity
@@ -495,7 +451,6 @@ export default function SettingsScreen({ navigation }) {
     );
   };
 
-  // Replace the renderChildItem function with this improved version
   const renderChildItem = (child) => {
     if (!child) return null;
 
@@ -518,8 +473,6 @@ export default function SettingsScreen({ navigation }) {
           },
         ]}
       >
-        {/* Add a highlight effect that works well on Android */}
-
         <View style={styles.childHeader}>
           {isCurrentChild && (
             <View
@@ -716,7 +669,6 @@ export default function SettingsScreen({ navigation }) {
     );
   };
 
-  // Edit Profile Modal
   const renderEditProfileModal = () => {
     return (
       <Modal
@@ -791,7 +743,6 @@ export default function SettingsScreen({ navigation }) {
                   ]}
                   value={editUsername}
                   onChangeText={(text) => {
-                    // Limit to 30 characters
                     if (text.length <= 30) {
                       setEditUsername(text);
                     }
@@ -938,7 +889,6 @@ export default function SettingsScreen({ navigation }) {
       style={[styles.container, { backgroundColor: theme.backgroundSecondary }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Profile Section */}
         <View
           style={[
             styles.profileSection,
@@ -1030,7 +980,6 @@ export default function SettingsScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Children Section */}
         {renderSection(
           "Children",
           <View>
@@ -1086,7 +1035,6 @@ export default function SettingsScreen({ navigation }) {
           </View>
         )}
 
-        {/* App Settings Section */}
         {renderSection(
           "App Settings",
           <View>
@@ -1103,7 +1051,6 @@ export default function SettingsScreen({ navigation }) {
               toggleHealthReminders
             )}
 
-            {/* Add Test Notification Button */}
             <TouchableOpacity
               style={[
                 styles.settingItem,
@@ -1133,7 +1080,6 @@ export default function SettingsScreen({ navigation }) {
               )}
             </TouchableOpacity>
 
-            {/* Add Push Token Registration Button (only on physical devices) */}
             {Platform.OS !== "web" && (
               <TouchableOpacity
                 style={[
@@ -1206,7 +1152,6 @@ export default function SettingsScreen({ navigation }) {
           </View>
         )}
 
-        {/* Account Section */}
         {renderSection(
           "Account",
           <View>

@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -77,9 +75,8 @@ export default function DiaperScreen({ navigation }) {
 
       if (Array.isArray(data)) {
         const processedData = data.map((change) => {
-          // Convert UTC date back to Romanian timezone for display (UTC+3 during DST)
           const utcDate = new Date(change.date);
-          const romanianDate = new Date(utcDate.getTime() + 3 * 60 * 60 * 1000); // Add 3 hours for Romania DST
+          const romanianDate = new Date(utcDate.getTime() + 3 * 60 * 60 * 1000);
 
           return {
             ...change,
@@ -256,15 +253,13 @@ export default function DiaperScreen({ navigation }) {
     try {
       setSubmitting(true);
 
-      // Create a date object that represents Romanian local time
       const romanianDate = new Date(changeDate);
 
-      // Log for debugging
       console.log("Original date:", changeDate);
       console.log("Romanian date being sent:", romanianDate);
 
       const diaperData = {
-        date: romanianDate, // Send as Date object, will be handled in service
+        date: romanianDate,
         type: selectedType,
         color: needsColorAndConsistency ? selectedColor : null,
         consistency: needsColorAndConsistency ? selectedConsistency : null,
@@ -344,7 +339,7 @@ export default function DiaperScreen({ navigation }) {
       data.push({
         name: "Wet",
         population: wetCount,
-        color: "#74c0fc", // Light blue for wet
+        color: "#74c0fc",
         legendFontColor: theme.textSecondary,
         legendFontSize: 12,
       });
@@ -354,7 +349,7 @@ export default function DiaperScreen({ navigation }) {
       data.push({
         name: "Dirty",
         population: dirtyCount,
-        color: "#8B4513", // Brown for dirty
+        color: "#8B4513",
         legendFontColor: theme.textSecondary,
         legendFontSize: 12,
       });
@@ -364,7 +359,7 @@ export default function DiaperScreen({ navigation }) {
       data.push({
         name: "Both",
         population: bothCount,
-        color: "rgba(210, 104, 22, 0.91)", // Orange-brown for both
+        color: "rgba(210, 104, 22, 0.91)",
         legendFontColor: theme.textSecondary,
         legendFontSize: 12,
       });

@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -17,7 +15,6 @@ import {
 import { useTheme } from "../../../context/theme-context";
 import Icon from "react-native-vector-icons/Feather";
 import Slider from "@react-native-community/slider";
-// Update Audio imports for SDK 53
 import { Audio } from "expo-av";
 import * as musicService from "../../../services/music-service";
 
@@ -35,33 +32,27 @@ const MusicScreen = () => {
   const [duration, setDuration] = useState(0);
   const [position, setPosition] = useState(0);
 
-  // Refs
   const soundRef = useRef(null);
   const progressIntervalRef = useRef(null);
   const audioConfiguredRef = useRef(false);
 
-  // Animation for the album rotation
   const spinValue = new Animated.Value(0);
 
-  // Fetch music data on component mount
   useEffect(() => {
     const fetchMusicData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Fetch all music tracks
         const musicData = await musicService.getAllMusic();
         setSongs(musicData);
 
-        // Get unique categories
         const uniqueCategories = [
           "All",
           ...new Set(musicData.map((song) => song.category)),
         ];
         setCategories(uniqueCategories);
 
-        // Set initial current song
         if (musicData.length > 0) {
           setCurrentSong(musicData[0]);
         }
@@ -76,19 +67,15 @@ const MusicScreen = () => {
 
     fetchMusicData();
 
-    // Initialize audio - Simplified for SDK 53
     const setupAudio = async () => {
-      // Skip if already configured to prevent multiple attempts
       if (audioConfiguredRef.current) return;
 
       try {
-        // Minimal configuration that works on both platforms
         const audioConfig = {
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
         };
 
-        // Only add Android-specific properties on Android
         if (Platform.OS === "android") {
           audioConfig.shouldDuckAndroid = true;
         }
@@ -98,13 +85,11 @@ const MusicScreen = () => {
         audioConfiguredRef.current = true;
       } catch (err) {
         console.error("Error setting audio mode:", err);
-        // Don't try again if it failed - audio might still work
       }
     };
 
     setupAudio();
 
-    // Cleanup function
     return () => {
       if (soundRef.current) {
         soundRef.current.unloadAsync();
@@ -115,13 +100,11 @@ const MusicScreen = () => {
     };
   }, []);
 
-  // Filter songs based on selected category
   const filteredSongs =
     selectedCategory === "All"
       ? songs
       : songs.filter((song) => song.category === selectedCategory);
 
-  // Start spinning animation when playing
   useEffect(() => {
     if (isPlaying) {
       Animated.loop(
@@ -142,28 +125,23 @@ const MusicScreen = () => {
     };
   }, [isPlaying]);
 
-  // Create the spinning animation
   const spin = spinValue.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "360deg"],
   });
 
-  // Load and play a song - Updated for SDK 53
   const loadAndPlaySong = async (song) => {
     try {
-      // Unload previous sound if exists
       if (soundRef.current) {
         await soundRef.current.unloadAsync();
       }
 
-      // Clear previous progress interval
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
 
       console.log(`Loading song: ${song.title}, URL: ${song.trackUrl}`);
 
-      // Updated sound creation for SDK 53
       const { sound } = await Audio.Sound.createAsync(
         { uri: song.trackUrl },
         {
@@ -178,7 +156,6 @@ const MusicScreen = () => {
       setCurrentSong(song);
       setIsPlaying(true);
 
-      // Start progress tracking
       startProgressTracking();
 
       console.log(`Now playing: ${song.title}`);
@@ -188,7 +165,6 @@ const MusicScreen = () => {
     }
   };
 
-  // Handle playback status updates
   const onPlaybackStatusUpdate = (status) => {
     if (status.isLoaded) {
       setDuration(status.durationMillis || 0);
@@ -202,7 +178,6 @@ const MusicScreen = () => {
     }
   };
 
-  // Start tracking progress
   const startProgressTracking = () => {
     progressIntervalRef.current = setInterval(async () => {
       if (soundRef.current) {
@@ -220,7 +195,6 @@ const MusicScreen = () => {
     }, 1000);
   };
 
-  // Format time for display (mm:ss)
   const formatTime = (milliseconds) => {
     if (!milliseconds) return "0:00";
 
@@ -230,7 +204,6 @@ const MusicScreen = () => {
     return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
   };
 
-  // Handle play/pause
   const handlePlayPause = async () => {
     if (!currentSong) return;
 
@@ -244,7 +217,6 @@ const MusicScreen = () => {
           setIsPlaying(true);
           startProgressTracking();
         } else {
-          // If no sound is loaded yet, load and play the current song
           await loadAndPlaySong(currentSong);
         }
       }
@@ -253,18 +225,14 @@ const MusicScreen = () => {
     }
   };
 
-  // Handle song selection
   const handleSongSelect = async (song) => {
     if (currentSong && currentSong.id === song.id) {
-      // If the same song is selected, toggle play/pause
       handlePlayPause();
     } else {
-      // Load and play the new song
       await loadAndPlaySong(song);
     }
   };
 
-  // Handle seeking
   const handleSeek = async (value) => {
     if (!soundRef.current) return;
 
@@ -278,7 +246,6 @@ const MusicScreen = () => {
     }
   };
 
-  // Handle volume change
   const handleVolumeChange = async (value) => {
     setVolume(value);
     if (soundRef.current) {
@@ -290,7 +257,6 @@ const MusicScreen = () => {
     }
   };
 
-  // Play next song
   const playNextSong = () => {
     if (!currentSong || filteredSongs.length === 0) return;
 
@@ -301,7 +267,6 @@ const MusicScreen = () => {
     loadAndPlaySong(filteredSongs[nextIndex]);
   };
 
-  // Play previous song
   const playPreviousSong = () => {
     if (!currentSong || filteredSongs.length === 0) return;
 
@@ -313,7 +278,6 @@ const MusicScreen = () => {
     loadAndPlaySong(filteredSongs[prevIndex]);
   };
 
-  // Render loading state
   if (loading) {
     return (
       <View
@@ -331,7 +295,6 @@ const MusicScreen = () => {
     );
   }
 
-  // Render error state
   if (error) {
     return (
       <View

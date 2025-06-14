@@ -29,17 +29,14 @@ export default function RegisterScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Error states
   const [nameError, setNameError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
 
-  // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  // Navigate to Activity screen when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       console.log("User is authenticated, navigating to Activity");
@@ -50,7 +47,6 @@ export default function RegisterScreen({ navigation }) {
     }
   }, [isAuthenticated, navigation]);
 
-  // Start animations when component mounts
   React.useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -66,7 +62,6 @@ export default function RegisterScreen({ navigation }) {
     ]).start();
   }, []);
 
-  // Validate name
   const validateName = (text) => {
     setName(text);
     if (text.trim() === "") {
@@ -78,7 +73,6 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
-  // Validate email
   const validateEmail = (text) => {
     setEmail(text);
     if (text.trim() === "") {
@@ -86,12 +80,10 @@ export default function RegisterScreen({ navigation }) {
     } else if (!text.includes("@") || !text.includes(".")) {
       setEmailError("Please enter a valid email address");
     } else {
-      // Clear any existing errors, including "already exists" errors
       setEmailError("");
     }
   };
 
-  // Validate password
   const validatePassword = (text) => {
     setPassword(text);
     if (text.trim() === "") {
@@ -102,13 +94,11 @@ export default function RegisterScreen({ navigation }) {
       setPasswordError("");
     }
 
-    // Also validate confirm password if it's already been entered
     if (confirmPassword) {
       validateConfirmPassword(confirmPassword, text);
     }
   };
 
-  // Validate confirm password
   const validateConfirmPassword = (text, pass = password) => {
     setConfirmPassword(text);
     if (text.trim() === "") {
@@ -120,7 +110,6 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
-  // Check if an error is a duplicate email error
   const isDuplicateEmailError = (error) => {
     return (
       error &&
@@ -129,15 +118,12 @@ export default function RegisterScreen({ navigation }) {
     );
   };
 
-  // Handle registration
   const handleRegister = async () => {
-    // Validate all inputs
     validateName(name);
     validateEmail(email);
     validatePassword(password);
     validateConfirmPassword(confirmPassword);
 
-    // Check if there are any errors
     if (
       nameError ||
       emailError ||
@@ -153,30 +139,24 @@ export default function RegisterScreen({ navigation }) {
 
     setIsLoading(true);
     try {
-      // Prepare user data for API
       const userData = {
         username: name,
         email: email,
         password: password,
-        imageSrc: null, // Default to null, can be updated later
+        imageSrc: null,
       };
 
       console.log("Sending registration data:", userData);
 
-      // Call the register function from auth context
       await register(userData);
 
-      // Navigation will be handled by the useEffect that watches isAuthenticated
       console.log("Registration successful, auth state updated");
     } catch (error) {
-      // Check if the error is about existing user
       if (isDuplicateEmailError(error)) {
-        // For duplicate email errors, just set the error without logging
         setEmailError(
           "This email is already registered. Please use a different email or try logging in."
         );
       } else {
-        // Only log non-duplicate email errors
         console.error("Registration error in component:", error);
         const errorMessage =
           error.message ||
@@ -224,7 +204,6 @@ export default function RegisterScreen({ navigation }) {
               Sign up to start tracking your child's growth
             </Text>
 
-            {/* Name Input */}
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
                 Parent Name
@@ -250,7 +229,6 @@ export default function RegisterScreen({ navigation }) {
                   placeholderTextColor={theme.textTertiary}
                   value={name}
                   onChangeText={(text) => {
-                    // Limit to 30 characters
                     if (text.length <= 30) {
                       validateName(text);
                     }
@@ -266,7 +244,6 @@ export default function RegisterScreen({ navigation }) {
               ) : null}
             </View>
 
-            {/* Email Input */}
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
                 Email
@@ -303,7 +280,6 @@ export default function RegisterScreen({ navigation }) {
               ) : null}
             </View>
 
-            {/* Password Input */}
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
                 Password
@@ -351,7 +327,6 @@ export default function RegisterScreen({ navigation }) {
               ) : null}
             </View>
 
-            {/* Confirm Password Input */}
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
                 Confirm Password

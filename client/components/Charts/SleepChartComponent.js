@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useState, useEffect } from "react";
 import {
   View,
@@ -18,21 +16,17 @@ const screenWidth = Dimensions.get("window").width;
 const SleepChartComponent = ({
   isLoading,
   error,
-  chartData,
   processedData,
-  rawSleepData, // Add this new prop
+  rawSleepData,
   theme,
   categoryColor,
   timePeriod,
   getChartConfig,
-  onMonthChange,
-  onFetchMonthlyData, // Add this new prop
+  onFetchMonthlyData,
 }) => {
-  // State to track the current month
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
-  // Array of month names
   const monthNames = [
     "January",
     "February",
@@ -48,17 +42,14 @@ const SleepChartComponent = ({
     "December",
   ];
 
-  // Helper function to extract date from datetime string
   const extractDateFromDateTime = (dateTimeString) => {
     if (!dateTimeString) return null;
-    // Handle both formats: "2025-06-03" and "2025-06-03 12:28:14"
     if (dateTimeString.includes(" ")) {
-      return dateTimeString.split(" ")[0]; // Extract just the date part
+      return dateTimeString.split(" ")[0];
     }
     return dateTimeString;
   };
 
-  // Function to handle month navigation
   const navigateMonth = async (direction) => {
     let newMonth = currentMonth;
     let newYear = currentYear;
@@ -79,60 +70,49 @@ const SleepChartComponent = ({
       }
     }
 
-    console.log(
-      `🔄 Navigating from ${monthNames[currentMonth]} ${currentYear} to ${monthNames[newMonth]} ${newYear}`
-    );
-
     setCurrentMonth(newMonth);
     setCurrentYear(newYear);
 
-    // Call the parent to fetch new data for this month
     if (onFetchMonthlyData) {
       console.log(
-        `📅 Fetching data for ${monthNames[newMonth]} ${newYear} (month: ${
+        ` Fetching data for ${monthNames[newMonth]} ${newYear} (month: ${
           newMonth + 1
         })`
       );
-      await onFetchMonthlyData(newYear, newMonth + 1); // Send 1-based month (1-12)
+      await onFetchMonthlyData(newYear, newMonth + 1);
     }
   };
 
-  // Reset to current month when switching to/from month view
   useEffect(() => {
-    // Only initialize the month/year state once when component mounts
     if (timePeriod === "month") {
       const now = new Date();
       const initMonth = now.getMonth();
       const initYear = now.getFullYear();
 
-      // Only set if not already set
       if (currentMonth !== initMonth || currentYear !== initYear) {
         setCurrentMonth(initMonth);
         setCurrentYear(initYear);
 
-        // Fetch initial data
         if (onFetchMonthlyData) {
-          console.log(`🔄 Initial fetch for ${initYear}-${initMonth + 1}`);
+          console.log(` Initial fetch for ${initYear}-${initMonth + 1}`);
           onFetchMonthlyData(initYear, initMonth + 1);
         }
       }
     }
-  }, []); // Empty dependency array - only run once on mount
+  }, []);
 
-  // Add a new useEffect to handle rawSleepData changes
   useEffect(() => {
     if (rawSleepData && rawSleepData.length > 0) {
-      console.log(`📊 Raw sleep data updated:`, rawSleepData);
+      console.log(`Raw sleep data updated:`, rawSleepData);
       console.log(
-        `📊 Current month/year: ${monthNames[currentMonth]} ${currentYear}`
+        ` Current month/year: ${monthNames[currentMonth]} ${currentYear}`
       );
     }
   }, [rawSleepData, currentMonth, currentYear, monthNames]);
 
-  // Process raw sleep data for charts
   const processRawSleepData = useCallback(() => {
     console.log(
-      "🔄 Processing raw sleep data for",
+      " Processing raw sleep data for",
       `${monthNames[currentMonth]} ${currentYear}:`,
       rawSleepData
     );
@@ -142,12 +122,6 @@ const SleepChartComponent = ({
       !Array.isArray(rawSleepData) ||
       rawSleepData.length === 0
     ) {
-      console.log(
-        "❌ No raw sleep data available for",
-        `${monthNames[currentMonth]} ${currentYear}`
-      );
-
-      // Return empty structure instead of null to prevent chart crashes
       if (timePeriod === "month") {
         const daysInMonth = new Date(
           currentYear,
@@ -174,8 +148,6 @@ const SleepChartComponent = ({
       return null;
     }
 
-    // Log each record to see what we're working with
-    console.log("📊 Raw sleep records received:");
     rawSleepData.forEach((record, index) => {
       console.log(`  Record ${index}:`, {
         id: record.id,
@@ -186,25 +158,21 @@ const SleepChartComponent = ({
       });
     });
 
-    // Get date range based on time period
     const now = new Date();
     let startDate,
       endDate,
       labels = [];
 
     if (timePeriod === "week") {
-      // For weekly view, the server already filtered the data for the last 7 days
-      // We just need to generate the same date range the server used
       endDate = new Date(now);
       startDate = new Date(now);
-      startDate.setDate(now.getDate() - 6); // 6 days ago + today = 7 days
+      startDate.setDate(now.getDate() - 6);
 
-      console.log("📅 Weekly range (client-side for labels):", {
+      console.log(" Weekly range (client-side for labels):", {
         startDate: startDate.toISOString().split("T")[0],
         endDate: endDate.toISOString().split("T")[0],
       });
 
-      // Generate labels for the week
       for (let i = 0; i < 7; i++) {
         const date = new Date(startDate);
         date.setDate(startDate.getDate() + i);
@@ -212,13 +180,11 @@ const SleepChartComponent = ({
         labels.push(dayNames[date.getDay()]);
       }
     } else {
-      // Monthly view - use the current state for month/year
-      // This ensures we respect the user's navigation choice
       startDate = new Date(currentYear, currentMonth, 1);
       endDate = new Date(currentYear, currentMonth + 1, 0);
 
       console.log(
-        `📅 Monthly range for ${monthNames[currentMonth]} ${currentYear}:`,
+        ` Monthly range for ${monthNames[currentMonth]} ${currentYear}:`,
         {
           startDate: startDate.toISOString().split("T")[0],
           endDate: endDate.toISOString().split("T")[0],
@@ -226,16 +192,12 @@ const SleepChartComponent = ({
         }
       );
 
-      // Generate labels for the month
       const daysInMonth = endDate.getDate();
       for (let i = 1; i <= daysInMonth; i++) {
         labels.push(i.toString());
       }
     }
 
-    console.log("📅 Generated labels:", labels);
-
-    // Initialize arrays for chart data
     const napHours = new Array(labels.length).fill(0);
     const nightHours = new Array(labels.length).fill(0);
     const totalSleepHours = new Array(labels.length).fill(0);
@@ -243,7 +205,6 @@ const SleepChartComponent = ({
     const recordCounts = new Array(labels.length).fill(0);
     const dates = [];
 
-    // Generate date strings for each label
     if (timePeriod === "week") {
       for (let i = 0; i < 7; i++) {
         const date = new Date(startDate);
@@ -252,10 +213,8 @@ const SleepChartComponent = ({
         dates.push(dateStr);
       }
     } else {
-      // For monthly view, generate dates for the selected month
       const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
       for (let i = 1; i <= daysInMonth; i++) {
-        // Format date as YYYY-MM-DD
         const day = i < 10 ? `0${i}` : `${i}`;
         const month =
           currentMonth + 1 < 10
@@ -265,20 +224,14 @@ const SleepChartComponent = ({
       }
     }
 
-    console.log("📅 Generated dates array for matching:", dates);
-
-    // Map data to chart arrays
     rawSleepData.forEach((item, index) => {
-      // Extract just the date part from the datetime string
       const itemDate = extractDateFromDateTime(item.date);
 
-      // Find the index in our dates array that matches this record's date
       const dateIndex = dates.findIndex((date) => {
-        // Compare just the date parts (YYYY-MM-DD)
         return date === itemDate;
       });
 
-      console.log(`📊 Mapping item ${index}:`, {
+      console.log(` Mapping item ${index}:`, {
         itemDate,
         itemFullDate: item.date,
         dateIndex,
@@ -290,8 +243,6 @@ const SleepChartComponent = ({
       });
 
       if (dateIndex !== -1) {
-        // For sleep data, we typically want to replace rather than accumulate per day
-        // since there should only be one sleep record per day
         napHours[dateIndex] = Number.parseFloat(item.napHours) || 0;
         nightHours[dateIndex] = Number.parseFloat(item.nightHours) || 0;
         totalSleepHours[dateIndex] =
@@ -300,16 +251,16 @@ const SleepChartComponent = ({
         sleepProgress[dateIndex] = Number.parseInt(item.sleepProgress) || 0;
         recordCounts[dateIndex] = 1;
 
-        console.log(`✅ Set data for ${itemDate} (index ${dateIndex}):`, {
+        console.log(` Set data for ${itemDate} (index ${dateIndex}):`, {
           nap: napHours[dateIndex],
           night: nightHours[dateIndex],
           total: totalSleepHours[dateIndex],
           progress: sleepProgress[dateIndex],
         });
       } else {
-        console.log(`❌ Could not find date index for ${itemDate}`);
-        console.log(`❌ Available dates for matching:`, dates);
-        console.log(`❌ Date comparison details:`, {
+        console.log(` Could not find date index for ${itemDate}`);
+        console.log(` Available dates for matching:`, dates);
+        console.log(`Date comparison details:`, {
           itemDate,
           expectedFormat: "YYYY-MM-DD",
           dateMatches: dates.map((d) => ({ date: d, matches: d === itemDate })),
@@ -317,7 +268,6 @@ const SleepChartComponent = ({
       }
     });
 
-    // Average the accumulated values for days with multiple records
     for (let i = 0; i < labels.length; i++) {
       if (recordCounts[i] > 1) {
         napHours[i] = napHours[i] / recordCounts[i];
@@ -327,7 +277,6 @@ const SleepChartComponent = ({
       }
     }
 
-    // Calculate averages
     const totalDaysWithData = totalSleepHours.filter(
       (hours) => hours > 0
     ).length;
@@ -365,36 +314,33 @@ const SleepChartComponent = ({
     };
 
     console.log(
-      "✅ Final processed data for",
+      "aFinal processed data for",
       `${monthNames[currentMonth]} ${currentYear}:`,
       result
     );
     return result;
   }, [rawSleepData, timePeriod, currentMonth, currentYear, monthNames]);
 
-  // Use processed data if rawSleepData is available, otherwise use the passed processedData
   const finalProcessedData = rawSleepData
     ? processRawSleepData()
     : processedData;
 
-  // Generate chart data from processed sleep data
   const generateChartData = useCallback(() => {
     const processed = finalProcessedData;
     if (!processed) {
-      console.log("❌ No processed data for chart generation");
+      console.log(" No processed data for chart generation");
       return null;
     }
 
     const { labels, napHours, nightHours, totalSleepHours } = processed;
 
-    // Check if we have any data
     const hasData = totalSleepHours.some((hours) => hours > 0);
     if (!hasData) {
-      console.log("❌ No sleep data found for chart");
+      console.log("  No sleep data found for chart");
       return null;
     }
 
-    console.log("📊 Generating chart data with:", {
+    console.log("  Generating chart data with:", {
       labels,
       totalSleepHours,
       napHours,
@@ -406,12 +352,12 @@ const SleepChartComponent = ({
       datasets: [
         {
           data: napHours,
-          color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`, // Orange for naps
+          color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
           strokeWidth: 3,
         },
         {
           data: nightHours,
-          color: (opacity = 1) => `rgba(52, 152, 219, ${opacity})`, // Blue for night sleep
+          color: (opacity = 1) => `rgba(52, 152, 219, ${opacity})`,
           strokeWidth: 3,
         },
       ],
@@ -439,7 +385,6 @@ const SleepChartComponent = ({
       );
     }
 
-    // Generate chart data from processed sleep data
     const generatedChartData = generateChartData();
     if (
       !generatedChartData ||
@@ -455,14 +400,11 @@ const SleepChartComponent = ({
       );
     }
 
-    // Calculate responsive width based on screen size
     const chartWidth = Math.min(screenWidth - 40, 500);
     const isSmallScreen = screenWidth < 350;
 
-    // Create a modified chart config without legend
     const baseConfig = getChartConfig(categoryColor);
 
-    // Create a completely new config object without any legend properties
     const finalChartConfig = {
       backgroundColor: baseConfig.backgroundColor,
       backgroundGradientFrom: baseConfig.backgroundGradientFrom,
@@ -487,7 +429,6 @@ const SleepChartComponent = ({
       formatXLabel: timePeriod === "month" ? () => "" : baseConfig.formatXLabel,
     };
 
-    // Remove the datasets legend property if it exists
     const modifiedChartData = { ...generatedChartData };
     if (modifiedChartData.datasets) {
       modifiedChartData.datasets = modifiedChartData.datasets.map((dataset) => {
@@ -497,7 +438,6 @@ const SleepChartComponent = ({
       });
     }
 
-    // Remove the legend property from chartData if it exists
     delete modifiedChartData.legend;
 
     return (
@@ -521,7 +461,7 @@ const SleepChartComponent = ({
             fromZero={true}
             bezier={true}
             withLegend={false}
-            hidePointsAtIndex={[0, 1, 2, 3, 4, 5, 6]} // Hide all points
+            hidePointsAtIndex={[0, 1, 2, 3, 4, 5, 6]}
           />
         </View>
       </ScrollView>
@@ -536,7 +476,6 @@ const SleepChartComponent = ({
     generateChartData,
   ]);
 
-  // Month navigation controls
   const renderMonthNavigation = () => {
     if (timePeriod !== "month") return null;
 
@@ -576,9 +515,8 @@ const SleepChartComponent = ({
       totalSleepHours,
       sleepProgress,
     } = finalProcessedData;
-    const sunnyColor = "#FF9500"; // Same color as in SleepScreen.js
+    const sunnyColor = "#FF9500";
 
-    // Filter to only include days with actual sleep data
     const daysWithData = labels
       .map((label, i) => ({
         label,
@@ -591,7 +529,7 @@ const SleepChartComponent = ({
       }))
       .filter((day) => {
         const hasData = day.nap > 0 || day.night > 0 || day.total > 0;
-        console.log(`📊 Day ${day.label} (${day.date}):`, {
+        console.log(` Day ${day.label} (${day.date}):`, {
           nap: day.nap,
           night: day.night,
           total: day.total,
@@ -600,9 +538,8 @@ const SleepChartComponent = ({
         return hasData;
       });
 
-    console.log(`📊 Days with data for ${timePeriod} view:`, daysWithData);
+    console.log(` Days with data for ${timePeriod} view:`, daysWithData);
 
-    // If no data for this month/week, show a message
     if (daysWithData.length === 0) {
       return (
         <View
@@ -629,7 +566,6 @@ const SleepChartComponent = ({
       );
     }
 
-    // Render the legend row
     const renderLegendRow = () => (
       <View
         style={[styles.legendRow, { borderBottomColor: `${theme.text}20` }]}
@@ -668,16 +604,14 @@ const SleepChartComponent = ({
           {timePeriod === "week" ? "Weekly" : "Monthly"} Sleep Summary
         </Text>
 
-        {/* Add the legend row */}
         {renderLegendRow()}
 
         {daysWithData.map((day) => {
           const isPositive = day.progress >= 0;
           const progressColor = isPositive ? "#2ecc71" : "#e74c3c";
 
-          // Format the date for display - extract just the day number
           const dateObj = new Date(day.date);
-          const dayNumber = dateObj.getDate(); // Just the day number (1-31)
+          const dayNumber = dateObj.getDate();
 
           return (
             <View
@@ -690,14 +624,12 @@ const SleepChartComponent = ({
                 },
               ]}
             >
-              {/* Day column (left) - show only day number for monthly view */}
               <View style={styles.dayColumn}>
                 <Text style={[styles.dayText, { color: theme.text }]}>
                   {timePeriod === "month" ? dayNumber : day.label}
                 </Text>
               </View>
 
-              {/* Sleep type column (middle) */}
               <View style={styles.sleepTypeColumn}>
                 <View style={styles.sleepTypeRow}>
                   <View
@@ -738,14 +670,12 @@ const SleepChartComponent = ({
                 </View>
               </View>
 
-              {/* Total hours column (right) */}
               <View style={styles.hoursColumn}>
                 <Text style={[styles.hoursText, { color: theme.text }]}>
                   {day.total} hrs
                 </Text>
               </View>
 
-              {/* Progress column (far right) */}
               <View style={styles.progressColumn}>
                 <View style={styles.progressBarContainer}>
                   <View style={styles.centerLine} />
@@ -999,7 +929,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: "right",
   },
-  // Month navigation styles
   monthNavigationContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -1030,7 +959,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
   },
-  // Legend row styles
   legendRow: {
     flexDirection: "row",
     justifyContent: "space-between",

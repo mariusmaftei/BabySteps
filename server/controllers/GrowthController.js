@@ -1,7 +1,6 @@
 import Growth from "../models/Growth.js";
 import Child from "../models/Child.js";
 
-// Create a new growth record
 export const createGrowthRecord = async (req, res) => {
   try {
     const {
@@ -17,7 +16,6 @@ export const createGrowthRecord = async (req, res) => {
       isInitialRecord,
     } = req.body;
 
-    // Validate required fields
     if (!childId || !weight || !height || !headCircumference) {
       return res.status(400).json({
         message:
@@ -25,7 +23,6 @@ export const createGrowthRecord = async (req, res) => {
       });
     }
 
-    // Check if child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -39,7 +36,6 @@ export const createGrowthRecord = async (req, res) => {
       });
     }
 
-    // Create the growth record with progress values from the client
     const growthRecord = await Growth.create({
       childId,
       weight,
@@ -69,7 +65,6 @@ export const createGrowthRecord = async (req, res) => {
   }
 };
 
-// Update a growth record
 export const updateGrowthRecord = async (req, res) => {
   try {
     const { id } = req.params;
@@ -84,14 +79,12 @@ export const updateGrowthRecord = async (req, res) => {
       notes,
     } = req.body;
 
-    // Find the growth record
     const growthRecord = await Growth.findByPk(id);
 
     if (!growthRecord) {
       return res.status(404).json({ message: "Growth record not found" });
     }
 
-    // Check if the growth record belongs to a child of the authenticated user
     const child = await Child.findOne({
       where: {
         id: growthRecord.childId,
@@ -105,7 +98,6 @@ export const updateGrowthRecord = async (req, res) => {
       });
     }
 
-    // Update the growth record with progress values from the client
     await growthRecord.update({
       weight: weight || growthRecord.weight,
       height: height || growthRecord.height,
@@ -142,17 +134,14 @@ export const updateGrowthRecord = async (req, res) => {
   }
 };
 
-// Get all growth records for a specific child
 export const getGrowthRecords = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Validate childId
     if (!childId) {
       return res.status(400).json({ message: "Child ID is required" });
     }
 
-    // Check if child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -166,7 +155,6 @@ export const getGrowthRecords = async (req, res) => {
         .json({ message: "Child not found or you don't have access" });
     }
 
-    // Get all growth records for the child, ordered by date
     const growthRecords = await Growth.findAll({
       where: { childId },
       order: [["recordDate", "DESC"]],
@@ -181,17 +169,14 @@ export const getGrowthRecords = async (req, res) => {
   }
 };
 
-// Get the latest growth record for a specific child
 export const getLatestGrowthRecord = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Validate childId
     if (!childId) {
       return res.status(400).json({ message: "Child ID is required" });
     }
 
-    // Check if child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -205,7 +190,6 @@ export const getLatestGrowthRecord = async (req, res) => {
         .json({ message: "Child not found or you don't have access" });
     }
 
-    // Get the latest growth record
     const latestRecord = await Growth.findOne({
       where: { childId },
       order: [["recordDate", "DESC"]],
@@ -226,17 +210,14 @@ export const getLatestGrowthRecord = async (req, res) => {
   }
 };
 
-// Get the previous growth record (before the latest) for a specific child
 export const getPreviousGrowthRecord = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Validate childId
     if (!childId) {
       return res.status(400).json({ message: "Child ID is required" });
     }
 
-    // Check if child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -250,7 +231,6 @@ export const getPreviousGrowthRecord = async (req, res) => {
         .json({ message: "Child not found or you don't have access" });
     }
 
-    // Get the latest two records
     const records = await Growth.findAll({
       where: { childId },
       order: [["recordDate", "DESC"]],
@@ -263,7 +243,6 @@ export const getPreviousGrowthRecord = async (req, res) => {
         .json({ message: "No previous growth record found" });
     }
 
-    // Return the second record (previous one)
     return res.status(200).json(records[1]);
   } catch (error) {
     console.error("Error fetching previous growth record:", error);
@@ -273,19 +252,16 @@ export const getPreviousGrowthRecord = async (req, res) => {
   }
 };
 
-// Delete a growth record
 export const deleteGrowthRecord = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the growth record
     const growthRecord = await Growth.findByPk(id);
 
     if (!growthRecord) {
       return res.status(404).json({ message: "Growth record not found" });
     }
 
-    // Check if the growth record belongs to a child of the authenticated user
     const child = await Child.findOne({
       where: {
         id: growthRecord.childId,
@@ -299,14 +275,12 @@ export const deleteGrowthRecord = async (req, res) => {
         .json({ message: "You don't have permission to delete this record" });
     }
 
-    // Don't allow deletion of initial records
     if (growthRecord.isInitialRecord) {
       return res.status(403).json({
         message: "Initial growth records cannot be deleted",
       });
     }
 
-    // Delete the growth record
     await growthRecord.destroy();
 
     return res
@@ -320,17 +294,14 @@ export const deleteGrowthRecord = async (req, res) => {
   }
 };
 
-// Get growth statistics for a child
 export const getGrowthStatistics = async (req, res) => {
   try {
     const { childId } = req.params;
 
-    // Validate childId
     if (!childId) {
       return res.status(400).json({ message: "Child ID is required" });
     }
 
-    // Check if child exists and belongs to the authenticated user
     const child = await Child.findOne({
       where: {
         id: childId,
@@ -344,7 +315,6 @@ export const getGrowthStatistics = async (req, res) => {
         .json({ message: "Child not found or you don't have access" });
     }
 
-    // Get all growth records for the child, ordered by date
     const growthRecords = await Growth.findAll({
       where: { childId },
       order: [["recordDate", "ASC"]],
@@ -356,7 +326,6 @@ export const getGrowthStatistics = async (req, res) => {
         .json({ message: "No growth records found for this child" });
     }
 
-    // Calculate statistics
     const statistics = {
       weightData: growthRecords.map((record) => ({
         date: record.recordDate,
@@ -402,14 +371,13 @@ export const getGrowthStatistics = async (req, res) => {
   }
 };
 
-// Check if today is Sunday (for client validation) - keeping this for backward compatibility
 export const checkIfSunday = async (req, res) => {
   try {
     const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 is Sunday
+    const dayOfWeek = today.getDay();
 
     return res.status(200).json({
-      isSunday: true, // Always return true to allow records any day
+      isSunday: true,
       currentDay: dayOfWeek,
       dayName: [
         "Sunday",
@@ -430,17 +398,14 @@ export const checkIfSunday = async (req, res) => {
   }
 };
 
-// Helper function to get the date of the next Sunday
 function getNextSunday() {
   const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 is Sunday
+  const dayOfWeek = today.getDay();
 
-  // If today is Sunday, return today's date
   if (dayOfWeek === 0) {
     return today;
   }
 
-  // Otherwise, calculate days until next Sunday
   const daysUntilSunday = 7 - dayOfWeek;
   const nextSunday = new Date(today);
   nextSunday.setDate(today.getDate() + daysUntilSunday);

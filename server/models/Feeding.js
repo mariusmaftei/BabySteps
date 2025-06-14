@@ -24,23 +24,23 @@ const Feeding = sequelize.define(
     },
     startTime: {
       type: DataTypes.DATE,
-      allowNull: true, // Only required for breastfeeding
+      allowNull: true,
     },
     endTime: {
       type: DataTypes.DATE,
-      allowNull: true, // Only required for breastfeeding
+      allowNull: true,
     },
     duration: {
-      type: DataTypes.INTEGER, // Duration in minutes
-      allowNull: true, // Only required for breastfeeding
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     side: {
       type: DataTypes.ENUM("left", "right"),
-      allowNull: true, // Only required for breastfeeding
+      allowNull: true,
     },
     amount: {
-      type: DataTypes.INTEGER, // Amount in ml for bottle, grams for solid
-      allowNull: true, // Only required for bottle and solid
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     note: {
       type: DataTypes.STRING,

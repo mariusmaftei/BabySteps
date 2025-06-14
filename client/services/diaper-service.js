@@ -36,12 +36,9 @@ export const createDiaperChange = async (childId, diaperData) => {
   try {
     await ensureToken();
 
-    // Convert date to Romanian timezone before sending
     const romanianDate = new Date(diaperData.date);
-    // Romania is UTC+2 (EET) or UTC+3 (EEST during DST) - currently DST is active
-    const targetOffset = 3; // Romania daylight saving time offset (UTC+3)
+    const targetOffset = 3;
 
-    // Adjust for Romanian timezone
     const adjustedDate = new Date(
       romanianDate.getTime() + targetOffset * 60 * 60 * 1000
     );
@@ -109,11 +106,10 @@ export const getDiaperDataByDateRange = async (childId, startDate, endDate) => {
   try {
     await ensureToken();
 
-    // Convert dates to Romanian timezone (UTC+3 during DST)
     const romanianStartDate = new Date(
       startDate.getTime() + 3 * 60 * 60 * 1000
-    ); // UTC+3
-    const romanianEndDate = new Date(endDate.getTime() + 3 * 60 * 60 * 1000); // UTC+3
+    );
+    const romanianEndDate = new Date(endDate.getTime() + 3 * 60 * 60 * 1000);
 
     const formattedStartDate = romanianStartDate.toISOString().split("T")[0];
     const formattedEndDate = romanianEndDate.toISOString().split("T")[0];

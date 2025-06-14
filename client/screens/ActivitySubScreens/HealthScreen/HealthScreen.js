@@ -47,35 +47,28 @@ export default function HealthScreen({ navigation }) {
   const [savingVaccination, setSavingVaccination] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(false);
 
-  // Set up the header title and update current screen
   React.useLayoutEffect(() => {
     navigation.setOptions({
       title: `${currentChild.name.split(" ")[0]}'s Vaccinations`,
     });
 
-    // Update current screen to HealthDetails
     updateCurrentScreen("HealthDetails");
 
-    // When component unmounts, reset to Activity
     return () => {
       updateCurrentScreen("Activity");
     };
   }, [navigation, currentChild, updateCurrentScreen]);
 
-  // Load vaccinations from API
   useEffect(() => {
     const loadVaccinations = async () => {
       setLoading(true);
       try {
-        // Try to fetch vaccinations from the API
         const vaccinationData =
           await VaccinationService.getVaccinationsForChild(currentChild.id);
 
-        // If we have vaccinations in the database, use them
         if (vaccinationData && vaccinationData.length > 0) {
           setVaccinations(vaccinationData);
 
-          // Create a map of completed vaccines
           const completedMap = {};
           vaccinationData.forEach((vaccine) => {
             if (vaccine.isCompleted) {
@@ -87,8 +80,6 @@ export default function HealthScreen({ navigation }) {
           });
           setCompletedVaccines(completedMap);
 
-          // Parse birth date from the first vaccination's scheduledDate
-          // This assumes the first vaccination is at birth
           const birthVaccine = vaccinationData.find(
             (v) => v.ageMonths === 0 && v.ageDays === 0
           );
@@ -96,33 +87,26 @@ export default function HealthScreen({ navigation }) {
             const birthDateFromVaccine = new Date(birthVaccine.scheduledDate);
             setBirthDate(birthDateFromVaccine);
           } else {
-            // Fallback to calculating from age
             calculateBirthDateFromAge();
           }
 
-          // Group vaccinations by date
           const groupedByDate = groupVaccinationsByDate(vaccinationData);
 
-          // Find the current and next relevant dates
           const { currentDate, nextDate } = findRelevantDates(groupedByDate);
           setCurrentRelevantDate(currentDate);
           setNextRelevantDate(nextDate);
 
-          // Initialize collapsed state for each date - only expand the current relevant date
           const initialCollapsedState = {};
           Object.keys(groupedByDate).forEach((dateKey) => {
             initialCollapsedState[dateKey] = dateKey !== currentDate;
           });
           setCollapsedDates(initialCollapsedState);
 
-          // Find due now vaccines for notifications
           findDueNowVaccines(vaccinationData, groupedByDate);
         } else {
-          // If no vaccinations in database, generate them
           await generateAndSaveVaccinationSchedule();
         }
 
-        // Load vaccination progress
         await loadVaccinationProgress();
       } catch (error) {
         console.error("Error loading vaccinations:", error);
@@ -132,7 +116,6 @@ export default function HealthScreen({ navigation }) {
           [{ text: "OK" }]
         );
 
-        // Fallback to generating schedule locally
         await generateAndSaveVaccinationSchedule();
       } finally {
         setLoading(false);
@@ -142,21 +125,17 @@ export default function HealthScreen({ navigation }) {
     loadVaccinations();
   }, [currentChild.id]);
 
-  // Calculate birth date from age
   const calculateBirthDateFromAge = () => {
     const calculatedBirthDate = new Date();
     const ageText = currentChild.age.toLowerCase();
 
     if (ageText.includes("day")) {
-      // Handle days old
       const days = Number.parseInt(ageText.split(" ")[0]) || 0;
       calculatedBirthDate.setDate(calculatedBirthDate.getDate() - days);
     } else if (ageText.includes("month")) {
-      // Handle months old
       const months = Number.parseInt(ageText.split(" ")[0]) || 0;
       calculatedBirthDate.setMonth(calculatedBirthDate.getMonth() - months);
     } else if (ageText.includes("year")) {
-      // Handle years old
       const years = Number.parseInt(ageText.split(" ")[0]) || 0;
       calculatedBirthDate.setFullYear(
         calculatedBirthDate.getFullYear() - years
@@ -167,16 +146,12 @@ export default function HealthScreen({ navigation }) {
     return calculatedBirthDate;
   };
 
-  // Generate and save vaccination schedule
   const generateAndSaveVaccinationSchedule = async () => {
     try {
-      // Calculate birth date from age
       const calculatedBirthDate = calculateBirthDateFromAge();
 
-      // Generate vaccination schedule
       const schedule = generateVaccinationSchedule(calculatedBirthDate);
 
-      // Format for API
       const vaccinationsForApi = schedule.map((vaccine) => ({
         vaccineId: vaccine.id,
         vaccineName: vaccine.vaccine,
@@ -188,31 +163,25 @@ export default function HealthScreen({ navigation }) {
         isCompleted: false,
       }));
 
-      // Save to API
       await VaccinationService.createMultipleVaccinations(
         currentChild.id,
         vaccinationsForApi
       );
 
-      // Set vaccinations state
       setVaccinations(schedule);
 
-      // Group vaccinations by date
       const groupedByDate = groupVaccinationsByDate(schedule);
 
-      // Find the current and next relevant dates
       const { currentDate, nextDate } = findRelevantDates(groupedByDate);
       setCurrentRelevantDate(currentDate);
       setNextRelevantDate(nextDate);
 
-      // Initialize collapsed state for each date - only expand the current relevant date
       const initialCollapsedState = {};
       Object.keys(groupedByDate).forEach((dateKey) => {
         initialCollapsedState[dateKey] = dateKey !== currentDate;
       });
       setCollapsedDates(initialCollapsedState);
 
-      // Find due now vaccines for notifications
       findDueNowVaccines(schedule, groupedByDate);
     } catch (error) {
       console.error("Error generating and saving vaccination schedule:", error);
@@ -224,7 +193,6 @@ export default function HealthScreen({ navigation }) {
     }
   };
 
-  // Load vaccination progress
   const loadVaccinationProgress = async () => {
     setLoadingProgress(true);
     try {
@@ -234,7 +202,6 @@ export default function HealthScreen({ navigation }) {
       setProgress(progressData);
     } catch (error) {
       console.error("Error loading vaccination progress:", error);
-      // Calculate progress locally as fallback
       if (vaccinations.length > 0) {
         const completedCount = Object.keys(completedVaccines).length;
         const totalCount = vaccinations.length;
@@ -250,29 +217,23 @@ export default function HealthScreen({ navigation }) {
     }
   };
 
-  // Find vaccines that are due now for notifications
   const findDueNowVaccines = async (schedule, groupedByDate) => {
     try {
-      // Try to get due vaccinations from API
       const dueVaccines = await VaccinationService.getDueVaccinations(
         currentChild.id
       );
       setDueNowVaccines(dueVaccines);
 
-      // Schedule notification if there are due vaccines
       if (dueVaccines.length > 0) {
         scheduleVaccinationReminders(dueVaccines, currentChild.name);
       } else {
-        // Cancel notification if no due vaccines
         cancelVaccinationReminders();
       }
     } catch (error) {
       console.error("Error fetching due vaccinations:", error);
 
-      // Fallback to calculating due vaccines locally
       const today = new Date();
       const localDueVaccines = schedule.filter((vaccine) => {
-        // Check if the vaccine is due this month and not completed
         return (
           vaccine.date.getMonth() === today.getMonth() &&
           vaccine.date.getFullYear() === today.getFullYear() &&
@@ -282,30 +243,24 @@ export default function HealthScreen({ navigation }) {
 
       setDueNowVaccines(localDueVaccines);
 
-      // Schedule notification if there are due vaccines
       if (localDueVaccines.length > 0) {
         scheduleVaccinationReminders(localDueVaccines, currentChild.name);
       } else {
-        // Cancel notification if no due vaccines
         cancelVaccinationReminders();
       }
     }
   };
 
-  // Update notifications when completed vaccines change
   useEffect(() => {
     if (vaccinations.length === 0) return;
 
-    // Check if all due now vaccines are completed
     const allDueNowCompleted = dueNowVaccines.every(
       (vaccine) => completedVaccines[vaccine.vaccineId || vaccine.id]
     );
 
     if (allDueNowCompleted && dueNowVaccines.length > 0) {
-      // Cancel notifications if all due vaccines are completed
       cancelVaccinationReminders();
     } else if (dueNowVaccines.length > 0) {
-      // Update notification with remaining due vaccines
       const remainingDueVaccines = dueNowVaccines.filter(
         (vaccine) => !completedVaccines[vaccine.vaccineId || vaccine.id]
       );
@@ -317,12 +272,10 @@ export default function HealthScreen({ navigation }) {
     }
   }, [completedVaccines, dueNowVaccines]);
 
-  // Function to find the current and next relevant vaccination dates
   const findRelevantDates = (groupedVaccinations) => {
     const today = new Date();
     const todayString = formatDate(today);
 
-    // Get all date keys and sort them chronologically
     const dateKeys = Object.keys(groupedVaccinations);
     const sortedDates = dateKeys
       .map((dateKey) => {
@@ -330,7 +283,6 @@ export default function HealthScreen({ navigation }) {
         return {
           dateKey,
           date: new Date(firstVaccine.scheduledDate || firstVaccine.date),
-          // Check if all vaccines for this date are completed
           allCompleted: groupedVaccinations[dateKey].every(
             (v) => completedVaccines[v.vaccineId || v.id]
           ),
@@ -338,14 +290,10 @@ export default function HealthScreen({ navigation }) {
       })
       .sort((a, b) => a.date - b.date);
 
-    // Check if today matches any vaccination date
     const todayMatch = sortedDates.find(
       (d) => formatDate(d.date) === todayString
     );
-
-    // If today matches a vaccination date and not all vaccines are completed, that's our current date
     if (todayMatch && !todayMatch.allCompleted) {
-      // Find the next date after today
       const nextDate = sortedDates.find(
         (d) =>
           d.date > today &&
@@ -359,14 +307,11 @@ export default function HealthScreen({ navigation }) {
       };
     }
 
-    // If today doesn't match, find the next upcoming date
     const nextUpcoming = sortedDates.find(
       (d) => d.date >= today && !d.allCompleted
     );
 
-    // If there's an upcoming date, that's our current relevant date
     if (nextUpcoming) {
-      // Find the date after the upcoming one
       const indexOfUpcoming = sortedDates.indexOf(nextUpcoming);
       const nextAfterUpcoming = sortedDates
         .slice(indexOfUpcoming + 1)
@@ -378,7 +323,6 @@ export default function HealthScreen({ navigation }) {
       };
     }
 
-    // If all future dates are completed, find the most recent past date that's not completed
     const mostRecentPast = [...sortedDates]
       .reverse()
       .find((d) => d.date < today && !d.allCompleted);
@@ -390,11 +334,9 @@ export default function HealthScreen({ navigation }) {
       };
     }
 
-    // If everything is completed or there are no dates, return null for both
     return { currentDate: null, nextDate: null };
   };
 
-  // Function to generate vaccination schedule based on birth date
   const generateVaccinationSchedule = (birthDate) => {
     if (!birthDate || isNaN(birthDate.getTime())) {
       console.error(
@@ -405,21 +347,18 @@ export default function HealthScreen({ navigation }) {
 
     const schedule = [];
 
-    // Helper function to add months to a date
     const addMonths = (date, months) => {
       const newDate = new Date(date);
       newDate.setMonth(newDate.getMonth() + months);
       return newDate;
     };
 
-    // Helper function to add days to a date
     const addDays = (date, days) => {
       const newDate = new Date(date);
       newDate.setDate(newDate.getDate() + days);
       return newDate;
     };
 
-    // Birth (0 months) - Hepatitis B is given at birth
     schedule.push({
       id: "hepb-1",
       date: new Date(birthDate),
@@ -430,7 +369,6 @@ export default function HealthScreen({ navigation }) {
       ageDays: 0,
     });
 
-    // 1-2 months
     schedule.push({
       id: "hepb-2",
       date: addMonths(birthDate, 1),
@@ -441,7 +379,6 @@ export default function HealthScreen({ navigation }) {
       ageDays: 30,
     });
 
-    // 2 months
     const twoMonthDate = addMonths(birthDate, 2);
     schedule.push({
       id: "dtap-1",
@@ -493,7 +430,6 @@ export default function HealthScreen({ navigation }) {
       ageDays: 60,
     });
 
-    // 4 months
     const fourMonthDate = addMonths(birthDate, 4);
     schedule.push({
       id: "dtap-2",
@@ -544,8 +480,6 @@ export default function HealthScreen({ navigation }) {
       ageMonths: 4,
       ageDays: 120,
     });
-
-    // 6 months
     const sixMonthDate = addMonths(birthDate, 6);
     schedule.push({
       id: "dtap-3",
@@ -617,7 +551,6 @@ export default function HealthScreen({ navigation }) {
       ageDays: 180,
     });
 
-    // 7 months (second flu shot)
     schedule.push({
       id: "flu-2",
       date: addMonths(birthDate, 7),
@@ -628,7 +561,6 @@ export default function HealthScreen({ navigation }) {
       ageDays: 210,
     });
 
-    // 12 months
     const twelveMonthDate = addMonths(birthDate, 12);
     schedule.push({
       id: "mmr-1",
@@ -673,7 +605,6 @@ export default function HealthScreen({ navigation }) {
     return schedule.sort((a, b) => a.date - b.date);
   };
 
-  // Format date for display
   const formatDate = (date) => {
     if (!date || isNaN(date.getTime())) {
       return "Invalid Date";
@@ -686,7 +617,6 @@ export default function HealthScreen({ navigation }) {
     });
   };
 
-  // Format age for display
   const formatAge = (vaccine) => {
     const ageMonths = vaccine.ageMonths;
     const ageDays = vaccine.ageDays;
@@ -702,7 +632,6 @@ export default function HealthScreen({ navigation }) {
     }
   };
 
-  // Check if a date is in the current month
   const isCurrentMonth = (date) => {
     if (!date || isNaN(date.getTime())) {
       return false;
@@ -715,7 +644,6 @@ export default function HealthScreen({ navigation }) {
     );
   };
 
-  // Mark a vaccine as completed
   const markAsCompleted = (vaccineId) => {
     const vaccine = vaccinations.find(
       (v) => (v.vaccineId || v.id) === vaccineId
@@ -724,21 +652,18 @@ export default function HealthScreen({ navigation }) {
     setShowAddModal(true);
   };
 
-  // Save completion details
   const saveCompletion = async () => {
     if (!selectedVaccine) return;
 
     setSavingVaccination(true);
 
     try {
-      // Save to API
       await VaccinationService.markVaccinationAsCompleted(
         currentChild.id,
         selectedVaccine.vaccineId || selectedVaccine.id,
         notes
       );
 
-      // Update local state
       const updatedCompletedVaccines = {
         ...completedVaccines,
         [selectedVaccine.vaccineId || selectedVaccine.id]: {
@@ -751,23 +676,17 @@ export default function HealthScreen({ navigation }) {
       setShowAddModal(false);
       setNotes("");
 
-      // Refresh vaccination progress
       await loadVaccinationProgress();
 
-      // After marking a vaccine as completed, recalculate the relevant dates
       const groupedByDate = groupVaccinationsByDate(vaccinations);
       const { currentDate, nextDate } = findRelevantDates(groupedByDate);
 
-      // If the current relevant date has changed, update the collapsed states
       if (currentDate !== currentRelevantDate) {
         const newCollapsedState = { ...collapsedDates };
 
-        // Collapse the previous current date if it's not the same as the new one
         if (currentRelevantDate && currentRelevantDate !== currentDate) {
           newCollapsedState[currentRelevantDate] = true;
         }
-
-        // Expand the new current date
         if (currentDate) {
           newCollapsedState[currentDate] = false;
         }
@@ -788,7 +707,6 @@ export default function HealthScreen({ navigation }) {
     }
   };
 
-  // Check if a date is in the past
   const isDatePast = (date) => {
     if (!date || isNaN(date.getTime())) {
       return false;
@@ -798,12 +716,10 @@ export default function HealthScreen({ navigation }) {
     return date < today;
   };
 
-  // Calculate vaccination progress
   const calculateVaccinationProgress = () => {
     return progress.percentage || 0;
   };
 
-  // Group vaccinations by date
   const groupVaccinationsByDate = (vaccinationList) => {
     return vaccinationList.reduce((groups, vaccine) => {
       const dateKey = formatDate(
@@ -817,7 +733,6 @@ export default function HealthScreen({ navigation }) {
     }, {});
   };
 
-  // Toggle collapse state for a date group
   const toggleDateCollapse = (dateKey) => {
     setCollapsedDates((prev) => ({
       ...prev,
@@ -825,7 +740,6 @@ export default function HealthScreen({ navigation }) {
     }));
   };
 
-  // Count vaccines for a date
   const countVaccinesForDate = (vaccines) => {
     const total = vaccines.length;
     const completed = vaccines.filter(
@@ -834,22 +748,18 @@ export default function HealthScreen({ navigation }) {
     return { total, completed };
   };
 
-  // Check if a date is the current relevant date
   const isCurrentRelevantDate = (dateKey) => {
     return dateKey === currentRelevantDate;
   };
 
-  // Check if a date is the next relevant date
   const isNextRelevantDate = (dateKey) => {
     return dateKey === nextRelevantDate;
   };
 
-  // Check if all vaccines for a date are completed
   const areAllVaccinesCompletedForDate = (vaccines) => {
     return vaccines.every((v) => completedVaccines[v.vaccineId || v.id]);
   };
 
-  // Render the add completion modal
   const renderAddCompletionModal = () => {
     if (!selectedVaccine) return null;
 
@@ -999,7 +909,6 @@ export default function HealthScreen({ navigation }) {
     );
   };
 
-  // Render loading state
   if (loading) {
     return (
       <SafeAreaView
@@ -1015,7 +924,6 @@ export default function HealthScreen({ navigation }) {
     );
   }
 
-  // Group vaccinations by date
   const groupedVaccinations = groupVaccinationsByDate(vaccinations);
 
   return (
@@ -1023,7 +931,6 @@ export default function HealthScreen({ navigation }) {
       style={[styles.container, { backgroundColor: theme.background }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Vaccination Schedule Header */}
         <View style={styles.headerContainer}>
           <View
             style={[
@@ -1106,7 +1013,6 @@ export default function HealthScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Vaccination Timeline */}
         <View style={styles.timelineContainer}>
           {Object.keys(groupedVaccinations).map((dateKey, dateIndex) => {
             if (dateKey === "Invalid Date") return null;
@@ -1133,7 +1039,6 @@ export default function HealthScreen({ navigation }) {
               groupedVaccinations[dateKey]
             );
 
-            // Determine section color based on status
             let sectionBgColor = theme.cardBackground;
             let sectionBorderColor = "transparent";
             let warningMessage = null;
@@ -1141,30 +1046,26 @@ export default function HealthScreen({ navigation }) {
             let statusText = "";
 
             if (allCompleted) {
-              // Completed section - green
-              sectionBgColor = "#E8F5E9"; // Light green
-              sectionBorderColor = "#4CAF50"; // Green
-              headerTextColor = "#4CAF50"; // Green
+              sectionBgColor = "#E8F5E9";
+              sectionBorderColor = "#4CAF50";
+              headerTextColor = "#4CAF50";
               statusText = "Completed";
             } else if (isPast && !isCurrentMonthDate) {
-              // Overdue section from previous months - red
-              sectionBgColor = "#FFEBEE"; // Light red
-              sectionBorderColor = "#F44336"; // Red
-              headerTextColor = "#F44336"; // Red
+              sectionBgColor = "#FFEBEE";
+              sectionBorderColor = "#F44336";
+              headerTextColor = "#F44336";
               warningMessage =
                 "Overdue vaccinations! Please consult your doctor.";
               statusText = "Overdue";
             } else if (isCurrentMonthDate) {
-              // Current month section - blue
-              sectionBgColor = "#E3F2FD"; // Light blue
-              sectionBorderColor = "#2196F3"; // Blue
-              headerTextColor = "#2196F3"; // Blue
+              sectionBgColor = "#E3F2FD";
+              sectionBorderColor = "#2196F3";
+              headerTextColor = "#2196F3";
               statusText = "Due Now";
             }
 
             return (
               <View key={dateKey} style={styles.dateGroup}>
-                {/* Date Header - Clickable to expand/collapse */}
                 <TouchableOpacity
                   style={styles.dateHeaderContainer}
                   onPress={() => toggleDateCollapse(dateKey)}
@@ -1210,7 +1111,6 @@ export default function HealthScreen({ navigation }) {
                           {formatAge(groupedVaccinations[dateKey][0])}
                         </Text>
 
-                        {/* Warning message for missed vaccinations */}
                         {isPast && !isCurrentMonthDate && !allCompleted && (
                           <Text
                             style={[styles.warningText, { color: "#F44336" }]}
@@ -1241,36 +1141,31 @@ export default function HealthScreen({ navigation }) {
                   </View>
                 </TouchableOpacity>
 
-                {/* Vaccines for this date - Only show if not collapsed */}
                 {!isCollapsed &&
                   groupedVaccinations[dateKey].map((vaccine) => {
-                    // Determine the card color based on status
                     const vaccineId = vaccine.vaccineId || vaccine.id;
                     const isCompleted = completedVaccines[vaccineId];
 
-                    let cardBgColor = "#FFFFFF"; // Default white
+                    let cardBgColor = "#FFFFFF";
                     let cardBorderColor = theme.borderLight;
                     let buttonBgColor = theme.backgroundSecondary;
                     let buttonTextColor = theme.textSecondary;
                     let buttonText = "Mark Complete";
 
                     if (isCompleted) {
-                      // Completed vaccination - green
-                      cardBgColor = "#E8F5E9"; // Light green
-                      cardBorderColor = "#4CAF50"; // Green
+                      cardBgColor = "#E8F5E9";
+                      cardBorderColor = "#4CAF50";
                     } else if (isPast && !isCurrentMonthDate) {
-                      // Overdue vaccination - red
-                      cardBgColor = "#FFEBEE"; // Light red
-                      cardBorderColor = "#F44336"; // Red
-                      buttonBgColor = "#F44336"; // Red
-                      buttonTextColor = "#FFFFFF"; // White
+                      cardBgColor = "#FFEBEE";
+                      cardBorderColor = "#F44336";
+                      buttonBgColor = "#F44336";
+                      buttonTextColor = "#FFFFFF";
                       buttonText = "Overdue";
                     } else if (isCurrentMonthDate) {
-                      // Current month vaccination - blue
-                      cardBgColor = "#E3F2FD"; // Light blue
-                      cardBorderColor = "#2196F3"; // Blue
-                      buttonBgColor = "#2196F3"; // Blue
-                      buttonTextColor = "#FFFFFF"; // White
+                      cardBgColor = "#E3F2FD";
+                      cardBorderColor = "#2196F3";
+                      buttonBgColor = "#2196F3";
+                      buttonTextColor = "#FFFFFF";
                       buttonText = "Due Now";
                     }
 
@@ -1302,11 +1197,11 @@ export default function HealthScreen({ navigation }) {
                                 styles.vaccineDose,
                                 {
                                   color: isCompleted
-                                    ? "#4CAF50" // Green
+                                    ? "#4CAF50"
                                     : isPast && !isCurrentMonthDate
-                                    ? "#F44336" // Red
+                                    ? "#F44336"
                                     : isCurrentMonthDate
-                                    ? "#2196F3" // Blue
+                                    ? "#2196F3"
                                     : theme.textSecondary,
                                 },
                               ]}
@@ -1391,7 +1286,6 @@ export default function HealthScreen({ navigation }) {
                     );
                   })}
 
-                {/* Timeline connector (except for last group) */}
                 {dateIndex < Object.keys(groupedVaccinations).length - 1 && (
                   <View
                     style={[
@@ -1405,7 +1299,6 @@ export default function HealthScreen({ navigation }) {
           })}
         </View>
 
-        {/* Vaccination Information */}
         <View
           style={[styles.infoCard, { backgroundColor: theme.cardBackground }]}
         >
@@ -1646,7 +1539,7 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     marginBottom: 20,
-    maxHeight: 300, // Add a max height to ensure scrolling works
+    maxHeight: 300,
   },
   vaccineTitle: {
     fontSize: 16,
